@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { SublemmaSchema } from './llm-proof-decomposition';
+import { SublemmaSchema } from './schemas';
 
 
 const ValidateProofInputSchema = z.object({

@@ -9,16 +9,12 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { SublemmaSchema } from './schemas';
 
 const DecomposeProofInputSchema = z.object({
   problem: z.string().describe('The mathematical problem to decompose into sublemmas, in LaTeX or natural language.'),
 });
 export type DecomposeProofInput = z.infer<typeof DecomposeProofInputSchema>;
-
-export const SublemmaSchema = z.object({
-  title: z.string().describe('A short, descriptive title for the sublemma (e.g., "Lemma 1: Cauchy-Schwarz Inequality").'),
-  content: z.string().describe('The detailed content of the sublemma statement.'),
-});
 
 const DecomposeProofOutputSchema = z.object({
   sublemmas: z.array(SublemmaSchema).describe('A sequence of sublemmas that form a proof of the given problem.'),
