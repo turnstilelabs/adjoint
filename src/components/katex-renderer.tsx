@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import katex from 'katex';
+import { cn } from '@/lib/utils';
 
 type KatexRendererProps = {
   content: string;
@@ -10,7 +11,6 @@ type KatexRendererProps = {
 
 export function KatexRenderer({ content, className }: KatexRendererProps) {
   const parts = useMemo(() => {
-    // A more robust way to handle mixed text and math content.
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
     const splitByDelimiters = content.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
     
@@ -40,17 +40,12 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           return <span key={index}>{part}</span>;
         }
       } else {
-        // This is a plain text part, replace newline characters with <br> tags
-        const textParts = part.split('\n').map((line, i) => (
-          <React.Fragment key={i}>
-            {line}
-            {i < part.split('\n').length - 1 && <br />}
-          </React.Fragment>
-        ));
-        return <span key={index}>{textParts}</span>;
+        // Render plain text parts
+        return <span key={index}>{part}</span>;
       }
     });
   }, [content]);
 
-  return <div className={className}>{parts}</div>;
+  // Use 'whitespace-pre-wrap' to respect newlines in the original text
+  return <div className={cn('whitespace-pre-wrap', className)}>{parts}</div>;
 }
