@@ -1,24 +1,15 @@
 'use client';
-import { AppSidebar } from '@/components/sidebar';
 import ProofDisplay from '@/components/proof-display';
 import { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { SidebarProvider, Sidebar, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 
 function ProofPageContent({ problem, sublemmas }: { problem: string, sublemmas: string[] }) {
   return (
-    <SidebarProvider>
-      <div className="flex h-screen bg-background">
-        <Sidebar>
-          <AppSidebar />
-        </Sidebar>
-        <SidebarInset>
-            <ProofDisplay initialProblem={problem} initialSublemmas={sublemmas} />
-        </SidebarInset>
+      <div className="h-screen bg-background">
+        <ProofDisplay initialProblem={problem} initialSublemmas={sublemmas} />
       </div>
-    </SidebarProvider>
   );
 }
 

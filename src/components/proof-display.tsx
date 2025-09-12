@@ -7,7 +7,9 @@ import { InteractiveChat } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { SidebarTrigger } from './ui/sidebar';
+import Link from 'next/link';
+import { Button } from './ui/button';
+import { Logo } from './logo';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -24,7 +26,12 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
       <div className="p-6 border-b flex-shrink-0">
         <div className="max-w-4xl mx-auto">
             <div className='flex items-center gap-4 mb-4'>
-              <SidebarTrigger />
+              <Button asChild variant="ghost" size="icon">
+                <Link href="/">
+                  <Logo />
+                  <span className="sr-only">New Proof</span>
+                </Link>
+              </Button>
               <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
             </div>
             <Card>
