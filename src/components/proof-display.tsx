@@ -54,8 +54,6 @@ export default function ProofDisplay({
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
-    setProofValidationResult(null); // Invalidate previous result on change
-    setLastValidatedSublemmas(null); // Invalidate cache
     setIsProofEdited(true); // Mark proof as edited
   };
 
@@ -69,9 +67,8 @@ export default function ProofDisplay({
           feedback: result.feedback || 'No feedback provided.',
         };
         setProofValidationResult(validationResult);
-        if (validationResult.isValid) {
-          setLastValidatedSublemmas(sublemmas);
-        }
+        setLastValidatedSublemmas(sublemmas); // Cache the proof state after any validation
+        setIsProofEdited(false); // Reset edited state after validation
       } else {
         toast({
           title: 'Validation Failed',
@@ -143,14 +140,14 @@ export default function ProofDisplay({
                       size="lg"
                       className="w-full"
                       onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0 || isProofUnchanged || !isProofEdited}
+                      disabled={isProofValidating || sublemmas.length === 0 || !isProofEdited}
                     >
                       {isProofValidating ? (
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       ) : (
                         <ShieldCheck className="mr-2 h-5 w-5" />
                       )}
-                      {isProofUnchanged ? 'Proof Verified' : 'Validate Full Proof'}
+                      Validate Full Proof
                     </Button>
                      {proofValidationResult && (
                         <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mt-4 bg-card">
