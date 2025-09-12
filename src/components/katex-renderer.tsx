@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import katex from 'katex';
 
 type KatexRendererProps = {
   content: string;
@@ -10,23 +11,47 @@ type KatexRendererProps = {
 export function KatexRenderer({ content, className }: KatexRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (containerRef.current && window.renderMathInElement) {
-      try {
-        window.renderMathInElement(containerRef.current, {
-          delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '\\[', right: '\\]', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\(', right: '\\)', display: false },
-          ],
-          throwOnError: false
-        });
-      } catch (error) {
-        console.error('KaTeX rendering error:', error);
-      }
-    }
-  }, [content]);
+  // This regex finds all KaTeX blocks, including those with custom delimiters.
+  const regex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\(.*?\\\)|\$.*?\$)/g;
 
-  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: content }} />;
+  // Split the content into parts: KaTeX blocks and the text between them.
+  const parts = content.split(regex).filter(Boolean);
+
+  return (
+    <div ref={containerRef} className={className}>
+      {parts.map((part, index) => {
+        if (regex.test(part)) {
+          // It's a KaTeX block. Let's render it.
+          // First, remove the delimiters.
+          let formula = part;
+          if (part.startsWith('$$') && part.endsWith('$$')) {
+            formula = part.substring(2, part.length - 2);
+          } else if (part.startsWith('\\[')) {
+            formula = part.substring(2, part.length - 2);
+          } else if (part.startsWith('$')) {
+            formula = part.substring(1, part.length - 1);
+          } else if (part.startsWith('\\(')) {
+            formula = part.substring(2, part.length - 2);
+          }
+          
+          const isDisplayMode = part.startsWith('$$') || part.startsWith('\\[');
+
+          try {
+            const html = katex.renderToString(formula, {
+              throwOnError: false,
+              displayMode: isDisplayMode,
+            });
+            return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+          } catch (e) {
+            console.error('KaTeX rendering error', e);
+            // Fallback: just show the raw TeX.
+            return <code key={index}>{part}</code>;
+          }
+        } else {
+          // It's just plain text.
+          return <span key={index}>{part}</span>;
+        }
+      })}
+    </div>
+  );
 }

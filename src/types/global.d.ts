@@ -1,6 +1,6 @@
 declare global {
   interface Window {
-    renderMathInElement?: (element: HTMLElement, options?: object) => void;
+    renderMathInElement: (element: HTMLElement, options?: object) => void;
   }
 }
 
