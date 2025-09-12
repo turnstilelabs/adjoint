@@ -1,6 +1,6 @@
 'use client';
 import ProofDisplay from '@/components/proof-display';
-import { Suspense } from 'react';
+import { Suspense, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -14,8 +14,12 @@ function ProofPageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const decompositionRan = useRef(false);
 
   useEffect(() => {
+    if (decompositionRan.current) {
+      return;
+    }
     const problemParam = searchParams.get('problem');
 
     if (!problemParam) {
@@ -27,6 +31,7 @@ function ProofPageContent() {
     setMessages([{ role: 'user', content: problemParam }]);
 
     startTransition(async () => {
+      decompositionRan.current = true;
       const result = await decomposeProblemAction(problemParam);
       if (result.success && result.sublemmas) {
         setSublemmas(result.sublemmas);
