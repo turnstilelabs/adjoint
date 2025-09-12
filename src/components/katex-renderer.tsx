@@ -40,8 +40,14 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           return <span key={index}>{part}</span>;
         }
       } else {
-        // This is a plain text part
-        return <span key={index}>{part}</span>;
+        // This is a plain text part, replace newline characters with <br> tags
+        const textParts = part.split('\n').map((line, i) => (
+          <React.Fragment key={i}>
+            {line}
+            {i < part.split('\n').length - 1 && <br />}
+          </React.Fragment>
+        ));
+        return <span key={index}>{textParts}</span>;
       }
     });
   }, [content]);
