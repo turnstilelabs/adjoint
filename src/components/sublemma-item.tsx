@@ -1,14 +1,18 @@
 'use client';
 
-import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma } from 'lucide-react';
+import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma, Save, X } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Textarea } from './ui/textarea';
+import { Button } from './ui/button';
+import { SelectionToolbar } from './selection-toolbar';
 
 interface SublemmaItemProps {
   step: number;
   title: string;
   content: string;
-  isLast: boolean;
+  onContentChange: (newContent: string) => void;
 }
 
 const icons = [
@@ -21,11 +25,85 @@ const icons = [
     { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, content, isLast }: SublemmaItemProps) {
+export function SublemmaItem({ step, title, content, onContentChange }: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(content);
+  const contentRef = useRef<HTMLDivElement>(null);
   
+  const [selection, setSelection] = useState<{ text: string, target: HTMLElement | null }>({ text: '', target: null });
+
+  const handleMouseUp = useCallback(() => {
+    if (isEditing) return;
+    const currentSelection = window.getSelection();
+    const selectedText = currentSelection?.toString().trim();
+
+    if (selectedText && contentRef.current?.contains(currentSelection.anchorNode)) {
+      const range = currentSelection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const tempEl = document.createElement('span');
+      // Position the anchor at the start of selection
+      tempEl.style.position = 'absolute';
+      tempEl.style.left = `${rect.left + window.scrollX}px`;
+      tempEl.style.top = `${rect.top + window.scrollY}px`;
+      document.body.appendChild(tempEl);
+      setSelection({ text: selectedText, target: tempEl });
+      
+      // Cleanup the temporary element
+      setTimeout(() => {
+        if (document.body.contains(tempEl)) {
+          document.body.removeChild(tempEl);
+        }
+      }, 0);
+
+    } else {
+      setSelection({ text: '', target: null });
+    }
+  }, [isEditing]);
+  
+  const handleDoubleClick = () => {
+    setIsEditing(true);
+    setEditedContent(content);
+  };
+  
+  const handleSave = () => {
+    onContentChange(editedContent);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditedContent(content);
+  };
+
+  const handleReviseFromToolbar = () => {
+    setIsEditing(true);
+    setEditedContent(selection.text);
+    setSelection({ text: '', target: null });
+  };
+
+  useEffect(() => {
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseUp]);
+
+  useEffect(() => {
+    // When editing starts/stops, or content changes, clear selection
+    setSelection({ text: '', target: null });
+  }, [isEditing, content]);
+
   return (
     <>
+      {selection.target && (
+        <SelectionToolbar
+          target={selection.target}
+          onRevise={handleReviseFromToolbar}
+          selectedText={selection.text}
+          fullText={content}
+        />
+      )}
       <AccordionItem value={`item-${step}`} className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border">
         <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline">
           <div className="flex items-center gap-4">
@@ -37,7 +115,24 @@ export function SublemmaItem({ step, title, content, isLast }: SublemmaItemProps
         </AccordionTrigger>
         <AccordionContent className="p-5 pt-0 border-t">
           <div className="py-4">
-            <KatexRenderer content={content} />
+            {isEditing ? (
+              <div className="space-y-4">
+                <Textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="w-full h-32 text-base"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={handleCancel}><X className="mr-2" />Cancel</Button>
+                  <Button onClick={handleSave}><Save className="mr-2" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div ref={contentRef} onDoubleClick={handleDoubleClick}>
+                <KatexRenderer content={content} />
+              </div>
+            )}
           </div>
         </AccordionContent>
       </AccordionItem>

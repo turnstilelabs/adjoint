@@ -22,14 +22,21 @@ interface ProofDisplayProps {
 
 export default function ProofDisplay({
   initialProblem,
-  sublemmas,
+  sublemmas: initialSublemmas,
   isLoading,
   messages,
   setMessages,
 }: ProofDisplayProps) {
   const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
+  const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
 
+  const handleSublemmaChange = (index: number, newContent: string) => {
+    const newSublemmas = [...sublemmas];
+    newSublemmas[index] = { ...newSublemmas[index], content: newContent };
+    setSublemmas(newSublemmas);
+  };
+  
   return (
     <div className="flex h-screen bg-background">
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -89,7 +96,7 @@ export default function ProofDisplay({
                         step={index + 1}
                         title={sublemma.title}
                         content={sublemma.content}
-                        isLast={index === sublemmas.length - 1}
+                        onContentChange={(newContent) => handleSublemmaChange(index, newContent)}
                       />
                     ))}
                   </Accordion>
