@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Info, CheckCircle, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
-import { InteractiveChat } from './interactive-chat';
+import { InteractiveChat, type Message } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent } from './ui/card';
@@ -16,10 +16,23 @@ interface ProofDisplayProps {
   initialSublemmas: string[];
 }
 
+const createInitialMessages = (problem?: string, sublemmas?: string[]): Message[] => {
+    if (!problem || !sublemmas) {
+        return [];
+    }
+    const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${sublemmas.map((s, i) => `**Step ${i + 1}:** ${s}`).join('\n\n')}`;
+    return [
+        { role: 'user', content: problem },
+        { role: 'assistant', content: assistantMessage },
+    ];
+}
+
 export default function ProofDisplay({ initialProblem, initialSublemmas }: ProofDisplayProps) {
   const [sublemmas, setSublemmas] = useState(initialSublemmas);
   const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
+  const [messages, setMessages] = useState<Message[]>(() => createInitialMessages(initialProblem, initialSublemmas));
+
 
   return (
     <div className="flex h-screen bg-background">
@@ -71,6 +84,7 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
                       step={index + 1}
                       title={`Step ${index + 1}`}
                       content={sublemma}
+                      isLast={index === sublemmas.length - 1}
                     />
                   ))}
                 </Accordion>
@@ -84,8 +98,8 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
         <aside className="w-[30rem] border-l flex flex-col h-screen">
           <InteractiveChat 
             proofSteps={sublemmas} 
-            initialProblem={initialProblem} 
-            initialSublemmas={initialSublemmas} 
+            messages={messages}
+            setMessages={setMessages}
           />
         </aside>
       )}

@@ -9,30 +9,18 @@ import { KatexRenderer } from "./katex-renderer";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { ScrollArea } from "./ui/scroll-area";
 
-type Message = {
+export type Message = {
     role: 'user' | 'assistant';
     content: string;
 };
 
 interface InteractiveChatProps {
     proofSteps: string[];
-    initialProblem?: string;
-    initialSublemmas?: string[];
+    messages: Message[];
+    setMessages: (messages: Message[]) => void;
 }
 
-const createInitialMessages = (problem?: string, sublemmas?: string[]): Message[] => {
-    if (!problem || !sublemmas) {
-        return [];
-    }
-    const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${sublemmas.map((s, i) => `**Step ${i + 1}:** ${s}`).join('\n\n')}`;
-    return [
-        { role: 'user', content: problem },
-        { role: 'assistant', content: assistantMessage },
-    ];
-}
-
-export function InteractiveChat({ proofSteps, initialProblem, initialSublemmas }: InteractiveChatProps) {
-    const [messages, setMessages] = useState<Message[]>(() => createInitialMessages(initialProblem, initialSublemmas));
+export function InteractiveChat({ proofSteps, messages, setMessages }: InteractiveChatProps) {
     const [input, setInput] = useState('');
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
@@ -41,10 +29,13 @@ export function InteractiveChat({ proofSteps, initialProblem, initialSublemmas }
 
     useEffect(() => {
         if(scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTo({
-                top: scrollAreaRef.current.scrollHeight,
-                behavior: 'smooth'
-            });
+            const scrollableNode = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+            if (scrollableNode) {
+                 scrollableNode.scrollTo({
+                    top: scrollableNode.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
         }
     }, [messages]);
 
