@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle, MessageSquare, FilePenLine, ChevronDown, Sigma, CheckCircle2, Rocket, Puzzle, Lightbulb } from 'lucide-react';
+import { CheckCircle, MessageSquare, FilePenLine, ChevronDown, Sigma, CheckCircle2, Rocket, Puzzle, Lightbulb, Save, X } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { KatexRenderer } from './katex-renderer';
 import { VerifyModal } from './verify-modal';
+import { Textarea } from './ui/textarea';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { Card, CardContent } from './ui/card';
 
 interface SublemmaItemProps {
   step: number;
@@ -24,14 +27,42 @@ const icons = [
     { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, content, isLast }: SublemmaItemProps) {
+export function SublemmaItem({ step, title, content: initialContent, isLast }: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verifiedContent, setVerifiedContent] = useState<string | null>(null);
 
+  // State for revision
+  const [isRevising, setIsRevising] = useState(false);
+  const [currentContent, setCurrentContent] = useState(initialContent);
+  const [revisedContent, setRevisedContent] = useState(initialContent);
+  
+  // State for comments
+  const [comments, setComments] = useState<string[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isCommenting, setIsCommenting] = useState(false);
+
   const handleVerificationComplete = (proof: string) => {
     setVerifiedContent(proof);
     setIsModalOpen(false);
+  };
+
+  const handleRevisionSave = () => {
+    setCurrentContent(revisedContent);
+    setIsRevising(false);
+  };
+
+  const handleRevisionCancel = () => {
+    setRevisedContent(currentContent);
+    setIsRevising(false);
+  };
+
+  const handleAddComment = () => {
+    if (newComment.trim()) {
+      setComments([...comments, newComment]);
+      setNewComment('');
+      setIsCommenting(false);
+    }
   };
   
   return (
@@ -48,11 +79,27 @@ export function SublemmaItem({ step, title, content, isLast }: SublemmaItemProps
         </AccordionTrigger>
         <AccordionContent className="p-5 pt-0 border-t">
           <div className="py-4">
-            <KatexRenderer content={content} />
-            {isLast && (
-              <span className="inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full mt-4">
-                Q.E.D.
-              </span>
+            {isRevising ? (
+              <div className="space-y-2">
+                <Textarea 
+                  value={revisedContent}
+                  onChange={(e) => setRevisedContent(e.target.value)}
+                  className="h-32"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleRevisionCancel}><X className="mr-1.5 h-4 w-4" /> Cancel</Button>
+                  <Button size="sm" onClick={handleRevisionSave}><Save className="mr-1.5 h-4 w-4" /> Save</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <KatexRenderer content={currentContent} />
+                {isLast && (
+                  <span className="inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full mt-4">
+                    Q.E.D.
+                  </span>
+                )}
+              </>
             )}
           </div>
 
@@ -75,22 +122,71 @@ export function SublemmaItem({ step, title, content, isLast }: SublemmaItemProps
               <CheckCircle className="mr-1.5 h-4 w-4" />
               Verify
             </Button>
-            <Button variant="ghost" size="sm" className="text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 rounded-full">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 hover:text-gray-700 rounded-full"
+              onClick={() => setIsCommenting(!isCommenting)}
+            >
               <MessageSquare className="mr-1.5 h-4 w-4" />
               Comment
             </Button>
-            <Button variant="ghost" size="sm" className="text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 hover:text-blue-700 rounded-full">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 hover:text-blue-700 rounded-full"
+              onClick={() => setIsRevising(true)}
+              disabled={isRevising}
+            >
               <FilePenLine className="mr-1.5 h-4 w-4" />
               Revise
             </Button>
           </div>
+          
+          {(isCommenting || comments.length > 0) && (
+            <div className="mt-4 pt-4 border-t">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">Comments</h4>
+              <div className="space-y-4">
+                {comments.map((comment, index) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{['U1', 'U2', 'U3'][index % 3]}</AvatarFallback>
+                    </Avatar>
+                    <div className="bg-gray-100 rounded-lg p-3 text-sm flex-1">
+                      <p>{comment}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {isCommenting && (
+                <div className="mt-4 flex items-start gap-3">
+                  <Avatar className="h-8 w-8">
+                      <AvatarFallback>U1</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-2">
+                      <Textarea 
+                        placeholder="Add your comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        rows={2}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => { setIsCommenting(false); setNewComment(''); }}>Cancel</Button>
+                        <Button size="sm" onClick={handleAddComment}>Post</Button>
+                      </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </AccordionContent>
       </AccordionItem>
       <VerifyModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         step={step}
-        lemma={content}
+        lemma={currentContent}
         onProofComplete={handleVerificationComplete}
       />
     </>
