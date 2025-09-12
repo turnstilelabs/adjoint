@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle, MessageSquare, FilePenLine, ChevronDown, Sigma, CheckCircle2, Rocket, Puzzle, Lightbulb, Save, X } from 'lucide-react';
+import { CheckCircle, MessageSquare, FilePenLine, Sigma, CheckCircle2, Rocket, Puzzle, Lightbulb, Save, X } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { KatexRenderer } from './katex-renderer';
 import { VerifyModal } from './verify-modal';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { Card, CardContent } from './ui/card';
 
 interface SublemmaItemProps {
   step: number;
@@ -68,14 +67,13 @@ export function SublemmaItem({ step, title, content: initialContent, isLast }: S
   return (
     <>
       <AccordionItem value={`item-${step}`} className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border">
-        <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+        <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline">
           <div className="flex items-center gap-4">
             <span className={`p-2 rounded-full ${bg}`}>
                 <Icon className={`h-5 w-5 ${text}`} />
             </span>
             <span className="text-base font-medium text-gray-900 font-headline">{title}</span>
           </div>
-          <ChevronDown className="h-5 w-5 shrink-0 text-gray-500 transition-transform duration-200" />
         </AccordionTrigger>
         <AccordionContent className="p-5 pt-0 border-t">
           <div className="py-4">
