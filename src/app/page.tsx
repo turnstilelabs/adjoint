@@ -55,11 +55,11 @@ export default function Home() {
                       <KatexRenderer content={example.problem} className="text-sm" />
                     </CardContent>
                     <div className="p-6 pt-0 mt-auto">
-                       <Button asChild variant="outline" className="w-full">
-                        <Link href={example.href}>
+                      <Link href={example.href}>
+                        <Button variant="outline" className="w-full">
                           Start Proof <ArrowRight className="ml-2 h-4 w-4" />
-                        </Link>
-                      </Button>
+                        </Button>
+                      </Link>
                     </div>
                   </Card>
                 ))}
