@@ -1,10 +1,8 @@
 import ProblemInputForm from '@/components/problem-input-form';
-import { AppSidebar } from '@/components/sidebar';
 
 export default function Home() {
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar />
       <main className="flex-1 flex flex-col">
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-4xl mx-auto">
