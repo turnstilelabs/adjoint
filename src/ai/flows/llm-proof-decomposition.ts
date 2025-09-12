@@ -15,10 +15,17 @@ const DecomposeProofInputSchema = z.object({
 });
 export type DecomposeProofInput = z.infer<typeof DecomposeProofInputSchema>;
 
+const SublemmaSchema = z.object({
+  title: z.string().describe('A short, descriptive title for the sublemma (e.g., "Lemma 1: Cauchy-Schwarz Inequality").'),
+  content: z.string().describe('The detailed content of the sublemma statement.'),
+});
+
 const DecomposeProofOutputSchema = z.object({
-  sublemmas: z.array(z.string()).describe('A sequence of sublemmas that form a proof of the given problem.'),
+  sublemmas: z.array(SublemmaSchema).describe('A sequence of sublemmas that form a proof of the given problem.'),
 });
 export type DecomposeProofOutput = z.infer<typeof DecomposeProofOutputSchema>;
+export type Sublemma = z.infer<typeof SublemmaSchema>;
+
 
 export async function decomposeProof(input: DecomposeProofInput): Promise<DecomposeProofOutput> {
   return decomposeProofFlow(input);
@@ -32,7 +39,7 @@ const decomposeProofPrompt = ai.definePrompt({
 
 Instructions
 Input: A mathematical problem (theorem, proposition, or extended argument)
-Output: A restructured version with appropriate decomposition. Your output must be a JSON object with a 'sublemmas' key containing an array of strings.
+Output: A restructured version with appropriate decomposition. Your output must be a JSON object with a 'sublemmas' key containing an array of objects, where each object has a 'title' and 'content'.
 
 Decomposition Guidelines
 1. Identify Decomposition Candidates
@@ -53,7 +60,7 @@ Each lemma/proposition should:
 Problem to Decompose:
 "{{{problem}}}"
 
-Decompose the problem into a sequence of sublemmas.`,
+Decompose the problem into a sequence of sublemmas, each with a title and content.`,
 });
 
 const decomposeProofFlow = ai.defineFlow(

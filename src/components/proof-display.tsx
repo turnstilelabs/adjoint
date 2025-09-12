@@ -10,10 +10,11 @@ import { Card, CardContent } from './ui/card';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { Logo } from './logo';
+import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 
 interface ProofDisplayProps {
   initialProblem: string;
-  sublemmas: string[];
+  sublemmas: Sublemma[];
   isLoading: boolean;
   messages: Message[];
   setMessages: (messages: Message[]) => void;
@@ -86,8 +87,8 @@ export default function ProofDisplay({
                       <SublemmaItem
                         key={index}
                         step={index + 1}
-                        title={`Step ${index + 1}`}
-                        content={sublemma}
+                        title={sublemma.title}
+                        content={sublemma.content}
                         isLast={index === sublemmas.length - 1}
                       />
                     ))}
@@ -102,7 +103,7 @@ export default function ProofDisplay({
       {isChatOpen && (
         <aside className="w-[30rem] border-l flex flex-col h-screen">
           <InteractiveChat 
-            proofSteps={sublemmas} 
+            proofSteps={sublemmas.map(s => `${s.title}: ${s.content}`)} 
             messages={messages}
             setMessages={setMessages}
           />
