@@ -1,5 +1,5 @@
-import { AppSidebar } from '@/components/sidebar';
 import ProblemInputForm from '@/components/problem-input-form';
+import { AppSidebar } from '@/components/sidebar';
 
 export default function Home() {
   return (
