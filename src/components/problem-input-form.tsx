@@ -7,7 +7,6 @@ import { Wand2, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { decomposeProblemAction } from '@/app/actions';
 import { Card, CardContent } from './ui/card';
 
 export default function ProblemInputForm() {
@@ -27,20 +26,10 @@ export default function ProblemInputForm() {
       return;
     }
 
-    startTransition(async () => {
-      const result = await decomposeProblemAction(problem);
-      if (result.success && result.sublemmas) {
-        const params = new URLSearchParams();
-        params.append('problem', problem);
-        params.append('sublemmas', JSON.stringify(result.sublemmas));
-        router.push(`/proof?${params.toString()}`);
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'An unexpected error occurred.',
-          variant: 'destructive',
-        });
-      }
+    startTransition(() => {
+      const params = new URLSearchParams();
+      params.append('problem', problem);
+      router.push(`/proof?${params.toString()}`);
     });
   };
 
@@ -73,7 +62,7 @@ export default function ProblemInputForm() {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Generating...
+                  Navigating...
                 </>
               ) : (
                 <>

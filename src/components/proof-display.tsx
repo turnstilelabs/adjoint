@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2 } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -13,26 +13,21 @@ import { Logo } from './logo';
 
 interface ProofDisplayProps {
   initialProblem: string;
-  initialSublemmas: string[];
+  sublemmas: string[];
+  isLoading: boolean;
+  messages: Message[];
+  setMessages: (messages: Message[]) => void;
 }
 
-const createInitialMessages = (problem?: string, sublemmas?: string[]): Message[] => {
-    if (!problem || !sublemmas) {
-        return [];
-    }
-    const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${sublemmas.map((s, i) => `**Step ${i + 1}:** ${s}`).join('\n\n')}`;
-    return [
-        { role: 'user', content: problem },
-        { role: 'assistant', content: assistantMessage },
-    ];
-}
-
-export default function ProofDisplay({ initialProblem, initialSublemmas }: ProofDisplayProps) {
-  const [sublemmas, setSublemmas] = useState(initialSublemmas);
+export default function ProofDisplay({
+  initialProblem,
+  sublemmas,
+  isLoading,
+  messages,
+  setMessages,
+}: ProofDisplayProps) {
   const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
-  const [messages, setMessages] = useState<Message[]>(() => createInitialMessages(initialProblem, initialSublemmas));
-
 
   return (
     <div className="flex h-screen bg-background">
@@ -68,27 +63,37 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
           <div className="p-6">
             <div className="max-w-4xl mx-auto">
               <h2 className="text-2xl font-bold font-headline mb-4">Tentative Proof</h2>
-              <div className="space-y-4">
-                {validationResult && (
-                  <Alert variant={validationResult.isValid ? "default" : "destructive"} className="mb-4 bg-card">
-                    {validationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
-                    <AlertTitle>{validationResult.isValid ? "Step Verified" : "Suggestion"}</AlertTitle>
-                    <AlertDescription>{validationResult.feedback}</AlertDescription>
-                  </Alert>
-                )}
+              {isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <p className="text-lg font-medium">Generating proof steps...</p>
+                    <p className="text-sm">The AI is thinking. This may take a moment.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {validationResult && (
+                    <Alert variant={validationResult.isValid ? "default" : "destructive"} className="mb-4 bg-card">
+                      {validationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
+                      <AlertTitle>{validationResult.isValid ? "Step Verified" : "Suggestion"}</AlertTitle>
+                      <AlertDescription>{validationResult.feedback}</AlertDescription>
+                    </Alert>
+                  )}
 
-                <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
-                  {sublemmas.map((sublemma, index) => (
-                    <SublemmaItem
-                      key={index}
-                      step={index + 1}
-                      title={`Step ${index + 1}`}
-                      content={sublemma}
-                      isLast={index === sublemmas.length - 1}
-                    />
-                  ))}
-                </Accordion>
-              </div>
+                  <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
+                    {sublemmas.map((sublemma, index) => (
+                      <SublemmaItem
+                        key={index}
+                        step={index + 1}
+                        title={`Step ${index + 1}`}
+                        content={sublemma}
+                        isLast={index === sublemmas.length - 1}
+                      />
+                    ))}
+                  </Accordion>
+                </div>
+              )}
             </div>
           </div>
         </div>
