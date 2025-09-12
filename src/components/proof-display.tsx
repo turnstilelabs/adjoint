@@ -9,6 +9,7 @@ import { addProofStepAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface ProofDisplayProps {
   initialProblem: string;
