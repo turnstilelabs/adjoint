@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2 } from 'lucide-react';
+import { useState, useEffect, useTransition } from 'react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -11,6 +11,9 @@ import Link from 'next/link';
 import { Button } from './ui/button';
 import { Logo } from './logo';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { validateProofAction } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
+
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -20,6 +23,11 @@ interface ProofDisplayProps {
   setMessages: (messages: Message[]) => void;
 }
 
+type ValidationResult = {
+  isValid: boolean;
+  feedback: string;
+};
+
 export default function ProofDisplay({
   initialProblem,
   sublemmas: initialSublemmas,
@@ -27,9 +35,12 @@ export default function ProofDisplay({
   messages,
   setMessages,
 }: ProofDisplayProps) {
-  const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
+  const [isProofValidating, startProofValidationTransition] = useTransition();
+  const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
+  const { toast } = useToast();
+
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
@@ -39,6 +50,26 @@ export default function ProofDisplay({
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
+    setProofValidationResult(null); // Invalidate previous result on change
+  };
+
+  const handleValidateProof = () => {
+    startProofValidationTransition(async () => {
+      setProofValidationResult(null);
+      const result = await validateProofAction(initialProblem, sublemmas);
+      if (result.success) {
+        setProofValidationResult({
+          isValid: result.isValid || false,
+          feedback: result.feedback || 'No feedback provided.',
+        });
+      } else {
+        toast({
+          title: 'Validation Failed',
+          description: result.error || 'An unexpected error occurred during validation.',
+          variant: 'destructive',
+        });
+      }
+    });
   };
   
   return (
@@ -85,14 +116,6 @@ export default function ProofDisplay({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {validationResult && (
-                    <Alert variant={validationResult.isValid ? "default" : "destructive"} className="mb-4 bg-card">
-                      {validationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
-                      <AlertTitle>{validationResult.isValid ? "Step Verified" : "Suggestion"}</AlertTitle>
-                      <AlertDescription>{validationResult.feedback}</AlertDescription>
-                    </Alert>
-                  )}
-
                   <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
                     {sublemmas.map((sublemma, index) => (
                       <SublemmaItem
@@ -104,6 +127,31 @@ export default function ProofDisplay({
                       />
                     ))}
                   </Accordion>
+                  
+                  <div className="pt-4 space-y-4">
+                    {proofValidationResult && (
+                        <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mb-4 bg-card">
+                          {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
+                          <AlertTitle>{proofValidationResult.isValid ? "Proof Verified" : "Proof Invalid"}</AlertTitle>
+                          <AlertDescription>
+                            <KatexRenderer content={proofValidationResult.feedback} />
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      onClick={handleValidateProof}
+                      disabled={isProofValidating || sublemmas.length === 0}
+                    >
+                      {isProofValidating ? (
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="mr-2 h-5 w-5" />
+                      )}
+                      Validate Full Proof
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

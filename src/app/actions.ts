@@ -5,6 +5,9 @@ import { addProofStepWithLLMValidation } from '@/ai/flows/add-proof-step-validat
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
 import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
 import { validateStatement } from '@/ai/flows/validate-statement';
+import { validateProof } from '@/ai/flows/validate-proof';
+import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+
 
 export async function decomposeProblemAction(problem: string) {
   if (!problem) {
@@ -68,5 +71,18 @@ export async function validateStatementAction(statement: string) {
   } catch (error) {
     console.error('validateStatementAction error:', error);
     return { success: false, error: 'Failed to validate the statement with AI.' };
+  }
+}
+
+export async function validateProofAction(problem: string, proofSteps: Sublemma[]) {
+  if (proofSteps.length === 0) {
+    return { success: false, error: 'There are no proof steps to validate.' };
+  }
+  try {
+    const result = await validateProof({ problem, proofSteps });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('validateProofAction error:', error);
+    return { success: false, error: 'Failed to validate the proof with AI.' };
   }
 }
