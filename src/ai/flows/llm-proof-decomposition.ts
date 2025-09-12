@@ -28,11 +28,32 @@ const decomposeProofPrompt = ai.definePrompt({
   name: 'decomposeProofPrompt',
   input: {schema: DecomposeProofInputSchema},
   output: {schema: DecomposeProofOutputSchema},
-  prompt: `You are an expert mathematician. Your task is to decompose the following mathematical problem into a sequence of sublemmas that lead to a solution.
+  prompt: `You are a mathematical writing expert specializing in proof structure and clarity. Your task is to analyze a given mathematical problem and decompose it into well-structured lemmas and propositions to maximize readability and logical flow.
 
-Problem: {{{problem}}}
+Instructions
+Input: A mathematical problem (theorem, proposition, or extended argument)
+Output: A restructured version with appropriate decomposition. Your output must be a JSON object with a 'sublemmas' key containing an array of strings.
 
-Sublemmas:`,
+Decomposition Guidelines
+1. Identify Decomposition Candidates
+Look for proof segments that:
+- Establish intermediate results used multiple times.
+- Contain substantial sub-arguments (>3-4 logical steps).
+- Represent conceptually distinct ideas or techniques.
+- Can be stated as standalone mathematical facts.
+- Simplify the main proof's logical flow when extracted.
+
+2. Atomic Statement Principle
+Each lemma/proposition should:
+- Be self-contained: Provable using only stated assumptions and previously established results.
+- Have a single focus: Address one mathematical concept or relationship.
+- Be genuinely useful: Either used multiple times or significantly simplifies the main argument.
+- Have clear interfaces: Inputs (hypotheses) and outputs (conclusions) should be precisely stated.
+
+Problem to Decompose:
+"{{{problem}}}"
+
+Decompose the problem into a sequence of sublemmas.`,
 });
 
 const decomposeProofFlow = ai.defineFlow(
