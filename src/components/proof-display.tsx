@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Info, CheckCircle, MessageSquare, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat } from './interactive-chat';
@@ -10,7 +10,6 @@ import { Card, CardContent } from './ui/card';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { Logo } from './logo';
-import { Separator } from './ui/separator';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -83,7 +82,11 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
       
       {isChatOpen && (
         <aside className="w-[30rem] border-l flex flex-col h-screen">
-          <InteractiveChat proofSteps={sublemmas} />
+          <InteractiveChat 
+            proofSteps={sublemmas} 
+            initialProblem={initialProblem} 
+            initialSublemmas={initialSublemmas} 
+          />
         </aside>
       )}
     </div>

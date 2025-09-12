@@ -16,10 +16,23 @@ type Message = {
 
 interface InteractiveChatProps {
     proofSteps: string[];
+    initialProblem?: string;
+    initialSublemmas?: string[];
 }
 
-export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
-    const [messages, setMessages] = useState<Message[]>([]);
+const createInitialMessages = (problem?: string, sublemmas?: string[]): Message[] => {
+    if (!problem || !sublemmas) {
+        return [];
+    }
+    const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${sublemmas.map((s, i) => `**Step ${i + 1}:** ${s}`).join('\n\n')}`;
+    return [
+        { role: 'user', content: problem },
+        { role: 'assistant', content: assistantMessage },
+    ];
+}
+
+export function InteractiveChat({ proofSteps, initialProblem, initialSublemmas }: InteractiveChatProps) {
+    const [messages, setMessages] = useState<Message[]>(() => createInitialMessages(initialProblem, initialSublemmas));
     const [input, setInput] = useState('');
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
@@ -84,7 +97,7 @@ export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
                                 if(!isPending) handleSend();
                             }
                         }}
-                        placeholder="Ask a question about the proof..."
+                        placeholder="Ask a follow-up question..."
                         rows={1}
                         className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
                         disabled={isPending}
