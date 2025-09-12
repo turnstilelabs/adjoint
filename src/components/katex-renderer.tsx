@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React from 'react';
+import katex from 'katex';
 
 type KatexRendererProps = {
   content: string;
@@ -8,22 +9,21 @@ type KatexRendererProps = {
 };
 
 export function KatexRenderer({ content, className }: KatexRendererProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const renderMath = (text: string) => {
+    const renderedText = text.replace(/\$\$([\s\S]*?)\$\$|\$([\s\S]*?)\$/g, (match, display, inline) => {
+      const latex = display || inline;
+      try {
+        return katex.renderToString(latex, {
+          throwOnError: false,
+          displayMode: !!display,
+        });
+      } catch (error) {
+        console.error('KaTeX rendering error:', error);
+        return match; // return original string on error
+      }
+    });
+    return <div className={className} dangerouslySetInnerHTML={{ __html: renderedText }} />;
+  };
 
-  useEffect(() => {
-    // Trigger re-render when content changes
-    if (window.renderMathInElement && containerRef.current) {
-      window.renderMathInElement(containerRef.current, {
-        delimiters: [
-          { left: '$$', right: '$$', display: true },
-          { left: '\\[', right: '\\]', display: true },
-          { left: '$', right: '$', display: false },
-          { left: '\\(', right: '\\)', display: false },
-        ],
-        throwOnError: false,
-      });
-    }
-  }, [content]);
-
-  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: content }} />;
+  return renderMath(content);
 }
