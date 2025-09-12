@@ -7,21 +7,21 @@ import { KatexRenderer } from '@/components/katex-renderer';
 
 const exampleProblems = [
   {
-    level: 'High School (IMO Level)',
+    level: 'IMO-Level Inequality',
     problem:
       'Let $a, b, c$ be positive real numbers such that $abc = 1$. Prove that $\\frac{1}{a^3(b+c)} + \\frac{1}{b^3(c+a)} + \\frac{1}{c^3(a+b)} \\ge \\frac{3}{2}$.',
     href: '/proof?problem=Let+%24a%2C+b%2C+c%24+be+positive+real+numbers+such+that+%24abc+%3D+1%24.+Prove+that+%24%5Cfrac%7B1%7D%7Ba%5E3%28b%2Bc%29%7D+%2B+%5Cfrac%7B1%7D%7Bb%5E3%28c%2Ba%29%7D+%2B+%5Cfrac%7B1%7D%7Bc%5E3%28a%2Bb%29%7D+%5Cge+%5Cfrac%7B3%7D%7B2%7D%24.',
   },
   {
-    level: 'Undergraduate (Group Theory)',
+    level: "Lagrange's Theorem",
     problem:
-      "Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$ (Lagrange's Theorem).",
+      "Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$.",
     href: "/proof?problem=Prove+that+if+%24G%24+is+a+finite+group+and+%24H%24+is+a+subgroup+of+%24G%24%2C+then+the+order+of+%24H%24+divides+the+order+of+%24G%24+%28Lagrange%27s+Theorem%29.",
   },
   {
-    level: 'Graduate (Functional Analysis)',
+    level: 'Banach-Alaoglu Theorem',
     problem:
-      'Prove the Banach-Alaoglu theorem: The closed unit ball in the dual of a normed vector space is compact in the weak-* topology.',
+      'Prove that the closed unit ball in the dual of a normed vector space is compact in the weak-* topology.',
     href: '/proof?problem=Prove+the+Banach-Alaoglu+theorem%3A+The+closed+unit+ball+in+the+dual+of+a+normed+vector+space+is+compact+in+the+weak-%2A+topology.',
   },
 ];
