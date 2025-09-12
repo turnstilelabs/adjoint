@@ -92,11 +92,6 @@ export function SublemmaItem({ step, title, content: initialContent, isLast }: S
             ) : (
               <>
                 <KatexRenderer content={currentContent} />
-                {isLast && (
-                  <span className="inline-block px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full mt-4">
-                    Q.E.D.
-                  </span>
-                )}
               </>
             )}
           </div>
