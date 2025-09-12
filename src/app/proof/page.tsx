@@ -1,7 +1,10 @@
+'use client';
 import { AppSidebar } from '@/components/sidebar';
 import ProofDisplay from '@/components/proof-display';
 import { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 function ProofPageContent({ problem, sublemmas }: { problem: string, sublemmas: string[] }) {
   return (
@@ -19,11 +22,6 @@ export default function ProofPage() {
     </Suspense>
   )
 }
-
-// A client component wrapper to use searchParams hook
-'use client';
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 function ProofPageWrapper() {
   const searchParams = useSearchParams();
