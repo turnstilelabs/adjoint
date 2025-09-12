@@ -13,7 +13,7 @@ import {
 export function AppSidebar() {
   return (
     <aside className="w-72 bg-card border-r flex flex-col shrink-0">
-      <div className="flex items-center gap-3 px-6 py-4 border-b">
+      <div className="flex items-center gap-3 px-6 h-[88px] border-b">
         <Logo />
         <h1 className="text-xl font-bold font-headline text-foreground">ProofGenius</h1>
       </div>
