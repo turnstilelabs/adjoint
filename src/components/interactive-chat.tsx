@@ -79,7 +79,7 @@ export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
                                 if(!isPending) handleSend();
                             }
                         }}
-                        placeholder="Ask a follow-up question..."
+                        placeholder="Ask a question about the proof or request an example..."
                         rows={1}
                         className="w-full bg-gray-100 rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
                         disabled={isPending}
