@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { askQuestionAction } from "@/app/actions";
 import { KatexRenderer } from "./katex-renderer";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import { ScrollArea } from "./ui/scroll-area";
 
 type Message = {
     role: 'user' | 'assistant';
@@ -22,13 +23,17 @@ export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
     const [input, setInput] = useState('');
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
 
-    useEffect(scrollToBottom, [messages]);
+    useEffect(() => {
+        if(scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTo({
+                top: scrollAreaRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    }, [messages]);
 
     const handleSend = () => {
         if (!input.trim()) return;
@@ -54,22 +59,22 @@ export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
     };
 
     return (
-        <div className="px-8 py-4 bg-card border-t mt-auto sticky bottom-0">
-            <div className="max-w-4xl mx-auto">
-                {messages.length > 0 && (
-                    <div className="mb-4 space-y-4 max-h-64 overflow-y-auto">
-                        {messages.map((msg, index) => (
-                            <div key={index} className={`flex gap-3 text-sm ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.role === 'assistant' && <Avatar className="w-8 h-8 shrink-0"><AvatarFallback>AI</AvatarFallback></Avatar>}
-                                <div className={`p-3 rounded-lg max-w-xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                                    <KatexRenderer content={msg.content} />
-                                </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
+                 <div className="space-y-4">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex gap-3 text-sm ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            {msg.role === 'assistant' && <Avatar className="w-8 h-8 shrink-0"><AvatarFallback>AI</AvatarFallback></Avatar>}
+                            <div className={`p-3 rounded-lg max-w-xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                <KatexRenderer content={msg.content} />
                             </div>
-                        ))}
-                         <div ref={messagesEndRef} />
-                    </div>
-                )}
-                <div className="relative">
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+           
+            <div className="p-6 border-t bg-background">
+                 <div className="relative">
                     <Textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -79,9 +84,9 @@ export function InteractiveChat({ proofSteps }: InteractiveChatProps) {
                                 if(!isPending) handleSend();
                             }
                         }}
-                        placeholder="Ask a question about the proof or request an example..."
+                        placeholder="Ask a question about the proof..."
                         rows={1}
-                        className="w-full bg-gray-100 rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
+                        className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
                         disabled={isPending}
                     />
                     <Button

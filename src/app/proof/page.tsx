@@ -7,9 +7,7 @@ import { useEffect, useState } from 'react';
 
 function ProofPageContent({ problem, sublemmas }: { problem: string, sublemmas: string[] }) {
   return (
-      <div className="h-screen bg-background">
-        <ProofDisplay initialProblem={problem} initialSublemmas={sublemmas} />
-      </div>
+    <ProofDisplay initialProblem={problem} initialSublemmas={sublemmas} />
   );
 }
 
