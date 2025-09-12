@@ -40,6 +40,7 @@ export default function ProofDisplay({
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
   const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
+  const [isProofEdited, setIsProofEdited] = useState(false);
   const { toast } = useToast();
 
   const isProofUnchanged = lastValidatedSublemmas ? JSON.stringify(sublemmas) === JSON.stringify(lastValidatedSublemmas) : false;
@@ -55,6 +56,7 @@ export default function ProofDisplay({
     setSublemmas(newSublemmas);
     setProofValidationResult(null); // Invalidate previous result on change
     setLastValidatedSublemmas(null); // Invalidate cache
+    setIsProofEdited(true); // Mark proof as edited
   };
 
   const handleValidateProof = () => {
@@ -141,7 +143,7 @@ export default function ProofDisplay({
                       size="lg"
                       className="w-full"
                       onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0 || isProofUnchanged}
+                      disabled={isProofValidating || sublemmas.length === 0 || isProofUnchanged || !isProofEdited}
                     >
                       {isProofValidating ? (
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
