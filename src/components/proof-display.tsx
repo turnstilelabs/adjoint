@@ -72,7 +72,6 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
                       step={index + 1}
                       title={`Step ${index + 1}`}
                       content={sublemma}
-                      isLast={index === sublemmas.length - 1}
                     />
                   ))}
                 </Accordion>
@@ -84,13 +83,6 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
       
       {isChatOpen && (
         <aside className="w-[30rem] border-l flex flex-col h-screen">
-          <div className="p-6 border-b">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="h-6 w-6 text-primary" />
-              <h2 className="text-xl font-bold font-headline">Interactive Chat</h2>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">Ask questions, request examples, or explore variations of the proof.</p>
-          </div>
           <InteractiveChat proofSteps={sublemmas} />
         </aside>
       )}
