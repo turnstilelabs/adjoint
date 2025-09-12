@@ -6,7 +6,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -18,7 +17,7 @@ import {
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { KatexRenderer } from './katex-renderer';
-import { Wand2, BrainCircuit, Play, Loader2, X, Sigma } from 'lucide-react';
+import { Wand2, BrainCircuit, Play, Loader2, Sigma } from 'lucide-react';
 import { autoformalizeAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -90,11 +89,6 @@ export function VerifyModal({
                 Verify Lemma
               </DialogTitle>
             </div>
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <X className="h-5 w-5" />
-              </Button>
-            </DialogClose>
           </div>
         </DialogHeader>
 
