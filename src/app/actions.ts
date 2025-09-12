@@ -3,6 +3,7 @@
 import { decomposeProof } from '@/ai/flows/llm-proof-decomposition';
 import { addProofStepWithLLMValidation } from '@/ai/flows/add-proof-step-validation';
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
+import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
 
 export async function decomposeProblemAction(problem: string) {
   if (!problem) {
@@ -40,5 +41,18 @@ export async function askQuestionAction(question: string, proofSteps: string[]) 
   } catch (error) {
     console.error('askQuestionAction error:', error);
     return { success: false, error: 'Failed to get an answer from AI.' };
+  }
+}
+
+export async function autoformalizeAction(lemma: string) {
+  if (!lemma) {
+    return { success: false, error: 'Lemma cannot be empty.' };
+  }
+  try {
+    const result = await autoformalizeAndProve({ lemma });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('autoformalizeAction error:', error);
+    return { success: false, error: 'Failed to autoformalize with AI.' };
   }
 }

@@ -6,7 +6,7 @@ import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import Link from 'next/link';
 import { Button } from './ui/button';
 import { Logo } from './logo';
