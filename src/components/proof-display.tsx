@@ -39,7 +39,10 @@ export default function ProofDisplay({
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
+  const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
   const { toast } = useToast();
+
+  const isProofUnchanged = lastValidatedSublemmas ? JSON.stringify(sublemmas) === JSON.stringify(lastValidatedSublemmas) : false;
 
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export default function ProofDisplay({
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
     setProofValidationResult(null); // Invalidate previous result on change
+    setLastValidatedSublemmas(null); // Invalidate cache
   };
 
   const handleValidateProof = () => {
@@ -58,10 +62,14 @@ export default function ProofDisplay({
       setProofValidationResult(null);
       const result = await validateProofAction(initialProblem, sublemmas);
       if (result.success) {
-        setProofValidationResult({
+        const validationResult = {
           isValid: result.isValid || false,
           feedback: result.feedback || 'No feedback provided.',
-        });
+        };
+        setProofValidationResult(validationResult);
+        if (validationResult.isValid) {
+          setLastValidatedSublemmas(sublemmas);
+        }
       } else {
         toast({
           title: 'Validation Failed',
@@ -129,8 +137,21 @@ export default function ProofDisplay({
                   </Accordion>
                   
                   <div className="pt-4 space-y-4">
-                    {proofValidationResult && (
-                        <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mb-4 bg-card">
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      onClick={handleValidateProof}
+                      disabled={isProofValidating || sublemmas.length === 0 || isProofUnchanged}
+                    >
+                      {isProofValidating ? (
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="mr-2 h-5 w-5" />
+                      )}
+                      {isProofUnchanged ? 'Proof Verified' : 'Validate Full Proof'}
+                    </Button>
+                     {proofValidationResult && (
+                        <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mt-4 bg-card">
                           {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
                           <AlertTitle>{proofValidationResult.isValid ? "Proof Verified" : "Proof Invalid"}</AlertTitle>
                           <AlertDescription>
@@ -138,19 +159,6 @@ export default function ProofDisplay({
                           </AlertDescription>
                         </Alert>
                       )}
-                    <Button
-                      size="lg"
-                      className="w-full"
-                      onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0}
-                    >
-                      {isProofValidating ? (
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="mr-2 h-5 w-5" />
-                      )}
-                      Validate Full Proof
-                    </Button>
                   </div>
                 </div>
               )}
