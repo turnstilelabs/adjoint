@@ -101,7 +101,6 @@ export function SublemmaItem({ step, title, content, onContentChange }: Sublemma
           target={selection.target}
           onRevise={handleReviseFromToolbar}
           selectedText={selection.text}
-          fullText={content}
         />
       )}
       <AccordionItem value={`item-${step}`} className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border">

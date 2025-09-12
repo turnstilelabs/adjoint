@@ -3,28 +3,39 @@ import { Check, Edit } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { addProofStepAction } from '@/app/actions';
+import { validateStatementAction } from '@/app/actions';
 import { useTransition } from 'react';
 
 interface SelectionToolbarProps {
   target: HTMLElement | null;
   onRevise: () => void;
   selectedText: string;
-  fullText: string;
 }
 
-export function SelectionToolbar({ target, onRevise, selectedText, fullText }: SelectionToolbarProps) {
+export function SelectionToolbar({ target, onRevise, selectedText }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   const handleCheckAgain = () => {
     startTransition(async () => {
-      const result = await addProofStepAction('', fullText, selectedText);
+      const result = await validateStatementAction(selectedText);
       if (result.success) {
+        let title = 'Verification Result';
+        let description = result.reasoning || 'No reason provided.';
+        if (result.validity === 'VALID') {
+            title = 'Valid Statement';
+            description = `The AI confirmed: "${result.reasoning}"`;
+        } else if (result.validity === 'INVALID') {
+            title = 'Invalid Statement';
+            description = `The AI responded: "${result.reasoning}"`;
+        } else if (result.validity === 'INCOMPLETE') {
+            title = 'Incomplete Statement';
+            description = `The AI responded: "${result.reasoning}"`;
+        }
         toast({
-          title: result.isValid ? 'Verification Successful' : 'Verification Feedback',
-          description: result.feedback,
-          variant: result.isValid ? 'default' : 'destructive',
+          title: title,
+          description: description,
+          variant: result.validity === 'VALID' ? 'default' : 'destructive',
         });
       } else {
         toast({

@@ -4,6 +4,7 @@ import { decomposeProof } from '@/ai/flows/llm-proof-decomposition';
 import { addProofStepWithLLMValidation } from '@/ai/flows/add-proof-step-validation';
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
 import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
+import { validateStatement } from '@/ai/flows/validate-statement';
 
 export async function decomposeProblemAction(problem: string) {
   if (!problem) {
@@ -54,5 +55,18 @@ export async function autoformalizeAction(lemma: string) {
   } catch (error) {
     console.error('autoformalizeAction error:', error);
     return { success: false, error: 'Failed to autoformalize with AI.' };
+  }
+}
+
+export async function validateStatementAction(statement: string) {
+  if (!statement) {
+    return { success: false, error: 'Statement cannot be empty.' };
+  }
+  try {
+    const result = await validateStatement({ statement });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('validateStatementAction error:', error);
+    return { success: false, error: 'Failed to validate the statement with AI.' };
   }
 }
