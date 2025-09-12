@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2 } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
@@ -30,6 +30,10 @@ export default function ProofDisplay({
   const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
+
+  useEffect(() => {
+    setSublemmas(initialSublemmas);
+  }, [initialSublemmas]);
 
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
