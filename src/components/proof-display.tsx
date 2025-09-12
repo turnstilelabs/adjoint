@@ -7,7 +7,7 @@ import { InteractiveChat } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Separator } from './ui/separator';
+import { SidebarTrigger } from './ui/sidebar';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -19,11 +19,14 @@ export default function ProofDisplay({ initialProblem, initialSublemmas }: Proof
   const [validationResult, setValidationResult] = useState<{ isValid: boolean, feedback: string } | null>(null);
 
   return (
-    <main className="flex-1 flex flex-col overflow-hidden">
+    <main className="flex-1 flex flex-col overflow-hidden h-screen">
       {/* Non-scrollable header */}
-      <div className="p-6 border-b">
+      <div className="p-6 border-b flex-shrink-0">
         <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold font-headline mb-4">Original Problem</h2>
+            <div className='flex items-center gap-4 mb-4'>
+              <SidebarTrigger />
+              <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
+            </div>
             <Card>
                 <CardContent className='pt-6'>
                 <KatexRenderer content={initialProblem} />
