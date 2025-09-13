@@ -7,6 +7,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { decomposeProblemAction } from '@/app/actions';
 import { type Message } from '@/components/interactive-chat';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { Loader2 } from 'lucide-react';
 
 function ProofPageContent() {
   const searchParams = useSearchParams();
@@ -29,7 +30,6 @@ function ProofPageContent() {
     }
     
     setProblem(problemParam);
-    // No longer setting initial user message
     setMessages([]);
 
     startTransition(async () => {
@@ -60,10 +60,12 @@ function ProofPageContent() {
     );
   }
 
-  if (!problem) {
-    return <LoadingState message="Loading..." />;
+  if (isPending || !problem) {
+    return (
+      <LoadingState message="Generating proof steps..." />
+    );
   }
-
+  
   return (
     <ProofDisplay
       initialProblem={problem}
@@ -86,8 +88,10 @@ export default function ProofPage() {
 function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <p className="text-lg">{message}</p>
+      <div className="flex flex-col items-center gap-4 text-muted-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-lg font-medium">{message}</p>
+        <p className="text-sm">The AI is thinking. This may take a moment.</p>
       </div>
     </div>
   );
