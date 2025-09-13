@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useTransition } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -13,7 +13,7 @@ import { Logo } from './logo';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { validateProofAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-
+import { ProofHistorySidebar } from './proof-history-sidebar';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -28,6 +28,11 @@ type ValidationResult = {
   feedback: string;
 };
 
+export type ProofVersion = {
+  sublemmas: Sublemma[];
+  timestamp: Date;
+};
+
 export default function ProofDisplay({
   initialProblem,
   sublemmas: initialSublemmas,
@@ -36,25 +41,31 @@ export default function ProofDisplay({
   setMessages,
 }: ProofDisplayProps) {
   const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
   const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
   const [isProofEdited, setIsProofEdited] = useState(false);
   const { toast } = useToast();
-
-  const isProofUnchanged = lastValidatedSublemmas ? JSON.stringify(sublemmas) === JSON.stringify(lastValidatedSublemmas) : false;
-
+  const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
+    if (initialSublemmas.length > 0) {
+      // Save initial AI-generated proof as the first version
+      setProofHistory([{ sublemmas: initialSublemmas, timestamp: new Date() }]);
+    }
   }, [initialSublemmas]);
 
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
-    setIsProofEdited(true); // Mark proof as edited
+    setIsProofEdited(true);
+
+    // Save a new version to history
+    setProofHistory(prevHistory => [...prevHistory, { sublemmas: newSublemmas, timestamp: new Date() }]);
   };
 
   const handleValidateProof = () => {
@@ -67,8 +78,8 @@ export default function ProofDisplay({
           feedback: result.feedback || 'No feedback provided.',
         };
         setProofValidationResult(validationResult);
-        setLastValidatedSublemmas(sublemmas); // Cache the proof state after any validation
-        setIsProofEdited(false); // Reset edited state after validation
+        setLastValidatedSublemmas(sublemmas);
+        setIsProofEdited(false);
       } else {
         toast({
           title: 'Validation Failed',
@@ -78,9 +89,30 @@ export default function ProofDisplay({
       }
     });
   };
+
+  const handleRestoreVersion = (version: ProofVersion) => {
+    setSublemmas(version.sublemmas);
+    // Add the restored state as the newest item in history
+    setProofHistory(prev => [...prev, { sublemmas: version.sublemmas, timestamp: new Date() }]);
+    setIsProofEdited(true); // Mark as edited so it can be re-validated
+    setProofValidationResult(null); // Clear old validation result
+    toast({
+      title: 'Proof Restored',
+      description: `Restored version from ${version.timestamp.toLocaleTimeString()}`,
+    });
+  };
   
   return (
     <div className="flex h-screen bg-background">
+      {isHistoryOpen && (
+        <aside className="w-80 border-r flex flex-col h-screen bg-card">
+          <ProofHistorySidebar 
+            history={proofHistory}
+            onRestore={handleRestoreVersion}
+            onClose={() => setIsHistoryOpen(false)}
+          />
+        </aside>
+      )}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Non-scrollable header */}
         <div className="p-6 border-b flex-shrink-0">
@@ -93,7 +125,13 @@ export default function ProofDisplay({
                     <span className="sr-only">New Proof</span>
                   </Link>
                 </Button>
-                <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
+                <div className='flex items-center gap-2'>
+                  <Button variant="outline" size="icon" onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
+                    <History />
+                    <span className="sr-only">Toggle History</span>
+                  </Button>
+                  <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
+                </div>
               </div>
               <Button variant="outline" size="icon" onClick={() => setIsChatOpen(!isChatOpen)}>
                 {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
