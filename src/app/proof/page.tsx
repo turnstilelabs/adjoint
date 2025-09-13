@@ -29,7 +29,8 @@ function ProofPageContent() {
     }
     
     setProblem(problemParam);
-    setMessages([{ role: 'user', content: problemParam }]);
+    // No longer setting initial user message
+    setMessages([]);
 
     startTransition(async () => {
       decompositionRan.current = true;

@@ -65,7 +65,7 @@ export function InteractiveChat({ proofSteps, messages, setMessages }: Interacti
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
-                 <div className="space-y-4">
+                 <div className="space-y-4 pt-4">
                     {messages.map((msg, index) => (
                         <div key={index} className={`flex gap-3 text-sm ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             {msg.role === 'assistant' && <Avatar className="w-8 h-8 shrink-0"><AvatarFallback>AI</AvatarFallback></Avatar>}
