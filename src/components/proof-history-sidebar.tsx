@@ -3,7 +3,7 @@
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { type ProofVersion } from './proof-display';
-import { PanelLeftClose, Undo2 } from 'lucide-react';
+import { PanelLeftClose, Undo2, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 
 interface ProofHistorySidebarProps {
@@ -31,13 +31,16 @@ export function ProofHistorySidebar({ history, onRestore, onClose }: ProofHistor
             <Card key={history.length - 1 - index} className="group hover:bg-muted/50 transition-colors">
               <CardContent className='p-3'>
                 <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-sm font-medium">
-                            Version {history.length - index}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {version.timestamp.toLocaleTimeString()}
-                        </p>
+                    <div className="flex items-center gap-2">
+                         {version.isValid && <CheckCircle className="h-4 w-4 text-green-500" />}
+                        <div>
+                            <p className="text-sm font-medium">
+                                Version {history.length - index}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {version.timestamp.toLocaleTimeString()}
+                            </p>
+                        </div>
                     </div>
                     <Button
                         size="sm"

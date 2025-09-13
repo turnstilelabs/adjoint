@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useTransition } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, Check } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -14,6 +14,7 @@ import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { validateProofAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
+import { isEqual } from 'lodash';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -31,6 +32,7 @@ type ValidationResult = {
 export type ProofVersion = {
   sublemmas: Sublemma[];
   timestamp: Date;
+  isValid?: boolean;
 };
 
 export default function ProofDisplay({
@@ -53,21 +55,16 @@ export default function ProofDisplay({
   useEffect(() => {
     setSublemmas(initialSublemmas);
     if (initialSublemmas.length > 0) {
-      // Save initial AI-generated proof as the first version
       setProofHistory([{ sublemmas: initialSublemmas, timestamp: new Date() }]);
     }
   }, [initialSublemmas]);
 
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
-    // This was the source of the bug. It was creating a new object without preserving the title.
-    // The fix is to spread the existing sublemma object to retain its properties like `title`.
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
     setIsProofEdited(true);
   
-    // This logic should be moved to the save handler in SublemmaItem if we want to avoid saving on every keystroke.
-    // For now, let's assume saving on content change is the desired behavior for history.
     setProofHistory(prevHistory => [...prevHistory, { sublemmas: newSublemmas, timestamp: new Date() }]);
   };
 
@@ -83,6 +80,17 @@ export default function ProofDisplay({
         setProofValidationResult(validationResult);
         setLastValidatedSublemmas(sublemmas);
         setIsProofEdited(false);
+
+        // Update the latest history entry with the validation result
+        setProofHistory(prev => {
+          const latestHistory = [...prev];
+          const lastVersion = latestHistory[latestHistory.length - 1];
+          if (lastVersion && isEqual(lastVersion.sublemmas, sublemmas)) {
+            lastVersion.isValid = validationResult.isValid;
+          }
+          return latestHistory;
+        });
+
       } else {
         toast({
           title: 'Validation Failed',
@@ -95,10 +103,9 @@ export default function ProofDisplay({
 
   const handleRestoreVersion = (version: ProofVersion) => {
     setSublemmas(version.sublemmas);
-    // Add the restored state as the newest item in history
     setProofHistory(prev => [...prev, { sublemmas: version.sublemmas, timestamp: new Date() }]);
-    setIsProofEdited(true); // Mark as edited so it can be re-validated
-    setProofValidationResult(null); // Clear old validation result
+    setIsProofEdited(true);
+    setProofValidationResult(null);
     toast({
       title: 'Proof Restored',
       description: `Restored version from ${version.timestamp.toLocaleTimeString()}`,
@@ -181,7 +188,7 @@ export default function ProofDisplay({
                       size="lg"
                       className="w-full"
                       onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0 || !isProofEdited}
+                      disabled={isProofValidating || sublemmas.length === 0 || !isProofEdited && lastValidatedSublemmas !== null}
                     >
                       {isProofValidating ? (
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
