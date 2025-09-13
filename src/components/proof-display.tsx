@@ -111,6 +111,26 @@ export default function ProofDisplay({
       description: `Restored version from ${version.timestamp.toLocaleTimeString()}`,
     });
   };
+
+  const toggleChat = () => {
+    setIsChatOpen(prev => {
+      const isOpening = !prev;
+      if (isOpening) {
+        setIsHistoryOpen(false);
+      }
+      return isOpening;
+    });
+  };
+
+  const toggleHistory = () => {
+    setIsHistoryOpen(prev => {
+      const isOpening = !prev;
+      if (isOpening) {
+        setIsChatOpen(false);
+      }
+      return isOpening;
+    });
+  };
   
   return (
     <div className="flex h-screen bg-background">
@@ -137,7 +157,7 @@ export default function ProofDisplay({
                 </Button>
                 <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
               </div>
-              <Button variant="outline" size="icon" onClick={() => setIsChatOpen(!isChatOpen)}>
+              <Button variant="outline" size="icon" onClick={toggleChat}>
                 {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
                 <span className="sr-only">Toggle Chat</span>
               </Button>
@@ -155,7 +175,7 @@ export default function ProofDisplay({
           <div className="p-6">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-2 mb-4">
-                <Button variant="outline" size="icon" onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
+                <Button variant="outline" size="icon" onClick={toggleHistory}>
                   <History />
                   <span className="sr-only">Toggle History</span>
                 </Button>
