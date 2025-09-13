@@ -34,7 +34,7 @@ export default function Home() {
           <div className="w-full max-w-4xl mx-auto">
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold font-headline text-gray-900">
-                QED
+                Quod
               </h1>
               <p className="mt-2 text-lg text-gray-600">
                 From conjecture to conclusion.
