@@ -34,10 +34,10 @@ export default function Home() {
           <div className="w-full max-w-4xl mx-auto">
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold font-headline text-gray-900">
-                MathProof Pal
+                QED
               </h1>
               <p className="mt-2 text-lg text-gray-600">
-                Your AI partner in mathematical discovery.
+                From conjecture to conclusion.
               </p>
             </div>
             <ProblemInputForm />

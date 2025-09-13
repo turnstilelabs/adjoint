@@ -3,8 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MathProof Pal',
-  description: 'An app for mathematicians to leverage LLM models.',
+  title: 'QED',
+  description: 'From conjecture to conclusion.',
 };
 
 export default function RootLayout({
