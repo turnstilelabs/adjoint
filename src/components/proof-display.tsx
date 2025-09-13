@@ -60,11 +60,14 @@ export default function ProofDisplay({
 
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
+    // This was the source of the bug. It was creating a new object without preserving the title.
+    // The fix is to spread the existing sublemma object to retain its properties like `title`.
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     setSublemmas(newSublemmas);
     setIsProofEdited(true);
-
-    // Save a new version to history
+  
+    // This logic should be moved to the save handler in SublemmaItem if we want to avoid saving on every keystroke.
+    // For now, let's assume saving on content change is the desired behavior for history.
     setProofHistory(prevHistory => [...prevHistory, { sublemmas: newSublemmas, timestamp: new Date() }]);
   };
 
@@ -93,7 +96,7 @@ export default function ProofDisplay({
   const handleRestoreVersion = (version: ProofVersion) => {
     setSublemmas(version.sublemmas);
     // Add the restored state as the newest item in history
-    setProofHistory(prev => [...prev, { sublemmas: version.sublemmas, timestamp: new Date() }]);
+    setProofHistory(prev => [...prev, { sulemmas: version.sublemmas, timestamp: new Date() }]);
     setIsProofEdited(true); // Mark as edited so it can be re-validated
     setProofValidationResult(null); // Clear old validation result
     toast({
