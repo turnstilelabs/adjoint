@@ -2,12 +2,16 @@
 import ProofDisplay from '@/components/proof-display';
 import { Suspense, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { decomposeProblemAction } from '@/app/actions';
 import { type Message } from '@/components/interactive-chat';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
+import { KatexRenderer } from '@/components/katex-renderer';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { Logo } from '@/components/logo';
 
 function ProofPageContent() {
   const searchParams = useSearchParams();
@@ -19,22 +23,24 @@ function ProofPageContent() {
   const decompositionRan = useRef(false);
 
   useEffect(() => {
-    if (decompositionRan.current) {
-      return;
-    }
     const problemParam = searchParams.get('problem');
-
-    if (!problemParam) {
+    if (problemParam) {
+      setProblem(problemParam);
+    } else {
       setError('Missing problem in the URL.');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!problem || decompositionRan.current) {
       return;
     }
+    decompositionRan.current = true;
     
-    setProblem(problemParam);
     setMessages([]);
 
     startTransition(async () => {
-      decompositionRan.current = true;
-      const result = await decomposeProblemAction(problemParam);
+      const result = await decomposeProblemAction(problem);
       if (result.success && result.sublemmas) {
         setSublemmas(result.sublemmas);
         const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${result.sublemmas.map((s, i) => `**${s.title}:** ${s.content}`).join('\n\n')}`;
@@ -43,7 +49,7 @@ function ProofPageContent() {
         setError(result.error || 'Failed to decompose the problem.');
       }
     });
-  }, [searchParams]);
+  }, [problem]);
 
   if (error) {
     return (
@@ -60,15 +66,15 @@ function ProofPageContent() {
     );
   }
 
-  if (isPending || !problem) {
+  if (isPending || sublemmas.length === 0) {
     return (
-      <LoadingState message="Generating proof steps..." />
+      <LoadingState problem={problem} />
     );
   }
   
   return (
     <ProofDisplay
-      initialProblem={problem}
+      initialProblem={problem!}
       sublemmas={sublemmas}
       isLoading={isPending}
       messages={messages}
@@ -79,20 +85,59 @@ function ProofPageContent() {
 
 export default function ProofPage() {
   return (
-    <Suspense fallback={<LoadingState message="Loading page..." />}>
+    <Suspense fallback={<InitialLoading />}>
       <ProofPageContent />
     </Suspense>
   );
 }
 
-function LoadingState({ message }: { message: string }) {
+function InitialLoading() {
   return (
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4 text-muted-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-lg font-medium">{message}</p>
-        <p className="text-sm">The AI is thinking. This may take a moment.</p>
+        <p className="text-lg font-medium">Loading problem...</p>
       </div>
+    </div>
+  );
+}
+
+function LoadingState({ problem }: { problem: string | null }) {
+  const router = useRouter();
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="p-6 border-b">
+        <div className="max-w-4xl mx-auto">
+          <Button asChild variant="ghost" size="icon">
+            <Link href="/">
+              <Logo />
+              <span className="sr-only">New Proof</span>
+            </Link>
+          </Button>
+        </div>
+      </header>
+      <main className="flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-4xl mx-auto text-center">
+          <h2 className="text-2xl font-bold font-headline mb-4">Original Problem</h2>
+          <Card className='text-left'>
+            <CardContent className="pt-6">
+              {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
+            </CardContent>
+          </Card>
+          <div className="mt-12 flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-lg font-medium">Generating proof steps...</p>
+            <p className="text-sm">The AI is thinking. This may take a moment.</p>
+          </div>
+           <div className="mt-8">
+            <Button variant="outline" onClick={() => router.push('/')}>
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+            </Button>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
