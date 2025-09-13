@@ -42,7 +42,7 @@ export default function ProofDisplay({
   messages,
   setMessages,
 }: ProofDisplayProps) {
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
   const [isProofValidating, startProofValidationTransition] = useTransition();
