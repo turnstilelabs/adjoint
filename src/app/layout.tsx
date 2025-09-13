@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Quod',
+  title: 'Adjoint',
   description: 'From conjecture to conclusion.',
 };
 
