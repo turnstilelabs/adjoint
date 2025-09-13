@@ -96,7 +96,7 @@ export default function ProofDisplay({
   const handleRestoreVersion = (version: ProofVersion) => {
     setSublemmas(version.sublemmas);
     // Add the restored state as the newest item in history
-    setProofHistory(prev => [...prev, { sulemmas: version.sublemmas, timestamp: new Date() }]);
+    setProofHistory(prev => [...prev, { sublemmas: version.sublemmas, timestamp: new Date() }]);
     setIsProofEdited(true); // Mark as edited so it can be re-validated
     setProofValidationResult(null); // Clear old validation result
     toast({
@@ -128,13 +128,7 @@ export default function ProofDisplay({
                     <span className="sr-only">New Proof</span>
                   </Link>
                 </Button>
-                <div className='flex items-center gap-2'>
-                  <Button variant="outline" size="icon" onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
-                    <History />
-                    <span className="sr-only">Toggle History</span>
-                  </Button>
-                  <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
-                </div>
+                <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
               </div>
               <Button variant="outline" size="icon" onClick={() => setIsChatOpen(!isChatOpen)}>
                 {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
@@ -153,7 +147,13 @@ export default function ProofDisplay({
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="max-w-4xl mx-auto">
-              <h2 className="text-2xl font-bold font-headline mb-4">Tentative Proof</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <Button variant="outline" size="icon" onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
+                  <History />
+                  <span className="sr-only">Toggle History</span>
+                </Button>
+                <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
+              </div>
               {isLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <div className="flex flex-col items-center gap-4 text-muted-foreground">
