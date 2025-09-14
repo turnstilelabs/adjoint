@@ -50,21 +50,29 @@ export default function ProofDisplay({
   const [isProofEdited, setIsProofEdited] = useState(false);
   const { toast } = useToast();
   const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
+  const [activeVersionIndex, setActiveVersionIndex] = useState(0);
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
     if (initialSublemmas.length > 0) {
-      setProofHistory([{ sublemmas: initialSublemmas, timestamp: new Date() }]);
+      const initialHistory = [{ sublemmas: initialSublemmas, timestamp: new Date() }];
+      setProofHistory(initialHistory);
+      setActiveVersionIndex(0);
     }
   }, [initialSublemmas]);
 
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
+    
+    // Create a new version branching from the currently active version
+    const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
+    const newVersion = { sublemmas: newSublemmas, timestamp: new Date() };
+    
+    setProofHistory([...newHistory, newVersion]);
     setSublemmas(newSublemmas);
+    setActiveVersionIndex(newHistory.length);
     setIsProofEdited(true);
-  
-    setProofHistory(prevHistory => [...prevHistory, { sublemmas: newSublemmas, timestamp: new Date() }]);
   };
 
   const handleValidateProof = () => {
@@ -80,14 +88,14 @@ export default function ProofDisplay({
         setLastValidatedSublemmas(sublemmas);
         setIsProofEdited(false);
 
-        // Update the latest history entry with the validation result
+        // Update the active history entry with the validation result
         setProofHistory(prev => {
-          const latestHistory = [...prev];
-          const lastVersion = latestHistory[latestHistory.length - 1];
-          if (lastVersion && isEqual(lastVersion.sublemmas, sublemmas)) {
-            lastVersion.isValid = validationResult.isValid;
+          const updatedHistory = [...prev];
+          const activeVersion = updatedHistory[activeVersionIndex];
+          if (activeVersion && isEqual(activeVersion.sublemmas, sublemmas)) {
+            activeVersion.isValid = validationResult.isValid;
           }
-          return latestHistory;
+          return updatedHistory;
         });
 
       } else {
@@ -100,15 +108,18 @@ export default function ProofDisplay({
     });
   };
 
-  const handleRestoreVersion = (version: ProofVersion) => {
-    setSublemmas(version.sublemmas);
-    setProofHistory(prev => [...prev, { sublemmas: version.sublemmas, timestamp: new Date() }]);
-    setIsProofEdited(true);
-    setProofValidationResult(null);
-    toast({
-      title: 'Proof Restored',
-      description: `Restored version from ${version.timestamp.toLocaleTimeString()}`,
-    });
+  const handleRestoreVersion = (index: number) => {
+    const versionToRestore = proofHistory[index];
+    if (versionToRestore) {
+        setSublemmas(versionToRestore.sublemmas);
+        setActiveVersionIndex(index);
+        setIsProofEdited(true); // Mark as edited to allow re-validation
+        setProofValidationResult(null); // Clear old validation result
+        toast({
+        title: 'Proof Restored',
+        description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
+        });
+    }
   };
 
   const toggleChat = () => {
@@ -137,6 +148,7 @@ export default function ProofDisplay({
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
           <ProofHistorySidebar 
             history={proofHistory}
+            activeIndex={activeVersionIndex}
             onRestore={handleRestoreVersion}
             onClose={() => setIsHistoryOpen(false)}
           />
@@ -208,7 +220,7 @@ export default function ProofDisplay({
                   <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
                     {sublemmas.map((sublemma, index) => (
                       <SublemmaItem
-                        key={index}
+                        key={`${activeVersionIndex}-${index}`}
                         step={index + 1}
                         title={sublemma.title}
                         content={sublemma.content}
