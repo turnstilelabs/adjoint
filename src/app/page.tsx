@@ -56,7 +56,7 @@ export default function Home() {
                     <div className="p-6 pt-0 mt-auto">
                       <Link href={example.href}>
                         <Button variant="outline" className="w-full">
-                          Start Proof <ArrowRight className="ml-2 h-4 w-4" />
+                          Explore Proof <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </Link>
                     </div>
