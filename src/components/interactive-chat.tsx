@@ -79,7 +79,8 @@ export function InteractiveChat({
     if (!request) return;
 
     const userMessage: Message = { role: 'user', content: request };
-    setMessages([...messages, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
 
     startTransition(async () => {
