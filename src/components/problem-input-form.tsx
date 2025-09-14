@@ -75,7 +75,7 @@ export default function ProblemInputForm() {
               ) : (
                 <>
                   <Wand2 className="mr-2 h-5 w-5" />
-                  Begin Proof
+                  Decompose
                 </>
               )}
             </Button>
