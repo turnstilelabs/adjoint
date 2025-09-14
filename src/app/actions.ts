@@ -18,7 +18,8 @@ export async function decomposeProblemAction(problem: string) {
     return { success: true, sublemmas };
   } catch (error) {
     console.error('decomposeProblemAction error:', error);
-    return { success: false, error: 'Failed to decompose the problem with AI.' };
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Failed to decompose the problem with AI: ${errorMessage}` };
   }
 }
 
