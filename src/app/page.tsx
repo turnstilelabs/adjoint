@@ -36,7 +36,7 @@ export default function Home() {
             <div className="text-center mb-8">
               <Header />
               <p className="mt-2 text-lg text-gray-600">
-                Your canonical companion in proof.
+                Your canonical companion in reasoning.
               </p>
             </div>
             <ProblemInputForm />
