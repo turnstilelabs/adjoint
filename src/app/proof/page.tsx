@@ -40,6 +40,8 @@ function ProofPageContent() {
     setMessages([]);
 
     startTransition(async () => {
+      // Short delay to allow UI to render first
+      await new Promise(resolve => setTimeout(resolve, 50)); 
       const result = await decomposeProblemAction(problem);
       if (result.success && result.sublemmas) {
         setSublemmas(result.sublemmas);
