@@ -76,8 +76,8 @@ export function InteractiveChat({
   const handleSend = () => {
     if (!input.trim()) return;
 
-    const newMessages: Message[] = [...messages, { role: 'user', content: input }];
-    setMessages(newMessages);
+    const userMessage: Message = { role: 'user', content: input };
+    setMessages([...messages, userMessage]);
     const request = input;
     setInput('');
 
@@ -93,15 +93,14 @@ export function InteractiveChat({
                 isHandled: false,
             };
         }
-        setMessages([...newMessages, assistantMessage]);
+        setMessages((prevMessages) => [...prevMessages, assistantMessage]);
       } else {
         toast({
           title: 'Error',
           description: result.error || 'Failed to get an answer.',
           variant: 'destructive',
         });
-        // Revert to previous messages on error, keeping the user's message
-        setMessages(newMessages);
+        // On error, the user's message remains visible as it was set before the transition
       }
     });
   };
