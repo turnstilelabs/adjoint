@@ -16,6 +16,7 @@ export type Message = {
   suggestion?: {
     revisedSublemmas: Sublemma[];
     isHandled: boolean;
+    status?: 'accepted' | 'declined';
   }
 };
 
@@ -60,15 +61,15 @@ export function InteractiveChat({
       onProofRevision(message.suggestion.revisedSublemmas);
     }
 
-    // Mark suggestion as handled
+    // Mark suggestion as handled and set status
     const newMessages = [...messages];
     newMessages[messageIndex] = {
       ...message,
       suggestion: {
         ...message.suggestion,
         isHandled: true,
+        status: accept ? 'accepted' : 'declined',
       },
-      content: `${message.content}\n\n*Suggestion ${accept ? 'accepted' : 'declined'} by user.*`
     };
     setMessages(newMessages);
   };
@@ -139,6 +140,11 @@ export function InteractiveChat({
                             <ThumbsDown className='mr-2'/> Decline
                         </Button>
                     </div>
+                )}
+                 {msg.suggestion?.isHandled && (
+                  <p className="mt-2 pt-2 border-t border-muted-foreground/20 text-xs italic text-muted-foreground">
+                    Suggestion {msg.suggestion.status} by user.
+                  </p>
                 )}
               </div>
             </div>
