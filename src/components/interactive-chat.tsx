@@ -84,37 +84,24 @@ export function InteractiveChat({
     startTransition(async () => {
       const result = await reviseOrAskAction(problem, sublemmas, request);
       if (result.success) {
+        const assistantMessage: Message = { role: 'assistant', content: result.explanation };
         if (result.revisionType === 'DIRECT_REVISION' && result.revisedSublemmas) {
           onProofRevision(result.revisedSublemmas);
-          setMessages([
-            ...newMessages,
-            { role: 'assistant', content: result.explanation },
-          ]);
         } else if (result.revisionType === 'SUGGESTED_REVISION' && result.revisedSublemmas) {
-          setMessages([
-            ...newMessages,
-            {
-              role: 'assistant',
-              content: result.explanation,
-              suggestion: {
+            assistantMessage.suggestion = {
                 revisedSublemmas: result.revisedSublemmas,
                 isHandled: false,
-              }
-            },
-          ]);
-        } else {
-          setMessages([
-            ...newMessages,
-            { role: 'assistant', content: result.explanation },
-          ]);
+            };
         }
+        setMessages([...newMessages, assistantMessage]);
       } else {
         toast({
           title: 'Error',
           description: result.error || 'Failed to get an answer.',
           variant: 'destructive',
         });
-        setMessages(messages); // Revert messages on error
+        // Revert to previous messages on error, keeping the user's message
+        setMessages(newMessages);
       }
     });
   };
