@@ -1,0 +1,20 @@
+export function LogoSmall() {
+  return (
+    <div className="flex items-center justify-center size-10 rounded-full border-2 border-primary text-primary bg-primary/10">
+      <svg
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+        className="size-5"
+        aria-hidden="true"
+      >
+        <path d="M12 2v20"></path>
+        <path d="M4 12h8"></path>
+      </svg>
+    </div>
+  );
+}

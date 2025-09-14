@@ -11,7 +11,7 @@ import { Loader2, X } from 'lucide-react';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Header } from '@/components/header';
+import { PageHeader } from '@/components/page-header';
 
 function ProofPageContent() {
   const searchParams = useSearchParams();
@@ -111,7 +111,7 @@ function LoadingState({ problem }: { problem: string | null }) {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="p-6 border-b">
         <div className="max-w-4xl mx-auto">
-          <Header />
+          <PageHeader />
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center p-8">

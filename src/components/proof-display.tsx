@@ -14,7 +14,7 @@ import { validateProofAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
 import { isEqual } from 'lodash';
-import { Header } from './header';
+import { PageHeader } from './page-header';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -168,10 +168,10 @@ export default function ProofDisplay({
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Non-scrollable header */}
-        <div className="p-6 border-b flex-shrink-0">
+        <div className="p-6 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
              <div className="flex items-center justify-between gap-4 mb-4">
-               <Header />
+               <PageHeader />
               <Button variant="outline" size="icon" onClick={toggleChat}>
                 {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
                 <span className="sr-only">Toggle Chat</span>
