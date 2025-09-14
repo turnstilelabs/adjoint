@@ -74,11 +74,11 @@ export function InteractiveChat({
   };
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    const request = input.trim();
+    if (!request) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: 'user', content: request };
     setMessages([...messages, userMessage]);
-    const request = input;
     setInput('');
 
     startTransition(async () => {
@@ -100,7 +100,8 @@ export function InteractiveChat({
           description: result.error || 'Failed to get an answer.',
           variant: 'destructive',
         });
-        // On error, the user's message remains visible as it was set before the transition
+        // On error, remove the user's message to allow them to try again.
+        setMessages(prev => prev.filter(m => m !== userMessage));
       }
     });
   };

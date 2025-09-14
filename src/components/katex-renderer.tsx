@@ -9,6 +9,21 @@ type KatexRendererProps = {
   className?: string;
 };
 
+// Helper function to create a React element from a text part, converting newlines to <br>
+const renderTextWithLineBreaks = (text: string, key: number) => {
+  const lines = text.split('\n');
+  return (
+    <React.Fragment key={key}>
+      {lines.map((line, i) => (
+        <React.Fragment key={i}>
+          {line}
+          {i < lines.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </React.Fragment>
+  );
+};
+
 export function KatexRenderer({ content, className }: KatexRendererProps) {
   const parts = useMemo(() => {
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
@@ -25,7 +40,7 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return <span key={index}>{part}</span>;
+          return renderTextWithLineBreaks(part, index);
         }
       } else if (part.startsWith('$') && part.endsWith('$')) {
         const latex = part.substring(1, part.length - 1);
@@ -37,15 +52,15 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return <span key={index}>{part}</span>;
+          return renderTextWithLineBreaks(part, index);
         }
       } else {
-        // Render plain text parts
-        return <span key={index}>{part}</span>;
+        // Render plain text parts, handling newlines
+        return renderTextWithLineBreaks(part, index);
       }
     });
   }, [content]);
 
-  // Use 'whitespace-pre-wrap' to respect newlines in the original text
-  return <div className={cn('whitespace-pre-wrap', className)}>{parts}</div>;
+  // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
+  return <div className={cn(className)}>{parts}</div>;
 }
