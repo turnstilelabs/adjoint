@@ -41,7 +41,7 @@ export default function ProblemInputForm() {
             <Textarea
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
-              className="w-full h-48 p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+              className="w-full h-36 p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
               placeholder="For example: Prove that for any integer n, if n^2 is even, then n is even. Or type LaTeX like \\( \\forall n \\in \\mathbb{Z}, n^2 \\equiv 0 \\pmod{2} \\implies n \\equiv 0 \\pmod{2} \\)"
               disabled={isPending}
             />
