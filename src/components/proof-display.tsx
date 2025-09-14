@@ -165,7 +165,7 @@ export default function ProofDisplay({
           />
         </aside>
       )}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Non-scrollable header */}
         <div className="p-6 border-b flex-shrink-0">
           <div className="max-w-4xl mx-auto">
