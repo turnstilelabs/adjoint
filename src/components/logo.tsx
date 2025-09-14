@@ -12,8 +12,8 @@ export function Logo() {
         className="size-8"
         aria-hidden="true"
       >
-        <path d="M12 2 L12 22"></path> 
-        <path d="M12 12 L22 12"></path>
+        <path d="M12 2v20"></path>
+        <path d="M4 12h8"></path>
       </svg>
     </div>
   );

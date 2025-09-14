@@ -115,7 +115,7 @@ function LoadingState({ problem }: { problem: string | null }) {
                  <svg
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     viewBox="0 0 24 24"
@@ -123,9 +123,8 @@ function LoadingState({ problem }: { problem: string | null }) {
                     className="size-4"
                     aria-hidden="true"
                   >
-                    <path d="M12 2v20"></path>
-                    <path d="M4 12h16"></path>
-                    <path d="M4 12V6a2 2 0 0 1 2-2h0"></path>
+                   <path d="M12 2v20"></path>
+                   <path d="M4 12h8"></path>
                   </svg>
               </div>
               <span className="sr-only">New Proof</span>
