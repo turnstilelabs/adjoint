@@ -7,7 +7,7 @@ import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
 import { validateStatement } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-
+import { reviseProof } from '@/ai/flows/revise-proof';
 
 export async function decomposeProblemAction(problem: string) {
   if (!problem) {
@@ -47,6 +47,20 @@ export async function askQuestionAction(question: string, proofSteps: string[]) 
     return { success: false, error: 'Failed to get an answer from AI.' };
   }
 }
+
+export async function reviseOrAskAction(problem: string, proofSteps: Sublemma[], request: string) {
+  if (!request) {
+    return { success: false, error: 'Request cannot be empty.' };
+  }
+  try {
+    const result = await reviseProof({ problem, proofSteps, request });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('reviseOrAskAction error:', error);
+    return { success: false, error: 'Failed to process your request with AI.' };
+  }
+}
+
 
 export async function autoformalizeAction(lemma: string) {
   if (!lemma) {

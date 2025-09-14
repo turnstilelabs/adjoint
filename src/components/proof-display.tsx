@@ -61,11 +61,7 @@ export default function ProofDisplay({
     }
   }, [initialSublemmas]);
 
-  const handleSublemmaChange = (index: number, newContent: string) => {
-    const newSublemmas = [...sublemmas];
-    newSublemmas[index] = { ...newSublemmas[index], content: newContent };
-    
-    // Create a new version branching from the currently active version
+  const updateProof = (newSublemmas: Sublemma[], changeDescription: string) => {
     const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
     const newVersion = { sublemmas: newSublemmas, timestamp: new Date() };
     
@@ -73,7 +69,22 @@ export default function ProofDisplay({
     setSublemmas(newSublemmas);
     setActiveVersionIndex(newHistory.length);
     setIsProofEdited(true);
+
+    toast({
+        title: "Proof Updated",
+        description: changeDescription,
+    });
   };
+
+  const handleSublemmaChange = (index: number, newContent: string) => {
+    const newSublemmas = [...sublemmas];
+    newSublemmas[index] = { ...newSublemmas[index], content: newContent };
+    updateProof(newSublemmas, `Step ${index + 1} was manually edited.`);
+  };
+
+  const handleProofRevisionFromChat = (newSublemmas: Sublemma[]) => {
+    updateProof(newSublemmas, 'Proof revised by AI assistant.');
+  }
 
   const handleValidateProof = () => {
     startProofValidationTransition(async () => {
@@ -263,7 +274,9 @@ export default function ProofDisplay({
       {isChatOpen && (
         <aside className="w-[30rem] border-l flex flex-col h-screen">
           <InteractiveChat 
-            proofSteps={sublemmas.map(s => `${s.title}: ${s.content}`)} 
+            problem={initialProblem}
+            sublemmas={sublemmas}
+            onProofRevision={handleProofRevisionFromChat}
             messages={messages}
             setMessages={setMessages}
           />
