@@ -111,27 +111,7 @@ function LoadingState({ problem }: { problem: string | null }) {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="p-6 border-b">
         <div className="max-w-4xl mx-auto">
-          <Button asChild variant="ghost" size="icon">
-            <Link href="/">
-              <div className="flex items-center justify-center size-8 rounded-full border-2 border-primary text-primary">
-                 <svg
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="size-4"
-                    aria-hidden="true"
-                  >
-                   <path d="M12 2v20"></path>
-                   <path d="M4 12h8"></path>
-                  </svg>
-              </div>
-              <span className="sr-only">New Proof</span>
-            </Link>
-          </Button>
+          <Header />
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center p-8">

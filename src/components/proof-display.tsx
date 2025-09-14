@@ -14,6 +14,7 @@ import { validateProofAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
 import { isEqual } from 'lodash';
+import { Header } from './header';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -169,36 +170,14 @@ export default function ProofDisplay({
         {/* Non-scrollable header */}
         <div className="p-6 border-b flex-shrink-0">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div className='flex items-center gap-4'>
-                 <Button asChild variant="ghost" size="icon">
-                  <Link href="/">
-                     <div className="flex items-center justify-center size-8 rounded-full border-2 border-primary text-primary">
-                       <svg
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="size-4"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 2v20"></path>
-                          <path d="M4 12h8"></path>
-                        </svg>
-                    </div>
-                    <span className="sr-only">New Proof</span>
-                  </Link>
-                </Button>
-                <h2 className="text-2xl font-bold font-headline">Original Problem</h2>
-              </div>
+             <div className="flex items-center justify-between gap-4 mb-4">
+               <Header />
               <Button variant="outline" size="icon" onClick={toggleChat}>
                 {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
                 <span className="sr-only">Toggle Chat</span>
               </Button>
             </div>
+            <h2 className="text-2xl font-bold font-headline mb-4">Original Problem</h2>
             <Card>
               <CardContent className='pt-6'>
                 <KatexRenderer content={initialProblem} />
