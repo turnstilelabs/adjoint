@@ -109,7 +109,7 @@ function LoadingState({ problem }: { problem: string | null }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="p-6 border-b">
+      <header className="p-6">
         <div className="max-w-4xl mx-auto">
           <PageHeader />
         </div>
