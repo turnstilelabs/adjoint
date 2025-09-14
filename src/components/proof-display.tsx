@@ -9,7 +9,6 @@ import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent } from './ui/card';
 import Link from 'next/link';
 import { Button } from './ui/button';
-import { Logo } from './logo';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { validateProofAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
@@ -149,9 +148,25 @@ export default function ProofDisplay({
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between gap-4 mb-4">
               <div className='flex items-center gap-4'>
-                <Button asChild variant="ghost" size="icon">
+                 <Button asChild variant="ghost" size="icon">
                   <Link href="/">
-                    <Logo />
+                     <div className="flex items-center justify-center size-8 rounded-full border-2 border-primary text-primary">
+                       <svg
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="size-4"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 2v20"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 12V6a2 2 0 0 1 2-2h0"></path>
+                        </svg>
+                    </div>
                     <span className="sr-only">New Proof</span>
                   </Link>
                 </Button>

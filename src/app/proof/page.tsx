@@ -11,7 +11,7 @@ import { Loader2, X } from 'lucide-react';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Logo } from '@/components/logo';
+import { Header } from '@/components/header';
 
 function ProofPageContent() {
   const searchParams = useSearchParams();
@@ -111,7 +111,23 @@ function LoadingState({ problem }: { problem: string | null }) {
         <div className="max-w-4xl mx-auto">
           <Button asChild variant="ghost" size="icon">
             <Link href="/">
-              <Logo />
+              <div className="flex items-center justify-center size-8 rounded-full border-2 border-primary text-primary">
+                 <svg
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="size-4"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 2v20"></path>
+                    <path d="M4 12h16"></path>
+                    <path d="M4 12V6a2 2 0 0 1 2-2h0"></path>
+                  </svg>
+              </div>
               <span className="sr-only">New Proof</span>
             </Link>
           </Button>

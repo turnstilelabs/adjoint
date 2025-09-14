@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { KatexRenderer } from '@/components/katex-renderer';
+import { Header } from '@/components/header';
 
 const exampleProblems = [
   {
@@ -33,11 +34,9 @@ export default function Home() {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-4xl mx-auto">
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold font-headline text-gray-900">
-                Adjoint
-              </h1>
+              <Header />
               <p className="mt-2 text-lg text-gray-600">
-                From conjecture to conclusion.
+                Your canonical companion in proof.
               </p>
             </div>
             <ProblemInputForm />
