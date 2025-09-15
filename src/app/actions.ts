@@ -58,7 +58,8 @@ export async function reviseOrAskAction(problem: string, proofSteps: Sublemma[],
     return { success: true, ...result };
   } catch (error) {
     console.error('reviseOrAskAction error:', error);
-    return { success: false, error: 'Failed to process your request with AI.' };
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Failed to process your request with AI: ${errorMessage}` };
   }
 }
 
