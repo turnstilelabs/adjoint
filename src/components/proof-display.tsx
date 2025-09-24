@@ -238,7 +238,7 @@ export default function ProofDisplay({
                     size="icon"
                     onClick={() => setViewMode(viewMode === 'steps' ? 'graph' : 'steps')}
                     title="Toggle Graph View"
-                    disabled={!graphData && !isGraphLoading}
+                    disabled={isLoading}
                   >
                     <GitMerge />
                     <span className="sr-only">Toggle Graph View</span>
