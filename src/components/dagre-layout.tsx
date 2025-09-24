@@ -26,7 +26,7 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
 };
 
 export function DagreLayout() {
-  const { setNodes, setEdges } = useReactFlow();
+  const { setNodes, setEdges, fitView } = useReactFlow();
   const nodes = useNodes();
   const edges = useEdges();
   const nodesInitialized = useStore((store) => Array.from(store.nodeInternals.values()).every(internal => internal.width && internal.height));
@@ -39,10 +39,10 @@ export function DagreLayout() {
       setEdges(layouted.edges);
 
       window.requestAnimationFrame(() => {
-        // fitView(); // This might be useful to zoom/pan to the new layout
+        fitView();
       });
     }
-  }, [nodes.length, nodesInitialized]);
+  }, [nodes.length, edges.length, nodesInitialized, setNodes, setEdges, fitView]);
 
   return null;
 }
