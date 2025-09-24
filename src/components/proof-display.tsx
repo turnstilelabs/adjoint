@@ -48,7 +48,7 @@ export default function ProofDisplay({
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
   const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
-  const [isProofEdited, setIsProofEdited] = useState(false);
+  const [isProofEdited, setIsProofEdited] = useState(true); // Start as true to allow initial validation
   const { toast } = useToast();
   const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
@@ -63,6 +63,8 @@ export default function ProofDisplay({
       const initialHistory = [{ sublemmas: initialSublemmas, timestamp: new Date() }];
       setProofHistory(initialHistory);
       setActiveVersionIndex(0);
+      setLastValidatedSublemmas(null);
+      setIsProofEdited(true);
 
       // Automatically generate graph data for the initial proof
       startGraphLoadingTransition(async () => {
@@ -169,6 +171,11 @@ export default function ProofDisplay({
                 setGraphData({ nodes: result.nodes!, edges: result.edges! });
             } else {
                 setGraphData(null);
+                 toast({
+                    title: 'Graph Generation Failed',
+                    description: result.error,
+                    variant: 'destructive',
+                });
             }
         });
     }
