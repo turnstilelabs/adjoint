@@ -21,30 +21,30 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
 
   return (
     <Card className="w-full h-[600px] p-4 overflow-hidden">
-        <Canvas
-            nodes={nodes.map((node) => ({ id: node.id, text: node.label }))}
-            edges={edges}
-            maxHeight={560}
-            maxWidth={1000}
-            fit
-            node={
-                <Node>
-                    {event => (
-                    <foreignObject height={event.height} width={event.width} x={0} y={0}>
-                        <div className="bg-card border rounded-lg p-2 text-center shadow-sm text-sm" style={{ width: event.width, height: event.height }}>
-                            {event.node.text}
-                        </div>
-                    </foreignObject>
-                    )}
-                </Node>
-            }
-            edge={<Edge />}
-            layoutOptions={{
-                'elk.algorithm': 'layered',
-                'elk.direction': 'DOWN',
-                'elk.spacing.nodeNode': '60',
-            }}
-        />
+      <Canvas
+        nodes={nodes.map((node) => ({ id: node.id, text: node.label }))}
+        edges={edges}
+        maxHeight={560}
+        maxWidth={1000}
+        fit
+        node={(event) => (
+            <Node {...event}>
+              {(event) => (
+                <foreignObject height={event.height} width={event.width} x={0} y={0}>
+                  <div className="bg-card border rounded-lg p-2 text-center shadow-sm text-sm flex items-center justify-center w-full h-full">
+                    {event.node.text}
+                  </div>
+                </foreignObject>
+              )}
+            </Node>
+        )}
+        edge={<Edge />}
+        layoutOptions={{
+          'elk.algorithm': 'layered',
+          'elk.direction': 'DOWN',
+          'elk.spacing.nodeNode': '60',
+        }}
+      />
     </Card>
   );
 }
