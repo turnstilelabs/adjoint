@@ -48,17 +48,17 @@ const generateProofGraphPrompt = ai.definePrompt({
 **Input:** A list of sublemmas, each with a title and content.
 
 **Instructions:**
-1.  Create a node for each sublemma. Use "step-N" as the node ID, where N is the 1-based index of the sublemma. The node's label should be the sublemma's title.
+1.  Create a node for each sublemma. Use "step-N" as the node ID, where N is the 1-based index of the sublemma in the input array. The node's label should be the sublemma's title.
 2.  Analyze the dependencies between the sublemmas. An edge should exist from node A to node B if sublemma B directly depends on the result or statement of sublemma A.
 3.  The graph should represent the logical flow. Sometimes this will be a simple linear chain (1 -> 2 -> 3), but other times a step might depend on multiple previous steps.
 4.  Create edges connecting the nodes based on these dependencies. Use "edge-S-T" as the edge ID, where S and T are the 1-based source and target step numbers respectively.
 
 **Proof Steps to Analyze:**
 {{#each proofSteps}}
-- **Step {{add @index 1}} ({{this.title}})**: {{this.content}}
+- **Step {{@index}} ({{this.title}})**: {{this.content}}
 {{/each}}
 
-Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema.`,
+Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema. Ensure there is one node for every proof step provided.`,
 });
 
 const generateProofGraphFlow = ai.defineFlow(
