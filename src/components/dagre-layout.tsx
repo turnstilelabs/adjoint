@@ -1,18 +1,24 @@
 
 'use client';
 import { useEffect } from 'react';
-import { useReactFlow, useNodes, useEdges, useStore } from 'reactflow';
+import { useReactFlow, useNodes, useEdges, useStore, Node } from 'reactflow';
 import dagre from '@dagrejs/dagre';
 
 const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-const nodeWidth = 172;
-const nodeHeight = 36;
 
-const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
+const getLayoutedElements = (nodes: Node[], edges: any[], direction = 'TB') => {
   g.setGraph({ rankdir: direction });
 
   edges.forEach((edge) => g.setEdge(edge.source, edge.target));
-  nodes.forEach((node) => g.setNode(node.id, { ...node, width: nodeWidth, height: nodeHeight }));
+  
+  nodes.forEach((node) => {
+    // Use the actual node dimensions for layout
+    g.setNode(node.id, {
+      ...node,
+      width: node.width || 150,
+      height: node.height || 40,
+    });
+  });
 
   dagre.layout(g);
 
@@ -29,12 +35,22 @@ export function DagreLayout() {
   const { setNodes, setEdges, fitView } = useReactFlow();
   const nodes = useNodes();
   const edges = useEdges();
+  const nodeInternals = useStore((store) => store.nodeInternals);
   const nodesInitialized = useStore((store) => Array.from(store.nodeInternals.values()).every(internal => internal.width && internal.height));
 
 
   useEffect(() => {
-    if (nodes.length && nodesInitialized) {
-      const layouted = getLayoutedElements(nodes, edges);
+    if (nodes.length > 0 && nodesInitialized) {
+      const layoutNodes = nodes.map(node => {
+        const internalNode = nodeInternals.get(node.id);
+        return {
+          ...node,
+          width: internalNode?.width,
+          height: internalNode?.height,
+        };
+      });
+
+      const layouted = getLayoutedElements(layoutNodes, edges);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
 
@@ -42,7 +58,7 @@ export function DagreLayout() {
         fitView();
       });
     }
-  }, [nodes.length, edges.length, nodesInitialized, setNodes, setEdges, fitView]);
+  }, [nodes.length, edges.length, nodesInitialized, setNodes, setEdges, fitView, nodeInternals]);
 
   return null;
 }
