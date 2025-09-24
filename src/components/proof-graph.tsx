@@ -1,9 +1,19 @@
 
 'use client';
 
-import { Canvas, Edge, Node, NodeProps } from 'reaflow';
+import { useMemo } from 'react';
+import ReactFlow, {
+  Controls,
+  Background,
+  Panel,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
 import { Card } from './ui/card';
-import { memo } from 'react';
+import { DagreLayout } from './dagre-layout';
 
 export type GraphData = {
   nodes: { id: string; label: string }[];
@@ -14,43 +24,51 @@ interface ProofGraphProps {
   graphData: GraphData;
 }
 
-const CustomNode = memo(({...props}: NodeProps) => (
-  <Node {...props}>
-    {(event) => (
-      <foreignObject height={event.height} width={event.width} x={0} y={0}>
-        <div className="bg-card border rounded-lg p-2 text-center shadow-sm text-sm flex items-center justify-center w-full h-full">
-          {event.node.text}
-        </div>
-      </foreignObject>
-    )}
-  </Node>
-));
-CustomNode.displayName = 'CustomNode';
-
+const nodeStyle = {
+  border: '1px solid #B1B1B7',
+  borderRadius: '0.5rem',
+  padding: '0.5rem 1rem',
+  backgroundColor: 'white',
+  textAlign: 'center' as const,
+};
 
 export function ProofGraph({ graphData }: ProofGraphProps) {
   if (!graphData || !graphData.nodes || !graphData.edges) {
     return <div className="text-center p-8">No graph data available.</div>;
   }
 
-  const { nodes, edges } = graphData;
+  const { initialNodes, initialEdges } = useMemo(() => {
+    const nodes = graphData.nodes.map((node) => ({
+      id: node.id,
+      position: { x: 0, y: 0 }, // Position will be set by layout
+      data: { label: node.label },
+      style: nodeStyle,
+    }));
+
+    const edges = graphData.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+      },
+    }));
+
+    return { initialNodes: nodes, initialEdges: edges };
+  }, [graphData]);
 
   return (
-    <Card className="w-full h-[600px] p-4 overflow-hidden">
-      <Canvas
-        nodes={nodes.map((node) => ({ id: node.id, text: node.label }))}
-        edges={edges}
-        maxHeight={560}
-        maxWidth={1000}
-        fit
-        node={<CustomNode />}
-        edge={<Edge />}
-        layoutOptions={{
-          'elk.algorithm': 'layered',
-          'elk.direction': 'DOWN',
-          'elk.spacing.nodeNode': '60',
-        }}
-      />
+    <Card className="w-full h-[600px] p-0 overflow-hidden">
+      <ReactFlow
+        nodes={initialNodes}
+        edges={initialEdges}
+        fitView
+        proOptions={{ hideAttribution: true }}
+      >
+        <Controls />
+        <Background />
+        <DagreLayout />
+      </ReactFlow>
     </Card>
   );
 }
