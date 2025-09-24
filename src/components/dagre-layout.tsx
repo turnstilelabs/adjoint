@@ -1,7 +1,7 @@
 
 'use client';
 import { useEffect } from 'react';
-import { useReactFlow, useNodes, useEdges } from 'reactflow';
+import { useReactFlow, useNodes, useEdges, useStore } from 'reactflow';
 import dagre from '@dagrejs/dagre';
 
 const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
@@ -29,14 +29,20 @@ export function DagreLayout() {
   const { setNodes, setEdges } = useReactFlow();
   const nodes = useNodes();
   const edges = useEdges();
+  const nodesInitialized = useStore((store) => Array.from(store.nodeInternals.values()).every(internal => internal.width && internal.height));
+
 
   useEffect(() => {
-    if (nodes.length) {
+    if (nodes.length && nodesInitialized) {
       const layouted = getLayoutedElements(nodes, edges);
       setNodes(layouted.nodes);
       setEdges(layouted.edges);
+
+      window.requestAnimationFrame(() => {
+        // fitView(); // This might be useful to zoom/pan to the new layout
+      });
     }
-  }, [nodes.length]);
+  }, [nodes.length, nodesInitialized]);
 
   return null;
 }
