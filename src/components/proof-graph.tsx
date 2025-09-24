@@ -1,6 +1,13 @@
 'use client';
 import { useMemo } from 'react';
-import ReactFlow, { MiniMap, Controls, Background, type Node, type Edge } from 'reactflow';
+import ReactFlow, {
+  MiniMap,
+  Controls,
+  Background,
+  type Node,
+  type Edge,
+  ReactFlowProvider,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card } from './ui/card';
 import { DagreLayout } from './dagre-layout';
@@ -51,21 +58,23 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
 
   return (
     <Card className="w-full h-[600px] p-0 overflow-hidden relative">
-      <DagreLayout nodes={nodes} edges={edges}>
-        {(layoutedNodes, layoutedEdges) => (
-          <ReactFlow
-            nodes={layoutedNodes}
-            edges={layoutedEdges}
-            fitView
-            className="bg-background"
-            proOptions={{ hideAttribution: true }}
-          >
-            <Controls />
-            <MiniMap />
-            <Background gap={12} size={1} />
-          </ReactFlow>
-        )}
-      </DagreLayout>
+      <ReactFlowProvider>
+        <DagreLayout nodes={nodes} edges={edges}>
+          {(layoutedNodes, layoutedEdges) => (
+            <ReactFlow
+              nodes={layoutedNodes}
+              edges={layoutedEdges}
+              fitView
+              className="bg-background"
+              proOptions={{ hideAttribution: true }}
+            >
+              <Controls />
+              <MiniMap />
+              <Background gap={12} size={1} />
+            </ReactFlow>
+          )}
+        </DagreLayout>
+      </ReactFlowProvider>
     </Card>
   );
 }
