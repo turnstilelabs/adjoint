@@ -56,6 +56,22 @@ export default function ProofDisplay({
   const [viewMode, setViewMode] = useState<'steps' | 'graph'>('steps');
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [isGraphLoading, startGraphLoadingTransition] = useTransition();
+  
+  const generateGraph = (steps: Sublemma[]) => {
+    startGraphLoadingTransition(async () => {
+      const result = await generateProofGraphAction(steps);
+      if (result.success) {
+        setGraphData({ nodes: result.nodes!, edges: result.edges! });
+      } else {
+        setGraphData(null);
+        toast({
+          title: 'Graph Generation Failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    });
+  };
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
@@ -65,22 +81,10 @@ export default function ProofDisplay({
       setActiveVersionIndex(0);
       setLastValidatedSublemmas(null);
       setIsProofEdited(true);
-
-      // Automatically generate graph data for the initial proof
-      startGraphLoadingTransition(async () => {
-        const result = await generateProofGraphAction(initialSublemmas);
-        if (result.success) {
-          setGraphData({ nodes: result.nodes!, edges: result.edges! });
-        } else {
-          toast({
-            title: 'Graph Generation Failed',
-            description: result.error,
-            variant: 'destructive',
-          });
-        }
-      });
+      setGraphData(null); // Clear previous graph data
+      generateGraph(initialSublemmas);
     }
-  }, [initialSublemmas, toast]);
+  }, [initialSublemmas]);
 
   const updateProof = (newSublemmas: Sublemma[], changeDescription: string) => {
     const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
@@ -97,18 +101,7 @@ export default function ProofDisplay({
         description: changeDescription,
     });
     
-    startGraphLoadingTransition(async () => {
-      const result = await generateProofGraphAction(newSublemmas);
-      if (result.success) {
-        setGraphData({ nodes: result.nodes!, edges: result.edges! });
-      } else {
-        toast({
-          title: 'Graph Generation Failed',
-          description: result.error,
-          variant: 'destructive',
-        });
-      }
-    });
+    generateGraph(newSublemmas);
   };
 
   const handleSublemmaChange = (index: number, newContent: string) => {
@@ -165,19 +158,8 @@ export default function ProofDisplay({
         description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
         });
 
-        startGraphLoadingTransition(async () => {
-            const result = await generateProofGraphAction(versionToRestore.sublemmas);
-            if (result.success) {
-                setGraphData({ nodes: result.nodes!, edges: result.edges! });
-            } else {
-                setGraphData(null);
-                 toast({
-                    title: 'Graph Generation Failed',
-                    description: result.error,
-                    variant: 'destructive',
-                });
-            }
-        });
+        setGraphData(null);
+        generateGraph(versionToRestore.sublemmas);
     }
   };
 
@@ -199,6 +181,14 @@ export default function ProofDisplay({
       }
       return isOpening;
     });
+  };
+  
+  const handleToggleView = () => {
+    const newMode = viewMode === 'steps' ? 'graph' : 'steps';
+    setViewMode(newMode);
+    if (newMode === 'graph' && !graphData && !isGraphLoading) {
+      generateGraph(sublemmas);
+    }
   };
   
   return (
@@ -243,7 +233,7 @@ export default function ProofDisplay({
                  <Button
                     variant={viewMode === 'graph' ? 'secondary' : 'outline'}
                     size="icon"
-                    onClick={() => setViewMode(viewMode === 'steps' ? 'graph' : 'steps')}
+                    onClick={handleToggleView}
                     title="Toggle Graph View"
                     disabled={isLoading}
                   >
