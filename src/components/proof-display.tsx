@@ -1,20 +1,20 @@
 'use client';
 import { useState, useEffect, useTransition } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, Check } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent } from './ui/card';
-import Link from 'next/link';
 import { Button } from './ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { validateProofAction } from '@/app/actions';
+import { validateProofAction, generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
 import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
+import { ProofGraph, type GraphData } from './proof-graph';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -53,14 +53,32 @@ export default function ProofDisplay({
   const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
 
+  const [viewMode, setViewMode] = useState<'steps' | 'graph'>('steps');
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [isGraphLoading, startGraphLoadingTransition] = useTransition();
+
   useEffect(() => {
     setSublemmas(initialSublemmas);
     if (initialSublemmas.length > 0) {
       const initialHistory = [{ sublemmas: initialSublemmas, timestamp: new Date() }];
       setProofHistory(initialHistory);
       setActiveVersionIndex(0);
+
+      // Automatically generate graph data for the initial proof
+      startGraphLoadingTransition(async () => {
+        const result = await generateProofGraphAction(initialSublemmas);
+        if (result.success) {
+          setGraphData({ nodes: result.nodes!, edges: result.edges! });
+        } else {
+          toast({
+            title: 'Graph Generation Failed',
+            description: result.error,
+            variant: 'destructive',
+          });
+        }
+      });
     }
-  }, [initialSublemmas]);
+  }, [initialSublemmas, toast]);
 
   const updateProof = (newSublemmas: Sublemma[], changeDescription: string) => {
     const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
@@ -70,10 +88,24 @@ export default function ProofDisplay({
     setSublemmas(newSublemmas);
     setActiveVersionIndex(newHistory.length);
     setIsProofEdited(true);
+    setGraphData(null); // Invalidate old graph data
 
     toast({
         title: "Proof Updated",
         description: changeDescription,
+    });
+    
+    startGraphLoadingTransition(async () => {
+      const result = await generateProofGraphAction(newSublemmas);
+      if (result.success) {
+        setGraphData({ nodes: result.nodes!, edges: result.edges! });
+      } else {
+        toast({
+          title: 'Graph Generation Failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
     });
   };
 
@@ -100,7 +132,6 @@ export default function ProofDisplay({
         setLastValidatedSublemmas(sublemmas);
         setIsProofEdited(false);
 
-        // Update the active history entry with the validation result
         setProofHistory(prev => {
           const updatedHistory = [...prev];
           const activeVersion = updatedHistory[activeVersionIndex];
@@ -125,11 +156,20 @@ export default function ProofDisplay({
     if (versionToRestore) {
         setSublemmas(versionToRestore.sublemmas);
         setActiveVersionIndex(index);
-        setIsProofEdited(true); // Mark as edited to allow re-validation
-        setProofValidationResult(null); // Clear old validation result
+        setIsProofEdited(true); 
+        setProofValidationResult(null);
         toast({
         title: 'Proof Restored',
         description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
+        });
+
+        startGraphLoadingTransition(async () => {
+            const result = await generateProofGraphAction(versionToRestore.sublemmas);
+            if (result.success) {
+                setGraphData({ nodes: result.nodes!, edges: result.edges! });
+            } else {
+                setGraphData(null);
+            }
         });
     }
   };
@@ -167,7 +207,6 @@ export default function ProofDisplay({
         </aside>
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Non-scrollable header */}
         <div className="p-6 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
              <div className="flex items-center justify-between gap-4 mb-4">
@@ -186,26 +225,35 @@ export default function ProofDisplay({
           </div>
         </div>
 
-        {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-2 mb-4">
-                <Button variant="outline" size="icon" onClick={toggleHistory}>
+                <Button variant="outline" size="icon" onClick={toggleHistory} title="Toggle History">
                   <History />
                   <span className="sr-only">Toggle History</span>
                 </Button>
+                 <Button
+                    variant={viewMode === 'graph' ? 'secondary' : 'outline'}
+                    size="icon"
+                    onClick={() => setViewMode(viewMode === 'steps' ? 'graph' : 'steps')}
+                    title="Toggle Graph View"
+                    disabled={!graphData && !isGraphLoading}
+                  >
+                    <GitMerge />
+                    <span className="sr-only">Toggle Graph View</span>
+                  </Button>
                 <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
               </div>
               {isLoading ? (
-                <div className="flex items-center justify-center py-16">
+                 <div className="flex items-center justify-center py-16">
                   <div className="flex flex-col items-center gap-4 text-muted-foreground">
                     <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <p className="text-lg font-medium">Generating proof steps...</p>
                     <p className="text-sm">The AI is thinking. This may take a moment.</p>
                   </div>
                 </div>
-              ) : (
+              ) : viewMode === 'steps' ? (
                 <div className="space-y-4">
                   <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
                     {sublemmas.map((sublemma, index) => (
@@ -218,8 +266,25 @@ export default function ProofDisplay({
                       />
                     ))}
                   </Accordion>
-                  
-                  <div className="pt-4 space-y-4">
+                </div>
+              ) : (
+                isGraphLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                        <p className="text-lg font-medium">Generating dependency graph...</p>
+                      </div>
+                    </div>
+                ) : graphData ? (
+                    <ProofGraph graphData={graphData} />
+                ) : (
+                    <div className="text-center py-16 text-muted-foreground">
+                        <p>Could not generate graph.</p>
+                    </div>
+                )
+              )}
+
+                <div className="pt-4 space-y-4">
                     <Button
                       size="lg"
                       className="w-full"
@@ -243,8 +308,6 @@ export default function ProofDisplay({
                         </Alert>
                       )}
                   </div>
-                </div>
-              )}
             </div>
           </div>
         </div>

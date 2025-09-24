@@ -1,13 +1,13 @@
 'use server';
 
 import { decomposeProof } from '@/ai/flows/llm-proof-decomposition';
-import { addProofStepWithLLMValidation } from '@/ai/flows/add-proof-step-validation';
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
 import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
 import { validateStatement } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { reviseProof } from '@/ai/flows/revise-proof';
+import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 
 export async function decomposeProblemAction(problem: string) {
   if (!problem) {
@@ -20,19 +20,6 @@ export async function decomposeProblemAction(problem: string) {
     console.error('decomposeProblemAction error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { success: false, error: `Failed to decompose the problem with AI: ${errorMessage}` };
-  }
-}
-
-export async function addProofStepAction(problem: string, currentSteps: string, proposedStep: string) {
-  if (!proposedStep) {
-    return { success: false, error: 'Proposed step cannot be empty.' };
-  }
-  try {
-    const result = await addProofStepWithLLMValidation({ problem, currentSteps, proposedStep });
-    return { success: true, ...result };
-  } catch (error) {
-    console.error('addProofStepAction error:', error);
-    return { success: false, error: 'Failed to validate the proof step with AI.' };
   }
 }
 
@@ -100,5 +87,19 @@ export async function validateProofAction(problem: string, proofSteps: Sublemma[
   } catch (error) {
     console.error('validateProofAction error:', error);
     return { success: false, error: 'Failed to validate the proof with AI.' };
+  }
+}
+
+export async function generateProofGraphAction(proofSteps: Sublemma[]) {
+  if (proofSteps.length === 0) {
+    return { success: false, error: 'There are no proof steps to generate a graph from.' };
+  }
+  try {
+    const result = await generateProofGraph({ proofSteps });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('generateProofGraphAction error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Failed to generate proof graph with AI: ${errorMessage}` };
   }
 }
