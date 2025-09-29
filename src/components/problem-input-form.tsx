@@ -8,33 +8,54 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
+import { validateStatementAction } from '@/app/actions';
+import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from './ui/alert';
 
 export default function ProblemInputForm() {
   const [problem, setProblem] = useState('');
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!problem.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please enter a problem to solve.',
-        variant: 'destructive',
-      });
+    const trimmedProblem = problem.trim();
+    if (!trimmedProblem) {
+      setError('Please enter a problem to solve.');
       return;
     }
 
-    startTransition(() => {
-      const params = new URLSearchParams();
-      params.append('problem', problem);
-      router.push(`/proof?${params.toString()}`);
+    startTransition(async () => {
+      setError(null);
+      const validationResult = await validateStatementAction(trimmedProblem);
+      
+      if (validationResult.success && validationResult.validity === 'VALID') {
+        const params = new URLSearchParams();
+        params.append('problem', trimmedProblem);
+        router.push(`/proof?${params.toString()}`);
+      } else if (validationResult.success) {
+        // AI determined it's not a valid math problem
+        setError(validationResult.reasoning || "This doesn't seem to be a solvable mathematical problem. Please try again.");
+      }
+      else {
+        // The action itself failed
+        setError(validationResult.error || "An unexpected error occurred while validating your problem. Please try again later.");
+        toast({
+          title: 'Validation Error',
+          description: validationResult.error,
+          variant: 'destructive',
+        });
+      }
     });
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setProblem(e.target.value);
+    if (error) {
+      setError(null);
+    }
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
@@ -48,7 +69,10 @@ export default function ProblemInputForm() {
             <Textarea
               value={problem}
               onChange={handleTextareaChange}
-              className="w-full p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none overflow-y-hidden pr-14"
+              className={cn(
+                "w-full p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none overflow-y-hidden pr-14",
+                error && "border-destructive focus:ring-destructive"
+              )}
               placeholder="For example: Prove that for any integer n, if n^2 is even, then n is even. Or type LaTeX like \\( \\forall n \\in \\mathbb{Z}, n^2 \\equiv 0 \\pmod{2} \\implies n \\equiv 0 \\pmod{2} \\)"
               disabled={isPending}
               rows={1}
@@ -60,6 +84,15 @@ export default function ProblemInputForm() {
               </Button>
             </div>
           </div>
+
+          {error && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-4">
             <Button
               type="submit"
@@ -70,7 +103,7 @@ export default function ProblemInputForm() {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Navigating...
+                  Validating...
                 </>
               ) : (
                 <>
