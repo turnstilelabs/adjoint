@@ -36,7 +36,7 @@ export default function ProblemInputForm() {
         params.append('problem', trimmedProblem);
         router.push(`/proof?${params.toString()}`);
       } else if (validationResult.success) {
-        setError(validationResult.reasoning || "This doesn't appear to be a solvable mathematical problem. Please try again.");
+        setError(validationResult.reasoning || "Looks like that’s not math! The Adjoint only works with math problems.");
       }
       else {
         const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
