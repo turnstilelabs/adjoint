@@ -55,6 +55,9 @@ const addProofStepValidationFlow = ai.defineFlow(
     name: 'addProofStepValidationFlow',
     inputSchema: AddProofStepInputSchema,
     outputSchema: AddProofStepOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async input => {
     const {output} = await prompt(input);

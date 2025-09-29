@@ -56,9 +56,15 @@ const validateProofFlow = ai.defineFlow(
     name: 'validateProofFlow',
     inputSchema: ValidateProofInputSchema,
     outputSchema: ValidateProofOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('The AI failed to provide a validation result.');
+    }
+    return output;
   }
 );

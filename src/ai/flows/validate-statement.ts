@@ -52,6 +52,9 @@ const validateStatementFlow = ai.defineFlow(
     name: 'validateStatementFlow',
     inputSchema: ValidateStatementInputSchema,
     outputSchema: ValidateStatementOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async (input) => {
     const { output } = await prompt(input);

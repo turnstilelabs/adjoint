@@ -50,9 +50,15 @@ const autoformalizeFlow = ai.defineFlow(
     name: 'autoformalizeFlow',
     inputSchema: AutoformalizeInputSchema,
     outputSchema: AutoformalizeOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async (input) => {
     const { output } = await autoformalizePrompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('The AI failed to generate a formalization.');
+    }
+    return output;
   }
 );

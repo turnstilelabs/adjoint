@@ -64,9 +64,15 @@ const decomposeProofFlow = ai.defineFlow(
     name: 'decomposeProofFlow',
     inputSchema: DecomposeProofInputSchema,
     outputSchema: DecomposeProofOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async input => {
     const {output} = await decomposeProofPrompt(input);
-    return output!;
+    if (!output || !output.sublemmas) {
+      throw new Error('The AI failed to decompose the problem into steps.');
+    }
+    return output;
   }
 );

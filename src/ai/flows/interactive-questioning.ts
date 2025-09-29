@@ -49,6 +49,9 @@ const interactiveQuestioningFlow = ai.defineFlow(
     name: 'interactiveQuestioningFlow',
     inputSchema: InteractiveQuestioningInputSchema,
     outputSchema: InteractiveQuestioningOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async input => {
     const {output} = await prompt(input);

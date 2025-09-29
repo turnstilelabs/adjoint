@@ -62,9 +62,15 @@ const reviseProofFlow = ai.defineFlow(
     name: 'reviseProofFlow',
     inputSchema: ReviseProofInputSchema,
     outputSchema: ReviseProofOutputSchema,
+    cache: {
+      ttl: 3600, // Cache for 1 hour
+    },
   },
   async (input) => {
     const { output } = await reviseProofPrompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('The AI failed to process the revision request.');
+    }
+    return output;
   }
 );
