@@ -30,17 +30,21 @@ const prompt = ai.definePrompt({
   name: 'validateStatementPrompt',
   input: {schema: ValidateStatementInputSchema},
   output: {schema: ValidateStatementOutputSchema},
-  prompt: `You are a mathematical expert. Your task is to analyze a given string and determine if it represents a valid mathematical statement.
-
-Classify the statement into one of three categories:
-1.  VALID: The statement is a well-formed and complete mathematical assertion.
-2.  INVALID: The statement is mathematically incorrect, nonsensical, or contains errors.
-3.  INCOMPLETE: The statement is a fragment or is missing context, making it impossible to judge its validity.
+  prompt: `You are a mathematical expert. Your task is to analyze a given string and determine if it represents a valid mathematical statement that can be proven.
 
 Analyze the following statement:
 "{{{statement}}}"
 
-Provide your classification and a brief, one-sentence reasoning for your choice. Your output must be in JSON format.`,
+Classify the statement into one of three categories and provide a brief, one-sentence reasoning for your choice.
+
+1.  **VALID**: The statement is a well-formed and complete mathematical assertion that is suitable for a proof attempt.
+    *   *Reasoning example*: "This is a standard theorem in group theory."
+2.  **INVALID**: The statement is not a mathematical problem to be solved. This includes questions, requests for definitions, or nonsensical text.
+    *   *Reasoning example*: "This appears to be a request for a definition, not a problem to be solved." or "This seems to be a general question, not a mathematical statement."
+3.  **INCOMPLETE**: The statement is a fragment or is missing context, making it impossible to judge its validity.
+    *   *Reasoning example*: "The statement is missing a conclusion."
+
+Your output must be in JSON format.`,
 });
 
 const validateStatementFlow = ai.defineFlow(
@@ -49,8 +53,11 @@ const validateStatementFlow = ai.defineFlow(
     inputSchema: ValidateStatementInputSchema,
     outputSchema: ValidateStatementOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+  async (input) => {
+    const { output } = await prompt(input);
+    if (!output?.validity || !output?.reasoning) {
+        throw new Error('The AI failed to return a valid validity assessment. The response was malformed.');
+    }
+    return output;
   }
 );

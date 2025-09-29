@@ -36,12 +36,10 @@ export default function ProblemInputForm() {
         params.append('problem', trimmedProblem);
         router.push(`/proof?${params.toString()}`);
       } else if (validationResult.success) {
-        // AI determined it's not a valid math problem
-        setError(validationResult.reasoning || "This doesn't seem to be a solvable mathematical problem. Please try again.");
+        setError(validationResult.reasoning || "This doesn't appear to be a solvable mathematical problem. Please try again.");
       }
       else {
-        // The action itself failed
-        const errorMessage = validationResult.error || "An unexpected error occurred. This doesn't seem to be about solving a problem or getting guidance.";
+        const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
         setError(errorMessage);
         toast({
           title: 'Validation Error',
@@ -87,10 +85,12 @@ export default function ProblemInputForm() {
           </div>
 
           {error && (
-             <div className="mt-2 flex items-center text-sm text-destructive p-2">
-              <AlertCircle className="mr-2 h-4 w-4 shrink-0" />
-              <p>{error}</p>
-            </div>
+             <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {error}
+              </AlertDescription>
+            </Alert>
           )}
 
           <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-4">
