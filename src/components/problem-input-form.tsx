@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Wand2, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Wand2, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -41,10 +41,11 @@ export default function ProblemInputForm() {
       }
       else {
         // The action itself failed
-        setError(validationResult.error || "An unexpected error occurred while validating your problem. Please try again later.");
+        const errorMessage = validationResult.error || "An unexpected error occurred. This doesn't seem to be about solving a problem or getting guidance.";
+        setError(errorMessage);
         toast({
           title: 'Validation Error',
-          description: validationResult.error,
+          description: errorMessage,
           variant: 'destructive',
         });
       }
@@ -86,11 +87,10 @@ export default function ProblemInputForm() {
           </div>
 
           {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription>
-                {error}
-              </AlertDescription>
-            </Alert>
+             <div className="mt-2 flex items-center text-sm text-destructive p-2">
+              <AlertCircle className="mr-2 h-4 w-4 shrink-0" />
+              <p>{error}</p>
+            </div>
           )}
 
           <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-4">
