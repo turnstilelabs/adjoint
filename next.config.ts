@@ -1,12 +1,14 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
+
+const isDev = process.env.NODE_ENV !== 'production';
 
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: isDev,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: isDev,
   },
   images: {
     remotePatterns: [

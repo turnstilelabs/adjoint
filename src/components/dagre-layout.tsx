@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import dagre from '@dagrejs/dagre';
-import { useReactFlow, type Node, type Edge } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 
 interface DagreLayoutProps {
   nodes: Node[];
@@ -10,54 +10,40 @@ interface DagreLayoutProps {
   children: (nodes: Node[], edges: Edge[]) => ReactNode;
 }
 
-const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+function layoutElements(nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'TB') {
+  if (!nodes.length) return { nodes: [] as Node[], edges };
 
-const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
-  if (nodes.length === 0) {
-    return { layoutedNodes: [], layoutedEdges: [] };
-  }
-
+  const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: direction });
 
-  nodes.forEach((node) => {
-    const nodeWidth = node.width || 172;
-    const nodeHeight = node.height || 36;
-    g.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  nodes.forEach((n) => {
+    const width = n.width ?? 172;
+    const height = n.height ?? 36;
+    g.setNode(n.id, { width, height });
   });
 
-  edges.forEach((edge) => g.setEdge(edge.source, edge.target));
+  edges.forEach((e) => g.setEdge(e.source, e.target));
 
   dagre.layout(g);
 
-  const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = g.node(node.id);
-    const nodeWidth = node.width || 172;
-    const nodeHeight = node.height || 36;
-    
-    node.position = {
-      x: nodeWithPosition.x - nodeWidth / 2,
-      y: nodeWithPosition.y - nodeHeight / 2,
+  const laidOutNodes = nodes.map((n) => {
+    const { x, y } = g.node(n.id);
+    const width = n.width ?? 172;
+    const height = n.height ?? 36;
+    return {
+      ...n,
+      position: { x: x - width / 2, y: y - height / 2 },
     };
-    return node;
   });
 
-  return { layoutedNodes, layoutedEdges: edges };
-};
+  return { nodes: laidOutNodes, edges };
+}
 
 export function DagreLayout({ nodes, edges, children }: DagreLayoutProps) {
-  const { setNodes, setEdges, fitView } = useReactFlow();
+  const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
+    () => layoutElements(nodes, edges, 'TB'),
+    [nodes, edges]
+  );
 
-  useLayoutEffect(() => {
-    const { layoutedNodes, layoutedEdges } = getLayoutedElements(nodes, edges);
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-    
-    window.requestAnimationFrame(() => {
-        fitView();
-    });
-
-  }, [nodes, edges, setNodes, setEdges, fitView]);
-
-
-  return <>{children(nodes, edges)}</>;
+  return <>{children(layoutedNodes, layoutedEdges)}</>;
 }

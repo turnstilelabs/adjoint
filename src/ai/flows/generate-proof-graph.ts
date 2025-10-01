@@ -55,7 +55,8 @@ const generateProofGraphPrompt = ai.definePrompt({
 
 **Proof Steps to Analyze:**
 {{#each proofSteps}}
-- **Step {{@index}} ({{this.title}})**: {{this.content}}
+- Title: {{this.title}}
+  Content: {{this.content}}
 {{/each}}
 
 Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema. Ensure there is one node for every proof step provided.`,
@@ -66,9 +67,6 @@ const generateProofGraphFlow = ai.defineFlow(
     name: 'generateProofGraphFlow',
     inputSchema: GenerateProofGraphInputSchema,
     outputSchema: GenerateProofGraphOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async (input) => {
     const { output } = await generateProofGraphPrompt(input);

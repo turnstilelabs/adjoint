@@ -9,9 +9,16 @@ type KatexRendererProps = {
   className?: string;
 };
 
+/**
+ * Sanitize plain text segments:
+ * - Unescape "\$" to a literal "$" so users can show dollar signs outside math.
+ */
+const sanitizeText = (t: string) => t.replace(/\\\$/g, '$');
+
 // Helper function to create a React element from a text part, converting newlines to <br>
 const renderTextWithLineBreaks = (text: string, key: number) => {
-  const lines = text.split('\n');
+  const safe = sanitizeText(text);
+  const lines = safe.split('\n');
   return (
     <React.Fragment key={key}>
       {lines.map((line, i) => (
@@ -28,7 +35,7 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
   const parts = useMemo(() => {
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
     const splitByDelimiters = content.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
-    
+
     return splitByDelimiters.map((part, index) => {
       if (part.startsWith('$$') && part.endsWith('$$')) {
         const latex = part.substring(2, part.length - 2);
@@ -36,6 +43,7 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           const html = katex.renderToString(latex, {
             throwOnError: false,
             displayMode: true,
+            errorColor: '#dc2626',
           });
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
@@ -48,6 +56,7 @@ export function KatexRenderer({ content, className }: KatexRendererProps) {
           const html = katex.renderToString(latex, {
             throwOnError: false,
             displayMode: false,
+            errorColor: '#dc2626',
           });
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
