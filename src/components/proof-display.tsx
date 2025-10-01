@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
 import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
+import { LogoSmall } from './logo-small';
+import Link from 'next/link';
 import { ProofGraph, type GraphData } from './proof-graph';
 
 interface ProofDisplayProps {
@@ -44,6 +46,7 @@ export default function ProofDisplay({
 }: ProofDisplayProps) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isGraphOpen, setIsGraphOpen] = useState(false);
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
@@ -228,53 +231,103 @@ export default function ProofDisplay({
 
   return (
     <div className="flex h-screen bg-background">
+      <aside className="w-14 flex flex-col items-center py-4 border-r bg-card">
+        <Link href="/" className="mb-6">
+          <LogoSmall />
+        </Link>
+        <div className="flex flex-col items-center space-y-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="History"
+            onClick={() => {
+              setIsHistoryOpen(prev => {
+                const opening = !prev;
+                if (opening) {
+                  setIsChatOpen(false);
+                }
+                return opening;
+              });
+            }}
+          >
+            <History />
+            <span className="sr-only">History</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Graph"
+            onClick={() => {
+              const newMode = viewMode === 'graph' ? 'steps' : 'graph';
+              setViewMode(newMode);
+              if (newMode === 'graph' && !graphData && !isGraphLoading) {
+                generateGraph(sublemmas);
+              }
+            }}
+          >
+            <GitMerge />
+            <span className="sr-only">Graph</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Chat"
+            onClick={() => {
+              toggleChat();
+            }}
+          >
+            {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            <span className="sr-only">Chat</span>
+          </Button>
+        </div>
+      </aside>
       {isHistoryOpen && (
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
-          <ProofHistorySidebar
-            history={proofHistory}
-            activeIndex={activeVersionIndex}
-            onRestore={handleRestoreVersion}
-            onClose={() => setIsHistoryOpen(false)}
-          />
+          {isHistoryOpen ? (
+            <ProofHistorySidebar
+              history={proofHistory}
+              activeIndex={activeVersionIndex}
+              onRestore={handleRestoreVersion}
+              onClose={() => setIsHistoryOpen(false)}
+            />
+          ) : (
+            <div className="p-4 overflow-auto">
+              {isGraphLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                </div>
+              ) : graphData ? (
+                <ProofGraph graphData={graphData} />
+              ) : (
+                <div className="text-muted-foreground">No graph available.</div>
+              )}
+            </div>
+          )}
         </aside>
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="p-6 flex-shrink-0">
+        <div className="p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <PageHeader />
-              <Button variant="outline" size="icon" onClick={toggleChat}>
-                {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
-                <span className="sr-only">Toggle Chat</span>
-              </Button>
-            </div>
-            <h2 className="text-2xl font-bold font-headline mb-4">Original Problem</h2>
-            <Card>
+            {isLoading && (
+              <div className="mb-4">
+                <PageHeader />
+              </div>
+            )}
+            <Card className="mb-1">
               <CardContent className='pt-6'>
                 <KatexRenderer content={initialProblem} />
               </CardContent>
             </Card>
+
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6">
+          <div className="p-4">
             <div className="max-w-4xl mx-auto">
-              <div className="sticky top-0 z-20 flex items-center gap-2 mb-4 bg-background border-b">
-                <Button variant="outline" size="icon" onClick={toggleHistory} title="Toggle History">
-                  <History />
-                  <span className="sr-only">Toggle History</span>
-                </Button>
-                <Button
-                  variant={viewMode === 'graph' ? 'secondary' : 'outline'}
-                  size="icon"
-                  onClick={handleToggleView}
-                  title="Toggle Graph View"
-                  disabled={isLoading}
-                >
-                  <GitMerge />
-                  <span className="sr-only">Toggle Graph View</span>
-                </Button>
+              <div className="sticky top-0 z-20 flex items-center gap-2 mb-1 bg-background border-b">
                 <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
               </div>
               {isLoading ? (

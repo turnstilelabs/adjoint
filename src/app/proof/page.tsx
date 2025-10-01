@@ -11,7 +11,7 @@ import { Loader2, X } from 'lucide-react';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { PageHeader } from '@/components/page-header';
+import { Header } from '@/components/header';
 
 function ProofPageContent() {
   const searchParams = useSearchParams();
@@ -36,12 +36,12 @@ function ProofPageContent() {
       return;
     }
     decompositionRan.current = true;
-    
+
     setMessages([]);
 
     startTransition(async () => {
       // Short delay to allow UI to render first
-      await new Promise(resolve => setTimeout(resolve, 50)); 
+      await new Promise(resolve => setTimeout(resolve, 50));
       const result = await decomposeProblemAction(problem);
       if (result.success && result.sublemmas) {
         setSublemmas(result.sublemmas);
@@ -73,7 +73,7 @@ function ProofPageContent() {
       <LoadingState problem={problem} />
     );
   }
-  
+
   return (
     <ProofDisplay
       initialProblem={problem!}
@@ -111,12 +111,16 @@ function LoadingState({ problem }: { problem: string | null }) {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="p-6">
         <div className="max-w-4xl mx-auto">
-          <PageHeader />
+          <div className="text-center mb-8">
+            <Header />
+            <p className="mt-2 text-lg text-gray-600">
+              Your canonical companion in reasoning.
+            </p>
+          </div>
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold font-headline mb-4">Original Problem</h2>
           <Card className='text-left'>
             <CardContent className="pt-6">
               {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
@@ -127,10 +131,10 @@ function LoadingState({ problem }: { problem: string | null }) {
             <p className="text-lg font-medium">Generating proof steps...</p>
             <p className="text-sm">The AI is thinking. This may take a moment.</p>
           </div>
-           <div className="mt-8">
+          <div className="mt-8">
             <Button variant="outline" onClick={() => router.push('/')}>
-                <X className="mr-2 h-4 w-4" />
-                Cancel
+              <X className="mr-2 h-4 w-4" />
+              Cancel
             </Button>
           </div>
         </div>

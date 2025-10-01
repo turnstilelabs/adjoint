@@ -30,13 +30,13 @@ export default function ProblemInputForm() {
     startTransition(async () => {
       setError(null);
       const validationResult = await validateStatementAction(trimmedProblem);
-      
+
       if (validationResult.success && validationResult.validity === 'VALID') {
         const params = new URLSearchParams();
         params.append('problem', trimmedProblem);
         router.push(`/proof?${params.toString()}`);
       } else if (validationResult.success) {
-        setError("Looks like that’s not math! The Adjoint only works with math problems.");
+        setError("Looks like that’s not math! This app only works with math problems.");
       }
       else {
         const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
@@ -85,7 +85,7 @@ export default function ProblemInputForm() {
           </div>
 
           {error && (
-             <Alert variant="destructive" className="mt-4">
+            <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 {error}
