@@ -100,9 +100,9 @@ The Adjoint is structured as a Next.js application (App Router) with server acti
 
 ```mermaid
 flowchart LR
-  A[Next.js App Router UI] -- user events --> B[Server Actions]
-  B -- calls --> C[AI Flows (Genkit)]
-  C -- model --> D[Google AI (Gemini)]
+  A([Next.js App Router UI]) -- user events --> B{{Server Actions}}
+  B -- calls --> C[/AI Flows (Genkit)/]
+  C -- model --> D((Gemini))
   D -- responses --> C
   C -- typed results --> B
   B -- updates state/props --> A
