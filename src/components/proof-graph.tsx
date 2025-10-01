@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -175,6 +177,26 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
   const [open, setOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<PositionedNode | null>(null);
 
+  // pan & zoom state
+  const [scale, setScale] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panRef = useRef(pan);
+  const scaleRef = useRef(scale);
+  // panning state when dragging the canvas background
+  const [panning, setPanning] = useState<{
+    startX: number;
+    startY: number;
+    startPan: { x: number; y: number };
+  } | null>(null);
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
   // Reconcile nodes when graphData changes:
   // - keep positions for existing nodes
   // - add positions for new nodes deterministically
@@ -252,15 +274,22 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
     setEdges(nextEdges);
   }, [graphData?.edges, nodes]);
 
-  const getPoint = (e: React.MouseEvent | MouseEvent) => {
-    if (!svgRef.current) return { x: 0, y: 0 };
-    const ctm = svgRef.current.getScreenCTM();
-    if (!ctm) return { x: 0, y: 0 };
+  const getPoint = (e: React.MouseEvent | MouseEvent | React.WheelEvent<SVGSVGElement>) => {
+    // Map client coordinates -> SVG user coordinates, then account for pan/scale
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
     const clientX = 'clientX' in e ? e.clientX : 0;
     const clientY = 'clientY' in e ? e.clientY : 0;
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
+    // Convert from transformed (screen) coords into graph local coords using pan/scale
+    const currentScale = scaleRef.current ?? scale;
+    const currentPan = panRef.current ?? pan;
     return {
-      x: (clientX - ctm.e) / ctm.a,
-      y: (clientY - ctm.f) / ctm.d,
+      x: (svgP.x - currentPan.x) / currentScale,
+      y: (svgP.y - currentPan.y) / currentScale,
     };
   };
 
@@ -281,6 +310,15 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
 
   // Drag interactions on the SVG (for performance we also attach to window)
   const handleSvgMouseMove = (e: React.MouseEvent) => {
+    // If user is panning the canvas (started by mousedown on background), update pan
+    if (panning) {
+      const pt = getPoint(e);
+      const dx = pt.x - panning.startX;
+      const dy = pt.y - panning.startY;
+      setPan({ x: panning.startPan.x + dx, y: panning.startPan.y + dy });
+      return;
+    }
+
     if (!dragging) return;
     e.preventDefault();
     const pt = getPoint(e);
@@ -332,6 +370,9 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
   const handleSvgMouseUp = (e: React.MouseEvent) => {
     if (dragging) e.preventDefault();
     setDragging(null);
+    if (panning) {
+      setPanning(null);
+    }
   };
 
   useEffect(() => {
@@ -409,6 +450,39 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
 
   return (
     <Card className="w-full h-[600px] p-0 overflow-hidden relative">
+      <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-2 bg-transparent">
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Zoom in"
+          onClick={() => {
+            setScale((s) => Math.min(3, +(s * 1.25).toFixed(2)));
+          }}
+        >
+          <ZoomIn size={16} />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Zoom out"
+          onClick={() => {
+            setScale((s) => Math.max(0.5, +(s / 1.25).toFixed(2)));
+          }}
+        >
+          <ZoomOut size={16} />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Reset view"
+          onClick={() => {
+            setScale(1);
+            setPan({ x: 0, y: 0 });
+          }}
+        >
+          <RefreshCw size={16} />
+        </Button>
+      </div>
       <TooltipProvider>
         <svg
           ref={svgRef}
@@ -417,6 +491,32 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           className="rounded-lg border bg-muted/10"
           style={{ cursor: dragging ? 'grabbing' as const : 'default' }}
+          onMouseDown={(e) => {
+            // If a node already handled the event (node calls preventDefault), don't start panning.
+            if ((e as any).defaultPrevented) return;
+            const pt = getPoint(e);
+            setPanning({ startX: pt.x, startY: pt.y, startPan: { x: pan.x, y: pan.y } });
+          }}
+          onWheel={(e) => {
+            e.preventDefault();
+            const delta = 'deltaY' in e ? (e as any).deltaY : 0;
+            // smooth exponential zooming
+            const zoomFactor = Math.exp(-delta * 0.0015);
+            const svgP = getPoint(e);
+            const currentScale = scaleRef.current ?? scale;
+            const newScale = Math.min(3, Math.max(0.5, currentScale * zoomFactor));
+            // keep the point under cursor stable
+            const localX = (svgP.x - pan.x) / currentScale;
+            const localY = (svgP.y - pan.y) / currentScale;
+            const newPanX = svgP.x - localX * newScale;
+            const newPanY = svgP.y - localY * newScale;
+            setScale(newScale);
+            setPan({ x: newPanX, y: newPanY });
+          }}
+          onDoubleClick={() => {
+            setScale(1);
+            setPan({ x: 0, y: 0 });
+          }}
           onMouseMove={handleSvgMouseMove}
           onMouseUp={handleSvgMouseUp}
         >
@@ -454,10 +554,20 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
             >
               <path d="M 0 0 L 10 5 L 0 10 z" fill={activeStroke} />
             </marker>
+
+            {/* subtle dotted grid pattern for background */}
+            <pattern id="dotPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+              {/* background tile (very low contrast, adapts to theme via CSS vars) */}
+              <rect width="20" height="20" fill="hsl(var(--muted) / 0.06)" />
+              {/* small dot in the center (soft) */}
+              <circle cx="10" cy="10" r="0.6" fill="hsl(var(--muted-foreground) / 0.12)" />
+            </pattern>
           </defs>
 
           {/* Edges */}
-          <g>
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
+            {/* background tiled dots that pan/zoom with the graph */}
+            <rect x={-2000} y={-2000} width={4000} height={4000} fill="url(#dotPattern)" />
             {edges.map((edge) => {
               const isActive =
                 hoveredNode === edge.sourceId || hoveredNode === edge.targetId;
@@ -479,7 +589,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
           </g>
 
           {/* Nodes */}
-          <g>
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
             {nodes.map((node, idx) => {
               const isHovered = isNodeActive(node.id);
               const isDragging = dragging?.nodeId === node.id;
