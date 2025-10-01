@@ -242,7 +242,7 @@ export default function ProofDisplay({
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-2 mb-4">
+              <div className="sticky top-0 z-20 flex items-center gap-2 mb-4 bg-background border-b">
                 <Button variant="outline" size="icon" onClick={toggleHistory} title="Toggle History">
                   <History />
                   <span className="sr-only">Toggle History</span>
