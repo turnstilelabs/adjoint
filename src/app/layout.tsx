@@ -1,7 +1,8 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import { Toaster } from "@/components/ui/toaster";
 import { Inter, Poppins, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -34,9 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable} ${sourceCodePro.variable}`}>
-      <head>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0KOVEMckDITrE32MsppA/4ovTM9EuUY+BCcOEQFpBrumf6tz3WBGv" crossOrigin="anonymous" />
-      </head>
+      <head></head>
       <body className="font-body antialiased">
         {children}
         <Toaster />

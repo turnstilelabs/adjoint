@@ -61,7 +61,15 @@ export default function ProofDisplay({
     startGraphLoadingTransition(async () => {
       const result = await generateProofGraphAction(steps);
       if ('nodes' in result && 'edges' in result) {
-        setGraphData({ nodes: result.nodes, edges: result.edges });
+        setGraphData({
+          nodes: result.nodes.map(n => {
+            const m = n.id.match(/step-(\d+)/);
+            const idx = m ? parseInt(m[1], 10) - 1 : -1;
+            const content = idx >= 0 && idx < steps.length ? steps[idx].content : '';
+            return { ...n, content };
+          }),
+          edges: result.edges
+        });
       } else {
         setGraphData(null);
         toast({
@@ -107,8 +115,18 @@ export default function ProofDisplay({
           );
           return { ...prev, nodes: updatedNodes };
         });
+      } else if (opts?.change === 'content' && typeof opts.changedIndex === 'number') {
+        const changedIndex = opts.changedIndex;
+        setGraphData(prev => {
+          if (!prev) return prev;
+          const nodeId = `step-${changedIndex + 1}`;
+          const updatedNodes = prev.nodes.map(n =>
+            n.id === nodeId ? { ...n, content: newSublemmas[changedIndex].content } : n
+          );
+          return { ...prev, nodes: updatedNodes };
+        });
       }
-      // For content-only edits, leave graph structure as-is
+      // For other edits, leave graph structure as-is
     } else {
       setGraphData(null); // Invalidate old graph data
       generateGraph(newSublemmas);

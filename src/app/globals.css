@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 /* KaTeX styles to hide MathML fallback and style rendered math */
-@import 'katex/dist/katex.min.css';
 
 @layer base {
   :root {

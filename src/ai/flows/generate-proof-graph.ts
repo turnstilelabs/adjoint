@@ -51,7 +51,7 @@ const generateProofGraphPrompt = ai.definePrompt({
 1.  Create a node for each sublemma. Use "step-N" as the node ID, where N is the 1-based index of the sublemma in the input array. The node's label should be the sublemma's title.
 2.  Analyze the dependencies between the sublemmas. An edge should exist from node A to node B if sublemma B directly depends on the result or statement of sublemma A.
 3.  The graph should represent the logical flow. Sometimes this will be a simple linear chain (1 -> 2 -> 3), but other times a step might depend on multiple previous steps.
-4.  Create edges connecting the nodes based on these dependencies. Use "edge-S-T" as the edge ID, where S is the source step number and T is the target step number (1-based).
+4.  Create DIRECTED edges connecting the nodes based on these dependencies. Edges MUST be oriented from dependency to dependent: set "source" to the step that is used (A) and "target" to the step that depends on it (B). Use "edge-S-T" as the edge ID, where S is the source step number and T is the target step number (1-based). Do not output undirected edges.
 
 **Proof Steps to Analyze:**
 {{#each proofSteps}}
