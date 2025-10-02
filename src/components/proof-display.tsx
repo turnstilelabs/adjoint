@@ -249,6 +249,12 @@ export default function ProofDisplay({
     });
   };
 
+  const handleAbortValidation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
   const handleRestoreVersion = (index: number) => {
     const versionToRestore = proofHistory[index];
     if (versionToRestore) {
@@ -597,22 +603,8 @@ export default function ProofDisplay({
               )}
 
               <div className="pt-4 space-y-4">
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={handleValidateProof}
-                  variant={isProofValidating ? 'destructive' : 'default'}
-                  disabled={sublemmas.length === 0 || (!isProofEdited && lastValidatedSublemmas !== null)}
-                >
-                  {isProofValidating ? (
-                    <XCircle className="mr-2 h-5 w-5" />
-                  ) : (
-                    <ShieldCheck className="mr-2 h-5 w-5" />
-                  )}
-                  {isProofValidating ? 'Abort Validation' : 'Validate Full Proof'}
-                </Button>
                 {proofValidationResult && (
-                  <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mt-4 bg-card">
+                  <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="bg-card">
                     {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
                     <AlertTitle>{proofValidationResult.isValid ? "Proof Verified" : "Proof Invalid"}</AlertTitle>
                     <AlertDescription>
@@ -620,6 +612,46 @@ export default function ProofDisplay({
                     </AlertDescription>
                   </Alert>
                 )}
+              </div>
+              <div className="sticky bottom-0 left-0 right-0 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="max-w-4xl mx-auto p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    {isProofValidating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
+                        Validating full proof...
+                      </>
+                    ) : isProofEdited ? (
+                      <>Changes not validated yet.</>
+                    ) : (
+                      <>Up to date.</>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isProofValidating && (
+                      <Button variant="outline" size="sm" onClick={handleAbortValidation}>
+                        <XCircle className="mr-2 h-4 w-4" />
+                        Cancel
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleValidateProof}
+                      disabled={isProofValidating || sublemmas.length === 0 || (!isProofEdited && lastValidatedSublemmas !== null)}
+                    >
+                      {isProofValidating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Validating...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="mr-2 h-4 w-4" />
+                          Validate Full Proof
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
