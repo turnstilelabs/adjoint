@@ -16,6 +16,8 @@ import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
 import { LogoSmall } from './logo-small';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Textarea } from '@/components/ui/textarea';
 import { ProofGraph, type GraphData } from './proof-graph';
 
 interface ProofDisplayProps {
@@ -59,6 +61,13 @@ export default function ProofDisplay({
   const [viewMode, setViewMode] = useState<'steps' | 'graph'>('steps');
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [isGraphLoading, startGraphLoadingTransition] = useTransition();
+
+  const router = useRouter();
+  const [isEditingProblem, setIsEditingProblem] = useState(false);
+  const [editingProblemText, setEditingProblemText] = useState(initialProblem);
+  useEffect(() => {
+    setEditingProblemText(initialProblem);
+  }, [initialProblem]);
 
   const generateGraph = (steps: Sublemma[]) => {
     startGraphLoadingTransition(async () => {
@@ -317,7 +326,37 @@ export default function ProofDisplay({
             )}
             <Card className="mb-1">
               <CardContent className='pt-6'>
-                <KatexRenderer content={initialProblem} />
+                {isEditingProblem ? (
+                  <div>
+                    <Textarea
+                      value={editingProblemText}
+                      onChange={(e) => setEditingProblemText(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          const trimmed = editingProblemText.trim();
+                          if (trimmed) {
+                            setIsEditingProblem(false);
+                            const params = new URLSearchParams();
+                            params.append('problem', trimmed);
+                            router.push(`/proof?${params.toString()}`);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsEditingProblem(false);
+                          setEditingProblemText(initialProblem);
+                        }
+                      }}
+                      autoFocus
+                      rows={3}
+                      className="w-full"
+                    />
+                    <div className="text-sm text-muted-foreground mt-2">Press Enter to submit, Shift+Enter for newline, Esc to cancel.</div>
+                  </div>
+                ) : (
+                  <div onDoubleClick={() => { setIsEditingProblem(true); setEditingProblemText(initialProblem); }} style={{ cursor: 'pointer' }}>
+                    <KatexRenderer content={initialProblem} />
+                  </div>
+                )}
               </CardContent>
             </Card>
 

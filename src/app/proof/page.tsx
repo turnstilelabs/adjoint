@@ -26,6 +26,10 @@ function ProofPageContent() {
     const problemParam = searchParams.get('problem');
     if (problemParam) {
       setProblem(problemParam);
+      // Reset decomposition state so navigating to a new problem will trigger decomposition again
+      setSublemmas([]);
+      setMessages([]);
+      decompositionRan.current = false;
     } else {
       setError('Missing problem in the URL.');
     }

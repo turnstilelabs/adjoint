@@ -19,34 +19,37 @@ export default function ProblemInputForm() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const trimmedProblem = problem.trim();
+  const submitProblem = async (text: string) => {
+    const trimmedProblem = text.trim();
     if (!trimmedProblem) {
       setError('Please enter a problem to solve.');
       return;
     }
+    setError(null);
+    const validationResult = await validateStatementAction(trimmedProblem);
 
+    if ('validity' in validationResult && validationResult.validity === 'VALID') {
+      const params = new URLSearchParams();
+      params.append('problem', trimmedProblem);
+      router.push(`/proof?${params.toString()}`);
+    } else if ('validity' in validationResult) {
+      // The statement was validated but not as a valid math problem
+      setError("Looks like that’s not math! This app only works with math problems.");
+    } else {
+      const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
+      setError(errorMessage);
+      toast({
+        title: 'Validation Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     startTransition(async () => {
-      setError(null);
-      const validationResult = await validateStatementAction(trimmedProblem);
-
-      if (validationResult.success && validationResult.validity === 'VALID') {
-        const params = new URLSearchParams();
-        params.append('problem', trimmedProblem);
-        router.push(`/proof?${params.toString()}`);
-      } else if (validationResult.success) {
-        setError("Looks like that’s not math! This app only works with math problems.");
-      }
-      else {
-        const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
-        setError(errorMessage);
-        toast({
-          title: 'Validation Error',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-      }
+      await submitProblem(problem);
     });
   };
 
@@ -68,6 +71,14 @@ export default function ProblemInputForm() {
             <Textarea
               value={problem}
               onChange={handleTextareaChange}
+              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  startTransition(async () => {
+                    await submitProblem(problem);
+                  });
+                }
+              }}
               className={cn(
                 "w-full p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none overflow-y-hidden pr-14",
                 error && "border-destructive focus:ring-destructive"
@@ -93,26 +104,7 @@ export default function ProblemInputForm() {
             </Alert>
           )}
 
-          <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-4">
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full sm:w-auto font-semibold text-lg py-3 px-8 shadow-md hover:shadow-lg"
-              disabled={isPending}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Validating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-5 w-5" />
-                  Decompose
-                </>
-              )}
-            </Button>
-          </div>
+
         </form>
       </CardContent>
     </Card>
