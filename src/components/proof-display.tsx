@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useTransition } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge } from 'lucide-react';
+import { useState, useEffect, useTransition, useRef } from 'react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -9,7 +9,7 @@ import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { validateProofAction, generateProofGraphAction } from '@/app/actions';
+import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
 import { isEqual } from 'lodash';
@@ -62,6 +62,15 @@ export default function ProofDisplay({
   const [viewMode, setViewMode] = useState<'steps' | 'graph'>('steps');
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [isGraphLoading, startGraphLoadingTransition] = useTransition();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Abort in-flight validation if component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const router = useRouter();
   const [isEditingProblem, setIsEditingProblem] = useState(false);
@@ -166,33 +175,76 @@ export default function ProofDisplay({
   }
 
   const handleValidateProof = () => {
+    // If already validating, clicking acts as Abort
+    if (isProofValidating) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      return;
+    }
+
     startProofValidationTransition(async () => {
       setProofValidationResult(null);
-      const result = await validateProofAction(initialProblem, sublemmas);
-      if ('isValid' in result && 'feedback' in result) {
-        const validationResult = {
-          isValid: result.isValid || false,
-          feedback: result.feedback || 'No feedback provided.',
-        };
-        setProofValidationResult(validationResult);
-        setLastValidatedSublemmas(sublemmas);
-        setIsProofEdited(false);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      try {
+        const res = await fetch('/api/validate-proof', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem: initialProblem, proofSteps: sublemmas }),
+          signal: controller.signal,
+        });
 
-        setProofHistory(prev => {
-          const updatedHistory = [...prev];
-          const activeVersion = updatedHistory[activeVersionIndex];
-          if (activeVersion && isEqual(activeVersion.sublemmas, sublemmas)) {
-            activeVersion.isValid = validationResult.isValid;
+        if (!res.ok) {
+          // If the client aborted, the fetch throws before reaching here in most browsers.
+          // But handle non-2xx responses too.
+          let message = 'Failed to validate the proof with AI.';
+          try {
+            const data = await res.json();
+            if (data?.error) message = data.error;
+          } catch {
+            // ignore json parse error
           }
-          return updatedHistory;
-        });
+          throw new Error(message);
+        }
 
-      } else {
-        toast({
-          title: 'Validation Failed',
-          description: 'error' in result ? result.error : 'An unexpected error occurred during validation.',
-          variant: 'destructive',
-        });
+        const result = await res.json();
+        if ('isValid' in result && 'feedback' in result) {
+          const validationResult = {
+            isValid: result.isValid || false,
+            feedback: result.feedback || 'No feedback provided.',
+          };
+          setProofValidationResult(validationResult);
+          setLastValidatedSublemmas(sublemmas);
+          setIsProofEdited(false);
+
+          setProofHistory(prev => {
+            const updatedHistory = [...prev];
+            const activeVersion = updatedHistory[activeVersionIndex];
+            if (activeVersion && isEqual(activeVersion.sublemmas, sublemmas)) {
+              activeVersion.isValid = validationResult.isValid;
+            }
+            return updatedHistory;
+          });
+        } else {
+          toast({
+            title: 'Validation Failed',
+            description: 'An unexpected error occurred during validation.',
+            variant: 'destructive',
+          });
+        }
+      } catch (error: any) {
+        if (error?.name === 'AbortError') {
+          // Swallow; user intentionally aborted
+        } else {
+          toast({
+            title: 'Validation Failed',
+            description: error?.message || 'An unexpected error occurred during validation.',
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        abortControllerRef.current = null;
       }
     });
   };
@@ -451,14 +503,15 @@ export default function ProofDisplay({
                   size="lg"
                   className="w-full"
                   onClick={handleValidateProof}
-                  disabled={isProofValidating || sublemmas.length === 0 || !isProofEdited && lastValidatedSublemmas !== null}
+                  variant={isProofValidating ? 'destructive' : 'default'}
+                  disabled={sublemmas.length === 0 || (!isProofEdited && lastValidatedSublemmas !== null)}
                 >
                   {isProofValidating ? (
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <XCircle className="mr-2 h-5 w-5" />
                   ) : (
                     <ShieldCheck className="mr-2 h-5 w-5" />
                   )}
-                  Validate Full Proof
+                  {isProofValidating ? 'Abort Validation' : 'Validate Full Proof'}
                 </Button>
                 {proofValidationResult && (
                   <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="mt-4 bg-card">
