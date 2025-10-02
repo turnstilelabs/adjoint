@@ -150,7 +150,6 @@ Server actions are located in `src/app/actions.ts` and act as the entry points f
 - Interactive questioning: `askQuestionAction` triggers `interactive-questioning.ts`, which provides Q&A grounded in the current steps.
 - Revision: `reviseOrAskAction` calls `revise-proof.ts`. The flow can apply direct revisions or suggest changes for the user to approve.
 - Validation: `validateProofAction` calls `validate-proof.ts` to determine validity and generate feedback. There is also a `validate-statement.ts` for single statements.
-- Autoformalization: `autoformalizeAction` calls `autoformalize.ts` to formalize and attempt a proof of a single lemma.
 - Graph generation: `generateProofGraphAction` calls `generate-proof-graph.ts` to produce a dependency graph of nodes and edges.
 
 All flows run on the server. They use Genkit’s Google AI plugin (`@genkit-ai/googleai`) via `src/ai/genkit.ts`, which configures the default model (`googleai/gemini-2.5-flash`) and allows swapping or reconfiguring models if needed.

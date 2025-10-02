@@ -2,7 +2,6 @@
 
 import { decomposeProof } from '@/ai/flows/llm-proof-decomposition';
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
-import { autoformalizeAndProve } from '@/ai/flows/autoformalize';
 import { validateStatement } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
@@ -51,18 +50,6 @@ export async function reviseOrAskAction(problem: string, proofSteps: Sublemma[],
 }
 
 
-export async function autoformalizeAction(lemma: string) {
-  if (!lemma) {
-    return { success: false, error: 'Lemma cannot be empty.' };
-  }
-  try {
-    const result = await autoformalizeAndProve({ lemma });
-    return { success: true, ...result };
-  } catch (error) {
-    console.error('autoformalizeAction error:', error);
-    return { success: false, error: 'Failed to autoformalize with AI.' };
-  }
-}
 
 export async function validateStatementAction(statement: string) {
   if (!statement) {
