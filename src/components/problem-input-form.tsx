@@ -87,12 +87,7 @@ export default function ProblemInputForm() {
               disabled={isPending}
               rows={1}
             />
-            <div className="absolute bottom-3 right-3 flex items-center space-x-3">
-              <Button type="button" size="icon" variant="ghost" className="rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200" title="Upload Image" disabled={isPending}>
-                <ImageIcon className="h-5 w-5" />
-                <span className="sr-only">Upload Image</span>
-              </Button>
-            </div>
+
           </div>
 
           {error && (

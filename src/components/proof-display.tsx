@@ -18,6 +18,7 @@ import { LogoSmall } from './logo-small';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
+import { validateStatementAction } from '@/app/actions';
 import { ProofGraph, type GraphData } from './proof-graph';
 
 interface ProofDisplayProps {
@@ -65,8 +66,11 @@ export default function ProofDisplay({
   const router = useRouter();
   const [isEditingProblem, setIsEditingProblem] = useState(false);
   const [editingProblemText, setEditingProblemText] = useState(initialProblem);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isValidatingProblem, startProblemValidationTransition] = useTransition();
   useEffect(() => {
     setEditingProblemText(initialProblem);
+    setEditError(null);
   }, [initialProblem]);
 
   const generateGraph = (steps: Sublemma[]) => {
@@ -334,23 +338,56 @@ export default function ProofDisplay({
                       onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          const trimmed = editingProblemText.trim();
-                          if (trimmed) {
-                            setIsEditingProblem(false);
-                            const params = new URLSearchParams();
-                            params.append('problem', trimmed);
-                            router.push(`/proof?${params.toString()}`);
-                          }
+                          if (isValidatingProblem) return;
+                          startProblemValidationTransition(async () => {
+                            setEditError(null);
+                            const trimmed = editingProblemText.trim();
+                            if (!trimmed) {
+                              setEditError('Please enter a problem to solve.');
+                              return;
+                            }
+                            const result = await validateStatementAction(trimmed);
+                            if ('validity' in result && result.validity === 'VALID') {
+                              setIsEditingProblem(false);
+                              const params = new URLSearchParams();
+                              params.append('problem', trimmed);
+                              router.push(`/proof?${params.toString()}`);
+                            } else if ('validity' in result) {
+                              setEditError("Looks like that’s not math! This app only works with math problems.");
+                            } else {
+                              const errorMessage = result.error || "An unexpected error occurred while validating the problem.";
+                              setEditError(errorMessage);
+                              toast({
+                                title: 'Validation Error',
+                                description: errorMessage,
+                                variant: 'destructive',
+                              });
+                            }
+                          });
                         } else if (e.key === 'Escape') {
                           setIsEditingProblem(false);
                           setEditingProblemText(initialProblem);
+                          setEditError(null);
                         }
                       }}
                       autoFocus
                       rows={3}
                       className="w-full"
+                      disabled={isValidatingProblem}
                     />
-                    <div className="text-sm text-muted-foreground mt-2">Press Enter to submit, Shift+Enter for newline, Esc to cancel.</div>
+                    {isValidatingProblem ? (
+                      <div className="flex items-center text-sm text-muted-foreground mt-2">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
+                        Validating...
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground mt-2">Press Enter to submit, Shift+Enter for newline, Esc to cancel.</div>
+                    )}
+                    {editError && (
+                      <Alert variant="destructive" className="mt-4">
+                        <AlertDescription>{editError}</AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 ) : (
                   <div onDoubleClick={() => { setIsEditingProblem(true); setEditingProblemText(initialProblem); }} style={{ cursor: 'pointer' }}>
