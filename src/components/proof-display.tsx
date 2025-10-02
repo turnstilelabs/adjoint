@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useTransition, useRef } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle, FileDown } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -294,6 +294,93 @@ export default function ProofDisplay({
     }
   };
 
+  const escapeLatexText = (s: string) => {
+    return s
+      .replace(/&/g, '\\&')
+      .replace(/%/g, '\\%')
+      .replace(/#/g, '\\#')
+      .replace(/_/g, '\\_')
+      .replace(/{/g, '\\{')
+      .replace(/}/g, '\\}')
+      .replace(/\^/g, '\\textasciicircum{}')
+      .replace(/~/g, '\\textasciitilde{}');
+  };
+
+  const buildLatexDocument = (problem: string, steps: Sublemma[]) => {
+    const lines: string[] = [];
+    lines.push('\\documentclass[11pt]{article}');
+    lines.push('\\usepackage[utf8]{inputenc}');
+    lines.push('\\usepackage[T1]{fontenc}');
+    lines.push('\\usepackage{lmodern}');
+    lines.push('\\usepackage{geometry}');
+    lines.push('\\geometry{margin=1in}');
+    lines.push('\\usepackage{microtype}');
+    lines.push('\\usepackage{amsmath,amssymb,amsthm,mathtools}');
+    lines.push('\\usepackage{enumitem}');
+    lines.push('\\usepackage{xcolor}');
+    lines.push('\\usepackage{hyperref}');
+    lines.push('\\hypersetup{hidelinks}');
+    lines.push('');
+    lines.push('% theorem environments');
+    lines.push('\\newtheorem{theorem}{Theorem}');
+    lines.push('\\newtheorem{lemma}{Lemma}');
+    lines.push('\\newtheorem{proposition}{Proposition}');
+    lines.push('\\newtheorem{corollary}{Corollary}');
+    lines.push('\\theoremstyle{definition}');
+    lines.push('\\newtheorem{definition}{Definition}');
+    lines.push('\\theoremstyle{remark}');
+    lines.push('\\newtheorem{remark}{Remark}');
+    lines.push('');
+    lines.push('\\title{Tentative Proof Export}');
+    lines.push('\\author{Adjoint}');
+    lines.push('\\date{\\today}');
+    lines.push('');
+    lines.push('\\begin{document}');
+    lines.push('\\maketitle');
+    lines.push('');
+    lines.push('\\section*{Problem}');
+    lines.push('\\begin{quote}');
+    lines.push(problem);
+    lines.push('\\end{quote}');
+    lines.push('');
+    lines.push('\\section*{Proof Outline}');
+    lines.push('\\begin{enumerate}[leftmargin=*, label=Step~\\arabic*:]');
+    steps.forEach((s, i) => {
+      const t = escapeLatexText(s.title || `Step ${i + 1}`);
+      const titleWithPunct = /[.?!:]$/.test(t) ? t : `${t}.`;
+      lines.push(`\\item \\textbf{${titleWithPunct}} ${s.content}`);
+    });
+    lines.push('\\end{enumerate}');
+    lines.push('');
+    lines.push('\\end{document}');
+    return lines.join('\n');
+  };
+
+  const handleExportTex = () => {
+    try {
+      const latex = buildLatexDocument(editingProblemText || initialProblem, sublemmas);
+      const blob = new Blob([latex], { type: 'application/x-tex' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'proof.tex';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: 'Exported',
+        description: 'LaTeX file downloaded as proof.tex',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Export Failed',
+        description: e?.message || 'Could not export LaTeX.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background">
       <aside className="w-14 flex flex-col items-center py-4 border-r bg-card">
@@ -346,7 +433,18 @@ export default function ProofDisplay({
             {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
             <span className="sr-only">Chat</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Export .tex"
+            onClick={handleExportTex}
+            disabled={sublemmas.length === 0}
+          >
+            <FileDown />
+            <span className="sr-only">Export .tex</span>
+          </Button>
         </div>
+        <div className="flex-1" />
       </aside>
       {isHistoryOpen && (
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
