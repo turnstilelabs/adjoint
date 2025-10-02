@@ -9,8 +9,9 @@
  * - InteractiveQuestioningOutput - The return type for the interactiveQuestioning function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 
 const InteractiveQuestioningInputSchema = z.object({
   question: z.string().describe('The question asked by the user.'),
@@ -29,11 +30,13 @@ export async function interactiveQuestioning(input: InteractiveQuestioningInput)
 
 const prompt = ai.definePrompt({
   name: 'interactiveQuestioningPrompt',
-  input: {schema: InteractiveQuestioningInputSchema},
-  output: {schema: InteractiveQuestioningOutputSchema},
-  prompt: `You are a helpful AI assistant that answers questions about mathematical proofs.
+  input: { schema: InteractiveQuestioningInputSchema },
+  output: { schema: InteractiveQuestioningOutputSchema },
+  prompt: `${ADJOINT_SYSTEM_POLICY}
 
-  You are given a question and a set of proof steps. Use the proof steps and your mathematical knowledge to answer the question as accurately as possible.
+  You are a helpful AI assistant that answers questions about mathematical proofs. Stay strictly within the current problem/proof context. If the question is outside scope, respond with a brief, polite decline indicating this chat is scoped to the current problem/proof and suggest starting a new task for other topics.
+
+  You are given a question and a set of proof steps. Use the proof steps and your mathematical knowledge to answer the question as accurately as possible when in scope.
 
   Question: {{{question}}}
 
@@ -49,12 +52,9 @@ const interactiveQuestioningFlow = ai.defineFlow(
     name: 'interactiveQuestioningFlow',
     inputSchema: InteractiveQuestioningInputSchema,
     outputSchema: InteractiveQuestioningOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async input => {
-    const {output} = await prompt(input);
+    const { output } = await prompt(input);
     return {
       answer: output!.answer,
     };

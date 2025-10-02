@@ -8,6 +8,7 @@ import { reviseOrAskAction } from '@/app/actions';
 import { KatexRenderer } from './katex-renderer';
 import { ScrollArea } from './ui/scroll-area';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { useRouter } from 'next/navigation';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -18,6 +19,7 @@ export type Message = {
     status?: 'accepted' | 'declined';
   };
   isTyping?: boolean;
+  offTopic?: boolean;
 };
 
 interface InteractiveChatProps {
@@ -46,6 +48,7 @@ export function InteractiveChat({
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,7 +112,7 @@ export function InteractiveChat({
       // Narrow the successful result shape
       const { explanation, revisionType, revisedSublemmas } = result as {
         explanation: string;
-        revisionType?: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION';
+        revisionType?: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
         revisedSublemmas?: Sublemma[] | null;
       };
 
@@ -122,6 +125,8 @@ export function InteractiveChat({
           revisedSublemmas,
           isHandled: false,
         };
+      } else if (revisionType === 'OFF_TOPIC') {
+        assistantMessage.offTopic = true;
       }
 
       // Append assistant message to the messages we already sent (including the user's)
@@ -161,6 +166,13 @@ export function InteractiveChat({
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => handleSuggestion(index, false)}>
                       <ThumbsDown className='mr-2' /> Decline
+                    </Button>
+                  </div>
+                )}
+                {msg.offTopic && (
+                  <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => router.push('/')}>
+                      Start new task
                     </Button>
                   </div>
                 )}

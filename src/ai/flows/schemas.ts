@@ -1,4 +1,4 @@
-import {z} from 'genkit';
+import { z } from 'genkit';
 
 /**
  * @fileOverview Shared Zod schemas for AI flows.
@@ -14,13 +14,13 @@ export const SublemmaSchema = z.object({
 });
 
 export const ReviseProofInputSchema = z.object({
-    problem: z.string().describe('The original mathematical problem.'),
-    proofSteps: z.array(SublemmaSchema).describe('The current sequence of sublemmas in the proof.'),
-    request: z.string().describe("The user's request for revision or a question about the proof."),
+  problem: z.string().describe('The original mathematical problem.'),
+  proofSteps: z.array(SublemmaSchema).describe('The current sequence of sublemmas in the proof.'),
+  request: z.string().describe("The user's request for revision or a question about the proof."),
 });
 
 export const ReviseProofOutputSchema = z.object({
-    revisionType: z.enum(['DIRECT_REVISION', 'SUGGESTED_REVISION', 'NO_REVISION']).describe("The type of revision performed, based on the user's intent."),
-    revisedSublemmas: z.array(SublemmaSchema).nullable().describe('The new sequence of sublemmas. Null if no changes were made.'),
-    explanation: z.string().describe('An explanation of the changes made or an answer to the user\'s question.'),
+  revisionType: z.enum(['DIRECT_REVISION', 'SUGGESTED_REVISION', 'NO_REVISION', 'OFF_TOPIC']).describe("The type of revision performed, based on the user's intent. Use 'OFF_TOPIC' when the user's request is outside the scope of the current problem/proof."),
+  revisedSublemmas: z.array(SublemmaSchema).nullable().describe('The new sequence of sublemmas. Null if no changes were made or when OFF_TOPIC.'),
+  explanation: z.string().describe('An explanation of the changes made, an answer to the user\'s question, or a concise decline message when OFF_TOPIC.'),
 });
