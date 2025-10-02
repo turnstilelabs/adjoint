@@ -1,6 +1,6 @@
 'use client';
 import { useState, useTransition, useRef, useEffect } from 'react';
-import { Send, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -16,7 +16,8 @@ export type Message = {
     revisedSublemmas: Sublemma[];
     isHandled: boolean;
     status?: 'accepted' | 'declined';
-  }
+  };
+  isTyping?: boolean;
 };
 
 interface InteractiveChatProps {
@@ -26,6 +27,14 @@ interface InteractiveChatProps {
   messages: Message[];
   setMessages: (messages: Message[]) => void;
 }
+
+const TypingIndicator = () => (
+  <div className="flex items-center gap-1 text-muted-foreground">
+    <span className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.3s]" />
+    <span className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]" />
+    <span className="w-2 h-2 bg-current rounded-full animate-bounce" />
+  </div>
+);
 
 export function InteractiveChat({
   problem,
@@ -79,7 +88,8 @@ export function InteractiveChat({
 
     const userMessage: Message = { role: 'user', content: request };
     const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
+    setMessages([...newMessages, typingMessage]);
     setInput('');
 
     startTransition(async () => {
@@ -91,8 +101,8 @@ export function InteractiveChat({
           description: (result as any).error || 'Failed to get an answer.',
           variant: 'destructive',
         });
-        // On error, remove the user's message we previously appended.
-        setMessages(newMessages.filter(m => m !== userMessage));
+        // On error, remove the user's message and typing indicator we previously appended.
+        setMessages(messages);
         return;
       }
 
@@ -139,7 +149,11 @@ export function InteractiveChat({
                 {msg.role === 'assistant' && (
                   <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
                 )}
-                <KatexRenderer content={msg.content} />
+                {msg.isTyping ? (
+                  <TypingIndicator />
+                ) : (
+                  <KatexRenderer content={msg.content} />
+                )}
                 {msg.suggestion && !msg.suggestion.isHandled && (
                   <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => handleSuggestion(index, true)}>
@@ -186,11 +200,7 @@ export function InteractiveChat({
             disabled={isPending}
             aria-label="Send message"
           >
-            {isPending ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
+            <Send className="h-5 w-5" />
           </Button>
         </div>
       </div>
