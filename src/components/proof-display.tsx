@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useTransition, useRef } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle, FileDown } from 'lucide-react';
+import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle, FileDown, AlertTriangle } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -55,6 +55,8 @@ export default function ProofDisplay({
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
   const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
   const [isProofEdited, setIsProofEdited] = useState(true); // Start as true to allow initial validation
+  const [lastReviewStatus, setLastReviewStatus] = useState<'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error'>('ready');
+  const [lastReviewedAt, setLastReviewedAt] = useState<Date | null>(null);
   const { toast } = useToast();
   const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
@@ -108,6 +110,8 @@ export default function ProofDisplay({
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
+    setLastReviewStatus('ready');
+    setLastReviewedAt(null);
     if (initialSublemmas.length > 0) {
       const initialHistory = [{ sublemmas: initialSublemmas, timestamp: new Date() }];
       setProofHistory(initialHistory);
@@ -127,6 +131,8 @@ export default function ProofDisplay({
     setSublemmas(newSublemmas);
     setActiveVersionIndex(newHistory.length);
     setIsProofEdited(true);
+    setLastReviewStatus('ready');
+    setLastReviewedAt(null);
 
     if (opts?.recomputeGraph === false) {
       // Update graph locally without recomputing
@@ -175,6 +181,10 @@ export default function ProofDisplay({
   }
 
   const handleValidateProof = () => {
+    // Prevent re-running when nothing changed since last review
+    if (!isProofEdited && (lastReviewStatus === 'reviewed_ok' || lastReviewStatus === 'reviewed_issues')) {
+      return;
+    }
     // If already validating, clicking acts as Abort
     if (isProofValidating) {
       if (abortControllerRef.current) {
@@ -217,6 +227,8 @@ export default function ProofDisplay({
           setProofValidationResult(validationResult);
           setLastValidatedSublemmas(sublemmas);
           setIsProofEdited(false);
+          setLastReviewStatus(validationResult.isValid ? 'reviewed_ok' : 'reviewed_issues');
+          setLastReviewedAt(new Date());
 
           setProofHistory(prev => {
             const updatedHistory = [...prev];
@@ -237,6 +249,7 @@ export default function ProofDisplay({
         if (error?.name === 'AbortError') {
           // Swallow; user intentionally aborted
         } else {
+          setLastReviewStatus('error');
           toast({
             title: 'Validation Failed',
             description: error?.message || 'An unexpected error occurred during validation.',
@@ -605,10 +618,13 @@ export default function ProofDisplay({
               <div className="pt-4 space-y-4">
                 {proofValidationResult && (
                   <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="bg-card">
-                    {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <Info className="h-4 w-4" />}
-                    <AlertTitle>{proofValidationResult.isValid ? "Proof Verified" : "Proof Invalid"}</AlertTitle>
+                    {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                    <AlertTitle>{proofValidationResult.isValid ? "Reviewed by AI" : "AI found issues"}</AlertTitle>
                     <AlertDescription>
                       <KatexRenderer content={proofValidationResult.feedback} />
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {proofValidationResult.isValid ? "Assessed by AI" : "Flagged by AI; please double-check."}
+                      </div>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -616,15 +632,32 @@ export default function ProofDisplay({
               <div className="sticky bottom-0 left-0 right-0 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="max-w-4xl mx-auto p-3 flex items-center justify-between gap-3">
                   <div className="flex items-center text-sm text-muted-foreground">
-                    {isProofValidating ? (
+                    {lastReviewStatus === 'ready' && (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                        Validating full proof...
+                        <Info className="mr-2 h-4 w-4" />
+                        <span>Ready for AI review</span>
                       </>
-                    ) : isProofEdited ? (
-                      <>Changes not validated yet.</>
-                    ) : (
-                      <>Up to date.</>
+                    )}
+                    {lastReviewStatus === 'reviewed_ok' && (
+                      <>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        <span>Reviewed by AI</span>
+                        {lastReviewedAt && (
+                          <span className="ml-2 text-xs">• {lastReviewedAt.toLocaleTimeString()}</span>
+                        )}
+                      </>
+                    )}
+                    {lastReviewStatus === 'reviewed_issues' && (
+                      <>
+                        <XCircle className="mr-2 h-4 w-4" />
+                        <span>AI found issues</span>
+                      </>
+                    )}
+                    {lastReviewStatus === 'error' && (
+                      <>
+                        <AlertTriangle className="mr-2 h-4 w-4" />
+                        <span>Couldn’t review</span>
+                      </>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -636,17 +669,17 @@ export default function ProofDisplay({
                     )}
                     <Button
                       onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0 || (!isProofEdited && lastValidatedSublemmas !== null)}
+                      disabled={isProofValidating || sublemmas.length === 0 || (!isProofEdited && (lastReviewStatus === 'reviewed_ok' || lastReviewStatus === 'reviewed_issues'))}
                     >
                       {isProofValidating ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Validating...
+                          Reviewing…
                         </>
                       ) : (
                         <>
                           <ShieldCheck className="mr-2 h-4 w-4" />
-                          Validate Full Proof
+                          Run AI review
                         </>
                       )}
                     </Button>

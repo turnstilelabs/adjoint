@@ -24,6 +24,8 @@ const reviseProofPrompt = ai.definePrompt({
   prompt: `${ADJOINT_SYSTEM_POLICY}
 
 You are an expert mathematician and AI assistant. Your task is to analyze a user's request concerning a mathematical proof and take the appropriate action within the above policy.
+Important: Do not claim that changes have been applied. For any revisions (DIRECT_REVISION or SUGGESTED_REVISION), present the revised steps as a proposal and explicitly ask for user acceptance. The application will gate changes on user Accept/Decline.
+
 
 The user has provided a mathematical problem, a set of proof steps (sublemmas), and a request.
 
@@ -49,7 +51,7 @@ The user has provided a mathematical problem, a set of proof steps (sublemmas), 
 2.  **Generate a Response**:
     *   **For 'DIRECT_REVISION'**:
         *   Generate the new set of sublemmas and put them in the 'revisedSublemmas' field.
-        *   Write a brief 'explanation' confirming the action (e.g., "I have merged the first two steps as you requested.").
+        *   Write a brief 'explanation' proposing the change and asking for acceptance. Do not claim it's already applied (e.g., "I've prepared a merged version of steps 1 and 2. Would you like me to apply these changes?").
     *   **For 'SUGGESTED_REVISION'**:
         *   Provide a detailed 'explanation' that answers the user's question and describes the potential improvement.
         *   If a change is warranted, generate the new set of sublemmas that reflects this improvement and include it in 'revisedSublemmas'. If no change is needed, leave 'revisedSublemmas' as null.

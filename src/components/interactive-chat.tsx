@@ -118,9 +118,7 @@ export function InteractiveChat({
 
       const assistantMessage: Message = { role: 'assistant', content: explanation };
 
-      if (revisionType === 'DIRECT_REVISION' && revisedSublemmas) {
-        onProofRevision(revisedSublemmas);
-      } else if (revisionType === 'SUGGESTED_REVISION' && revisedSublemmas) {
+      if ((revisionType === 'DIRECT_REVISION' || revisionType === 'SUGGESTED_REVISION') && revisedSublemmas) {
         assistantMessage.suggestion = {
           revisedSublemmas,
           isHandled: false,
