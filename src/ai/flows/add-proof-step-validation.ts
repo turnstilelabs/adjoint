@@ -8,8 +8,8 @@
  * - AddProofStepOutput - The return type for the addProofStepWithLLMValidation function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const AddProofStepInputSchema = z.object({
   problem: z.string().describe('The original mathematical problem.'),
@@ -30,8 +30,8 @@ export async function addProofStepWithLLMValidation(input: AddProofStepInput): P
 
 const prompt = ai.definePrompt({
   name: 'addProofStepValidationPrompt',
-  input: {schema: AddProofStepInputSchema},
-  output: {schema: AddProofStepOutputSchema},
+  input: { schema: AddProofStepInputSchema },
+  output: { schema: AddProofStepOutputSchema },
   prompt: `You are an expert mathematician reviewing a proposed step in a mathematical proof.
 
 Original Problem: {{{problem}}}
@@ -47,7 +47,7 @@ Respond with a boolean value indicating whether the step is valid, and provide d
 Ensure that your feedback is clear, concise, and helpful to a mathematician trying to solve the problem.
 
 Your output must be in JSON format.
-`, 
+`,
 });
 
 const addProofStepValidationFlow = ai.defineFlow(
@@ -55,12 +55,9 @@ const addProofStepValidationFlow = ai.defineFlow(
     name: 'addProofStepValidationFlow',
     inputSchema: AddProofStepInputSchema,
     outputSchema: AddProofStepOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async input => {
-    const {output} = await prompt(input);
+    const { output } = await prompt(input);
     return output!;
   }
 );

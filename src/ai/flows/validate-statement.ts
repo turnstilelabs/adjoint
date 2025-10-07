@@ -7,8 +7,8 @@
  * - ValidateStatementOutput - The return type for the validateStatement function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const ValidateStatementInputSchema = z.object({
   statement: z.string().describe('The mathematical statement to validate.'),
@@ -28,8 +28,8 @@ export async function validateStatement(input: ValidateStatementInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'validateStatementPrompt',
-  input: {schema: ValidateStatementInputSchema},
-  output: {schema: ValidateStatementOutputSchema},
+  input: { schema: ValidateStatementInputSchema },
+  output: { schema: ValidateStatementOutputSchema },
   prompt: `You are a mathematical expert. Your task is to analyze a given string and determine if it represents a valid mathematical statement that can be proven.
 
 Analyze the following statement:
@@ -52,14 +52,11 @@ const validateStatementFlow = ai.defineFlow(
     name: 'validateStatementFlow',
     inputSchema: ValidateStatementInputSchema,
     outputSchema: ValidateStatementOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async (input) => {
     const { output } = await prompt(input);
     if (!output?.validity || !output?.reasoning) {
-        throw new Error('The AI failed to return a valid validity assessment. The response was malformed.');
+      throw new Error('The AI failed to return a valid validity assessment. The response was malformed.');
     }
     return output;
   }
