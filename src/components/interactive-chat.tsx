@@ -18,6 +18,7 @@ export type Message = {
     prevSublemmas?: Sublemma[];
     isHandled: boolean;
     status?: 'accepted' | 'declined' | 'reverted';
+    updated?: boolean;
   };
   isTyping?: boolean;
   offTopic?: boolean;
@@ -159,6 +160,14 @@ export function InteractiveChat({
     startTransition(async () => {
       try {
         const history = newMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
+        // Start authoritative impact in parallel with streaming
+        const impactPromise = fetch('/api/chat/impact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem, proofSteps: sublemmas, request }),
+        });
+
+        // Begin streaming free-form assistant text
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -199,33 +208,37 @@ export function InteractiveChat({
           return updated;
         });
 
-        // Post-stream impact check
-        const impactRes = await fetch('/api/chat/impact', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem, proofSteps: sublemmas, request }),
-        });
+        // Attach preliminary impact result (await parallel promise)
+        let preliminary: {
+          revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
+          revisedSublemmas?: Sublemma[] | null;
+        } | null = null;
+        try {
+          const ipRes = await impactPromise;
+          if (ipRes.ok) {
+            preliminary = await ipRes.json();
+          }
+        } catch {
+          // ignore
+        }
 
-        if (impactRes.ok) {
-          const impact = await impactRes.json() as {
-            revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
-            revisedSublemmas?: Sublemma[] | null;
-          };
-
+        if (preliminary) {
           setMessages(prev => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             const last = updated[lastIdx];
 
-            if ((impact.revisionType === 'DIRECT_REVISION' || impact.revisionType === 'SUGGESTED_REVISION') && impact.revisedSublemmas && impact.revisedSublemmas.length > 0) {
+            if ((preliminary!.revisionType === 'DIRECT_REVISION' || preliminary!.revisionType === 'SUGGESTED_REVISION') && preliminary!.revisedSublemmas && preliminary!.revisedSublemmas.length > 0) {
               updated[lastIdx] = {
                 ...last,
-                suggestion: { revisedSublemmas: impact.revisedSublemmas, isHandled: false },
+                noImpact: false,
+                offTopic: false,
+                suggestion: { revisedSublemmas: preliminary!.revisedSublemmas, isHandled: false },
               };
-            } else if (impact.revisionType === 'NO_REVISION') {
-              updated[lastIdx] = { ...last, noImpact: true };
-            } else if (impact.revisionType === 'OFF_TOPIC') {
-              updated[lastIdx] = { ...last, offTopic: true };
+            } else if (preliminary!.revisionType === 'NO_REVISION') {
+              updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+            } else if (preliminary!.revisionType === 'OFF_TOPIC') {
+              updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
             }
 
             return updated;
@@ -236,6 +249,67 @@ export function InteractiveChat({
             description: 'Could not classify effect on the proof.',
             variant: 'destructive',
           });
+        }
+
+        // Reconcile with assistant's final text to match exact wording
+        const sameRevised = (a?: Sublemma[] | null, b?: Sublemma[] | null) => {
+          if (!a && !b) return true;
+          if (!a || !b) return false;
+          if (a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) {
+            if ((a[i].title || '') !== (b[i].title || '')) return false;
+            if ((a[i].content || '') !== (b[i].content || '')) return false;
+          }
+          return true;
+        };
+
+        try {
+          const recRes = await fetch('/api/chat/impact-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problem, proofSteps: sublemmas, assistantText: accumulated }),
+          });
+          if (recRes.ok) {
+            const reconciled = await recRes.json() as {
+              revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
+              revisedSublemmas?: Sublemma[] | null;
+            };
+
+            setMessages(prev => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              const last = updated[lastIdx];
+
+              // Do not override decisions already handled by the user
+              if (last.suggestion?.isHandled) {
+                return updated;
+              }
+
+              if ((reconciled.revisionType === 'DIRECT_REVISION' || reconciled.revisionType === 'SUGGESTED_REVISION') && reconciled.revisedSublemmas && reconciled.revisedSublemmas.length > 0) {
+                const currentRevised = last.suggestion?.revisedSublemmas;
+                if (!sameRevised(currentRevised, reconciled.revisedSublemmas)) {
+                  updated[lastIdx] = {
+                    ...last,
+                    noImpact: false,
+                    offTopic: false,
+                    suggestion: { ...(last.suggestion || { isHandled: false }), revisedSublemmas: reconciled.revisedSublemmas, isHandled: false, updated: true },
+                  };
+                }
+              } else if (reconciled.revisionType === 'NO_REVISION') {
+                if (!last.noImpact) {
+                  updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                }
+              } else if (reconciled.revisionType === 'OFF_TOPIC') {
+                if (!last.offTopic) {
+                  updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
+                }
+              }
+
+              return updated;
+            });
+          }
+        } catch {
+          // ignore reconciliation errors
         }
       } catch (error: any) {
         toast({
@@ -271,8 +345,12 @@ export function InteractiveChat({
                 )}
                 <KatexRenderer content={msg.content} />
                 {msg.isTyping && (
-                  <div className="mt-2">
+                  <div className="mt-2 space-y-2">
                     <TypingIndicator />
+                    <div className="mt-3">
+                      <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
+                      <div className="mt-1 h-2 w-64 bg-muted rounded animate-pulse" />
+                    </div>
                   </div>
                 )}
                 {msg.suggestion && !msg.suggestion.isHandled && (
@@ -280,6 +358,7 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
+                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {msg.suggestion.revisedSublemmas.map((s, i) => (
@@ -326,6 +405,7 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
+                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {msg.suggestion.revisedSublemmas.map((s, i) => (
