@@ -1,4 +1,3 @@
-'use client';
 import { useState, useTransition, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Send, ThumbsUp, ThumbsDown } from 'lucide-react';
@@ -9,6 +8,8 @@ import { KatexRenderer } from './katex-renderer';
 import { ScrollArea } from './ui/scroll-area';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { useRouter } from 'next/navigation';
+import { useAppStore } from '@/state/app-store';
+import { pick } from 'lodash';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -25,14 +26,6 @@ export type Message = {
   noImpact?: boolean;
 };
 
-interface InteractiveChatProps {
-  problem: string;
-  sublemmas: Sublemma[];
-  onProofRevision: (newSublemmas: Sublemma[]) => void;
-  messages: Message[];
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-}
-
 const TypingIndicator = () => (
   <div className="flex items-center gap-1 text-muted-foreground">
     <span className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -42,17 +35,21 @@ const TypingIndicator = () => (
 );
 
 export function InteractiveChat({
-  problem,
-  sublemmas,
   onProofRevision,
-  messages,
-  setMessages,
-}: InteractiveChatProps) {
+}: {
+  onProofRevision: (newSublemmas: Sublemma[]) => void;
+}) {
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const { problem, sublemmas, messages } = useAppStore((s) =>
+    pick(s, ['problem', 'sublemmas', 'messages']),
+  );
+
+  const setMessages = useAppStore((s) => s.setMessages);
 
   useEffect(() => {
     if (scrollAreaRef.current) {

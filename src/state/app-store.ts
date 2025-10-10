@@ -38,7 +38,6 @@ interface AppState {
   startProof: (problem: string) => Promise<void>;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   cancelProof: () => void;
-  goHome: () => void;
   reset: () => void;
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
@@ -176,10 +175,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       loading: false,
       error: null,
     });
-  },
-
-  goHome: () => {
-    set({ view: 'home' });
   },
 
   reset: () => {

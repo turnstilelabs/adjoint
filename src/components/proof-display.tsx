@@ -43,10 +43,6 @@ import { useAppStore } from '@/state/app-store';
 
 interface ProofDisplayProps {
   initialProblem: string;
-  sublemmas: Sublemma[];
-  isLoading: boolean;
-  messages: Message[];
-  setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
 type ValidationResult = {
@@ -60,29 +56,11 @@ export type ProofVersion = {
   isValid?: boolean;
 };
 
-export default function ProofDisplay({
-  initialProblem,
-  sublemmas: initialSublemmas,
-  isLoading,
-  messages,
-  setMessages,
-}: ProofDisplayProps) {
+export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
   const { toast } = useToast();
-  // Global UI state from store
-  const { isChatOpen, isHistoryOpen, viewMode, graphData, isGraphLoading } = useAppStore((s) => ({
-    isChatOpen: s.isChatOpen,
-    isHistoryOpen: s.isHistoryOpen,
-    viewMode: s.viewMode,
-    graphData: s.graphData,
-    isGraphLoading: s.isGraphLoading,
-  }));
-  const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
-  const setIsHistoryOpen = useAppStore((s) => s.setIsHistoryOpen);
-  const setViewMode = useAppStore((s) => s.setViewMode);
-  const setGraphData = useAppStore((s) => s.setGraphData);
-  const setIsGraphLoading = useAppStore((s) => s.setIsGraphLoading);
-
   const {
+    isChatOpen,
+    viewMode,
     sublemmas,
     proofHistory,
     activeVersionIndex,
@@ -90,8 +68,9 @@ export default function ProofDisplay({
     lastReviewStatus,
     lastReviewedAt,
     proofValidationResult,
-    lastValidatedSublemmas,
   } = useAppStore((s) => ({
+    isChatOpen: s.isChatOpen,
+    viewMode: s.viewMode,
     sublemmas: s.sublemmas,
     proofHistory: s.proofHistory,
     activeVersionIndex: s.activeVersionIndex,
@@ -99,8 +78,9 @@ export default function ProofDisplay({
     lastReviewStatus: s.lastReviewStatus,
     lastReviewedAt: s.lastReviewedAt,
     proofValidationResult: s.proofValidationResult,
-    lastValidatedSublemmas: s.lastValidatedSublemmas,
   }));
+
+  const setGraphData = useAppStore((s) => s.setGraphData);
   const setSublemmas = useAppStore((s) => s.setSublemmas);
   const setProofHistory = useAppStore((s) => s.setProofHistory);
   const setActiveVersionIndex = useAppStore((s) => s.setActiveVersionIndex);
@@ -300,19 +280,9 @@ export default function ProofDisplay({
   return (
     <div className="flex h-screen bg-background">
       <ProofSidebar />
-      {isHistoryOpen && (
-        <aside className="w-80 border-r flex flex-col h-screen bg-card">
-          <ProofHistory />
-        </aside>
-      )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
-            {isLoading && (
-              <div className="mb-4">
-                <PageHeader />
-              </div>
-            )}
             <Card className="mb-1">
               <CardContent className="pt-6">
                 {isEditingProblem ? (
@@ -401,15 +371,7 @@ export default function ProofDisplay({
               <div className="sticky top-0 z-20 flex items-center gap-2 mb-1 bg-background border-b">
                 <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
               </div>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                    <p className="text-lg font-medium">Generating proof steps...</p>
-                    <p className="text-sm">The AI is thinking. This may take a moment.</p>
-                  </div>
-                </div>
-              ) : viewMode === 'steps' ? (
+              {viewMode === 'steps' ? (
                 <div className="space-y-4">
                   <Accordion
                     type="multiple"
@@ -529,13 +491,7 @@ export default function ProofDisplay({
 
       {isChatOpen && (
         <aside className="w-[30rem] border-l flex flex-col h-screen">
-          <InteractiveChat
-            problem={initialProblem}
-            sublemmas={sublemmas}
-            onProofRevision={handleProofRevisionFromChat}
-            messages={messages}
-            setMessages={setMessages}
-          />
+          <InteractiveChat onProofRevision={handleProofRevisionFromChat} />
         </aside>
       )}
     </div>
