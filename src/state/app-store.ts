@@ -190,7 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsChatOpen: (open) => {
     if (typeof open === 'function') {
       set((state) => ({
-        isChatOpen: (open as (prev: boolean) => boolean)(state.isChatOpen),
+        isChatOpen: open(state.isChatOpen),
       }));
     } else {
       set({ isChatOpen: open });
@@ -199,7 +199,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsHistoryOpen: (open) => {
     if (typeof open === 'function') {
       set((state) => ({
-        isHistoryOpen: (open as (prev: boolean) => boolean)(state.isHistoryOpen),
+        isHistoryOpen: open(state.isHistoryOpen),
       }));
     } else {
       set({ isHistoryOpen: open });
@@ -209,7 +209,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGraphData: (data) => {
     if (typeof data === 'function') {
       set((state) => ({
-        graphData: (data as (prev: GraphData | null) => GraphData | null)(state.graphData),
+        graphData: data(state.graphData),
       }));
     } else {
       set({ graphData: data });
@@ -221,24 +221,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSublemmas: (updater) => {
     if (typeof updater === 'function') {
       set((state) => ({
-        sublemmas: (updater as (prev: Sublemma[]) => Sublemma[])(state.sublemmas),
+        sublemmas: updater(state.sublemmas),
       }));
     } else {
       set({ sublemmas: updater });
     }
   },
   setProofHistory: (updater) => {
+    console.log('setProofHistory', updater);
     if (typeof updater === 'function') {
       set((state) => ({
-        proofHistory: (
-          updater as (
-            prev: {
-              sublemmas: Sublemma[];
-              timestamp: Date;
-              isValid?: boolean;
-            }[],
-          ) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]
-        )(state.proofHistory),
+        proofHistory: updater(state.proofHistory),
       }));
     } else {
       set({ proofHistory: updater });

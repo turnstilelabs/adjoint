@@ -131,20 +131,6 @@ export default function ProofDisplay({
     setEditError(null);
   }, [initialProblem]);
 
-  useEffect(() => {
-    setSublemmas(initialSublemmas);
-    setLastReviewStatus('ready');
-    setLastReviewedAt(null);
-    if (initialSublemmas.length > 0) {
-      const initialHistory = [{ sublemmas: initialSublemmas, timestamp: new Date() }];
-      setProofHistory(initialHistory);
-      setActiveVersionIndex(0);
-      setLastValidatedSublemmas(null);
-      setIsProofEdited(true);
-      setGraphData(null);
-    }
-  }, [initialSublemmas]);
-
   const updateProof = (
     newSublemmas: Sublemma[],
     changeDescription: string,
