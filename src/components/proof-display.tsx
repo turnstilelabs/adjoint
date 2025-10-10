@@ -12,6 +12,7 @@ import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { ProofHistorySidebar } from './proof-history-sidebar';
+import { ProofSidebar } from './proof-sidebar';
 import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
 import { LogoSmall } from './logo-small';
@@ -306,208 +307,18 @@ export default function ProofDisplay({
     }
   };
 
-  const toggleChat = () => {
-    setIsChatOpen(prev => {
-      const isOpening = !prev;
-      if (isOpening) {
-        setIsHistoryOpen(false);
-      }
-      return isOpening;
-    });
-  };
-
-  const toggleHistory = () => {
-    setIsHistoryOpen(prev => {
-      const isOpening = !prev;
-      if (isOpening) {
-        setIsChatOpen(false);
-      }
-      return isOpening;
-    });
-  };
-
-  const handleToggleView = () => {
-    const newMode = viewMode === 'steps' ? 'graph' : 'steps';
-    setViewMode(newMode);
-    if (newMode === 'graph' && !graphData && !isGraphLoading) {
-      generateGraph(sublemmas);
-    }
-  };
-
-  const escapeLatexText = (s: string) => {
-    return s
-      .replace(/&/g, '\\&')
-      .replace(/%/g, '\\%')
-      .replace(/#/g, '\\#')
-      .replace(/_/g, '\\_')
-      .replace(/{/g, '\\{')
-      .replace(/}/g, '\\}')
-      .replace(/\^/g, '\\textasciicircum{}')
-      .replace(/~/g, '\\textasciitilde{}');
-  };
-
-  const buildLatexDocument = (problem: string, steps: Sublemma[]) => {
-    const lines: string[] = [];
-    lines.push('\\documentclass[11pt]{article}');
-    lines.push('\\usepackage[utf8]{inputenc}');
-    lines.push('\\usepackage[T1]{fontenc}');
-    lines.push('\\usepackage{lmodern}');
-    lines.push('\\usepackage{geometry}');
-    lines.push('\\geometry{margin=1in}');
-    lines.push('\\usepackage{microtype}');
-    lines.push('\\usepackage{amsmath,amssymb,amsthm,mathtools}');
-    lines.push('\\usepackage{enumitem}');
-    lines.push('\\usepackage{xcolor}');
-    lines.push('\\usepackage{hyperref}');
-    lines.push('\\hypersetup{hidelinks}');
-    lines.push('');
-    lines.push('% theorem environments');
-    lines.push('\\newtheorem{theorem}{Theorem}');
-    lines.push('\\newtheorem{lemma}{Lemma}');
-    lines.push('\\newtheorem{proposition}{Proposition}');
-    lines.push('\\newtheorem{corollary}{Corollary}');
-    lines.push('\\theoremstyle{definition}');
-    lines.push('\\newtheorem{definition}{Definition}');
-    lines.push('\\theoremstyle{remark}');
-    lines.push('\\newtheorem{remark}{Remark}');
-    lines.push('');
-    lines.push('\\title{Tentative Proof Export}');
-    lines.push('\\author{Adjoint}');
-    lines.push('\\date{\\today}');
-    lines.push('');
-    lines.push('\\begin{document}');
-    lines.push('\\maketitle');
-    lines.push('');
-    lines.push('\\section*{Problem}');
-    lines.push('\\begin{quote}');
-    lines.push(problem);
-    lines.push('\\end{quote}');
-    lines.push('');
-    lines.push('\\section*{Proof Outline}');
-    lines.push('\\begin{enumerate}[leftmargin=*, label=Step~\\arabic*:]');
-    steps.forEach((s, i) => {
-      const t = escapeLatexText(s.title || `Step ${i + 1}`);
-      const titleWithPunct = /[.?!:]$/.test(t) ? t : `${t}.`;
-      lines.push(`\\item \\textbf{${titleWithPunct}} ${s.content}`);
-    });
-    lines.push('\\end{enumerate}');
-    lines.push('');
-    lines.push('\\end{document}');
-    return lines.join('\n');
-  };
-
-  const handleExportTex = () => {
-    try {
-      const latex = buildLatexDocument(editingProblemText || initialProblem, sublemmas);
-      const blob = new Blob([latex], { type: 'application/x-tex' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'proof.tex';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({
-        title: 'Exported',
-        description: 'LaTeX file downloaded as proof.tex',
-      });
-    } catch (e: any) {
-      toast({
-        title: 'Export Failed',
-        description: e?.message || 'Could not export LaTeX.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   return (
     <div className="flex h-screen bg-background">
-      <aside className="w-14 flex flex-col items-center py-4 border-r bg-card">
-        <Link href="/" className="mb-6">
-          <LogoSmall />
-        </Link>
-        <div className="flex flex-col items-center space-y-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            title="History"
-            onClick={() => {
-              setIsHistoryOpen(prev => {
-                const opening = !prev;
-                if (opening) {
-                  setIsChatOpen(false);
-                }
-                return opening;
-              });
-            }}
-          >
-            <History />
-            <span className="sr-only">History</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Graph"
-            onClick={() => {
-              const newMode = viewMode === 'graph' ? 'steps' : 'graph';
-              setViewMode(newMode);
-              if (newMode === 'graph' && !graphData && !isGraphLoading) {
-                generateGraph(sublemmas);
-              }
-            }}
-          >
-            <GitMerge />
-            <span className="sr-only">Graph</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Chat"
-            onClick={() => {
-              toggleChat();
-            }}
-          >
-            {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
-            <span className="sr-only">Chat</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Export .tex"
-            onClick={handleExportTex}
-            disabled={sublemmas.length === 0}
-          >
-            <FileDown />
-            <span className="sr-only">Export .tex</span>
-          </Button>
-        </div>
-        <div className="flex-1" />
-      </aside>
+      <ProofSidebar />
       {isHistoryOpen && (
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
-          {isHistoryOpen ? (
             <ProofHistorySidebar
               history={proofHistory}
               activeIndex={activeVersionIndex}
               onRestore={handleRestoreVersion}
               onClose={() => setIsHistoryOpen(false)}
             />
-          ) : (
-            <div className="p-4 overflow-auto">
-              {isGraphLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                </div>
-              ) : graphData ? (
-                <ProofGraph graphData={graphData} />
-              ) : (
-                <div className="text-muted-foreground">No graph available.</div>
-              )}
-            </div>
-          )}
         </aside>
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
