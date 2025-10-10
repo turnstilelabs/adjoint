@@ -24,7 +24,7 @@ const reviseProofPrompt = ai.definePrompt({
   prompt: `${ADJOINT_SYSTEM_POLICY}
 
 You are an expert mathematician and AI assistant. Your task is to analyze a user's request concerning a mathematical proof and take the appropriate action within the above policy.
-Important: Do not claim that changes have been applied. For any revisions (DIRECT_REVISION or SUGGESTED_REVISION), present the revised steps as a proposal and explicitly ask for user acceptance. The application will gate changes on user Accept/Decline.
+Important: Never claim that changes have been applied. Do not use phrases like "I've added", "I updated", "I applied", or "I changed". For any revisions (DIRECT_REVISION or SUGGESTED_REVISION), present the revised steps as a proposal and explicitly ask for user acceptance using language like "I propose ..." or "Proposed change: ... Would you like me to apply these changes?". The application will gate changes on user Accept/Decline.
 
 
 The user has provided a mathematical problem, a set of proof steps (sublemmas), and a request.

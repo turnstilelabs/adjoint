@@ -7,8 +7,8 @@
  * - ValidateProofOutput - The return type for the validateProof function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 
 
@@ -31,8 +31,8 @@ export async function validateProof(input: ValidateProofInput): Promise<Validate
 
 const prompt = ai.definePrompt({
   name: 'validateProofPrompt',
-  input: {schema: ValidateProofInputSchema},
-  output: {schema: ValidateProofOutputSchema},
+  input: { schema: ValidateProofInputSchema },
+  output: { schema: ValidateProofOutputSchema },
   prompt: `You are a meticulous mathematics professor reviewing a student's proof. Your task is to determine if the provided sequence of sublemmas constitutes a valid proof for the original problem.
 
 Original Problem:
@@ -56,12 +56,9 @@ const validateProofFlow = ai.defineFlow(
     name: 'validateProofFlow',
     inputSchema: ValidateProofInputSchema,
     outputSchema: ValidateProofOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async input => {
-    const {output} = await prompt(input);
+    const { output } = await prompt(input);
     if (!output) {
       throw new Error('The AI failed to provide a validation result.');
     }

@@ -7,8 +7,8 @@
  * - DecomposeProofOutput - The return type for the decomposeProof function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 
 const DecomposeProofInputSchema = z.object({
@@ -29,8 +29,8 @@ export async function decomposeProof(input: DecomposeProofInput): Promise<Decomp
 
 const decomposeProofPrompt = ai.definePrompt({
   name: 'decomposeProofPrompt',
-  input: {schema: DecomposeProofInputSchema},
-  output: {schema: DecomposeProofOutputSchema},
+  input: { schema: DecomposeProofInputSchema },
+  output: { schema: DecomposeProofOutputSchema },
   prompt: `You are a mathematical writing expert specializing in proof structure and clarity. Your task is to analyze a given mathematical problem and decompose it into well-structured lemmas and propositions to maximize readability and logical flow.
 
 Instructions
@@ -64,12 +64,9 @@ const decomposeProofFlow = ai.defineFlow(
     name: 'decomposeProofFlow',
     inputSchema: DecomposeProofInputSchema,
     outputSchema: DecomposeProofOutputSchema,
-    cache: {
-      ttl: 3600, // Cache for 1 hour
-    },
   },
   async input => {
-    const {output} = await decomposeProofPrompt(input);
+    const { output } = await decomposeProofPrompt(input);
     if (!output || !output.sublemmas) {
       throw new Error('The AI failed to decompose the problem into steps.');
     }

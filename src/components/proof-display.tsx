@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useTransition, useRef } from 'react';
+import { useState, useEffect, useTransition, useRef, type Dispatch, type SetStateAction } from 'react';
 import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle, FileDown, AlertTriangle } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
@@ -26,7 +26,7 @@ interface ProofDisplayProps {
   sublemmas: Sublemma[];
   isLoading: boolean;
   messages: Message[];
-  setMessages: (messages: Message[]) => void;
+  setMessages: Dispatch<SetStateAction<Message[]>>;
 }
 
 type ValidationResult = {

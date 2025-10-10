@@ -20,22 +20,27 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
     startTransition(async () => {
       const result = await validateStatementAction(selectedText);
       if (result.success) {
+        const r = result as {
+          success: true;
+          validity: 'VALID' | 'INVALID' | 'INCOMPLETE';
+          reasoning: string;
+        };
         let title = 'Verification Result';
-        let description = result.reasoning || 'No reason provided.';
-        if (result.validity === 'VALID') {
-            title = 'Valid Statement';
-            description = `The AI confirmed: "${result.reasoning}"`;
-        } else if (result.validity === 'INVALID') {
-            title = 'Invalid Statement';
-            description = `The AI responded: "${result.reasoning}"`;
-        } else if (result.validity === 'INCOMPLETE') {
-            title = 'Incomplete Statement';
-            description = `The AI responded: "${result.reasoning}"`;
+        let description = r.reasoning || 'No reason provided.';
+        if (r.validity === 'VALID') {
+          title = 'Valid Statement';
+          description = `The AI confirmed: "${r.reasoning}"`;
+        } else if (r.validity === 'INVALID') {
+          title = 'Invalid Statement';
+          description = `The AI responded: "${r.reasoning}"`;
+        } else if (r.validity === 'INCOMPLETE') {
+          title = 'Incomplete Statement';
+          description = `The AI responded: "${r.reasoning}"`;
         }
         toast({
           title: title,
           description: description,
-          variant: result.validity === 'VALID' ? 'default' : 'destructive',
+          variant: r.validity === 'VALID' ? 'default' : 'destructive',
         });
       } else {
         toast({
@@ -49,15 +54,15 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
 
   return (
     <Popover open={!!target}>
-        <PopoverAnchor asChild>
-            <div
-            style={{
-                position: 'absolute',
-                top: target?.getBoundingClientRect().top ? target?.getBoundingClientRect().top + window.scrollY : 0,
-                left: target?.getBoundingClientRect().left ? target?.getBoundingClientRect().left + window.scrollX: 0,
-            }}
-            />
-        </PopoverAnchor>
+      <PopoverAnchor asChild>
+        <div
+          style={{
+            position: 'absolute',
+            top: target?.getBoundingClientRect().top ? target?.getBoundingClientRect().top + window.scrollY : 0,
+            left: target?.getBoundingClientRect().left ? target?.getBoundingClientRect().left + window.scrollX : 0,
+          }}
+        />
+      </PopoverAnchor>
       <PopoverContent
         className="w-auto p-1"
         onOpenAutoFocus={(e) => e.preventDefault()}
