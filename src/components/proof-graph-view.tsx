@@ -26,8 +26,7 @@ export function ProofGraphView() {
 
   // Trigger graph generation when entering graph view and data is missing.
   useEffect(() => {
-    let cancelled = false;
-    const maybeGenerate = async () => {
+    const generateIfNeeded = async () => {
       if (viewMode !== 'graph') return;
       if (graphData || isGraphLoading) return;
       if (!sublemmas || sublemmas.length === 0) return;
@@ -35,7 +34,6 @@ export function ProofGraphView() {
       setIsGraphLoading(true);
       try {
         const result = await generateProofGraphAction(sublemmas);
-        if (cancelled) return;
         if ('nodes' in result && 'edges' in result) {
           setGraphData({
             nodes: result.nodes.map((n) => {
@@ -55,14 +53,11 @@ export function ProofGraphView() {
           });
         }
       } finally {
-        if (!cancelled) setIsGraphLoading(false);
+        setIsGraphLoading(false);
       }
     };
 
-    maybeGenerate();
-    return () => {
-      cancelled = true;
-    };
+    generateIfNeeded();
   }, [viewMode, sublemmas, graphData, isGraphLoading, setGraphData, setIsGraphLoading, toast]);
 
   if (isGraphLoading) {
