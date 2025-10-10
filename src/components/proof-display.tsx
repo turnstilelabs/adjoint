@@ -11,7 +11,7 @@ import { Button } from './ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { ProofHistorySidebar } from './proof-history-sidebar';
+import { ProofHistory } from './proof-history';
 import { ProofSidebar } from './proof-sidebar';
 import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
@@ -290,22 +290,6 @@ export default function ProofDisplay({
     }
   };
 
-  const handleRestoreVersion = (index: number) => {
-    const versionToRestore = proofHistory[index];
-    if (versionToRestore) {
-      setSublemmas(versionToRestore.sublemmas);
-      setActiveVersionIndex(index);
-      setIsProofEdited(true);
-      setProofValidationResult(null);
-      toast({
-        title: 'Proof Restored',
-        description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
-      });
-
-      setGraphData(null);
-      generateGraph(versionToRestore.sublemmas);
-    }
-  };
 
 
   return (
@@ -313,12 +297,7 @@ export default function ProofDisplay({
       <ProofSidebar />
       {isHistoryOpen && (
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
-            <ProofHistorySidebar
-              history={proofHistory}
-              activeIndex={activeVersionIndex}
-              onRestore={handleRestoreVersion}
-              onClose={() => setIsHistoryOpen(false)}
-            />
+            <ProofHistory />
         </aside>
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
