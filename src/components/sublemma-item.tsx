@@ -1,5 +1,3 @@
-'use client';
-
 import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma, Save, X } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
