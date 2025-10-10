@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { type Sublemma } from "@/ai/flows/llm-proof-decomposition";
 import { type Message } from "@/components/interactive-chat";
+import { type GraphData } from "@/components/proof-graph";
 import { decomposeProblemAction } from "@/app/actions";
 
 export type View = "home" | "proof";
@@ -14,12 +15,24 @@ interface AppState {
   messages: Message[];
   loading: boolean;
   error: string | null;
+  // Proof display UI state
+  isChatOpen: boolean;
+  isHistoryOpen: boolean;
+  viewMode: 'steps' | 'graph';
+  graphData: GraphData | null;
+  isGraphLoading: boolean;
   // actions
   startProof: (problem: string) => Promise<void>;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   cancelProof: () => void;
   goHome: () => void;
   reset: () => void;
+  // UI actions
+  setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setViewMode: (mode: 'steps' | 'graph') => void;
+  setGraphData: (data: GraphData | null | ((prev: GraphData | null) => GraphData | null)) => void;
+  setIsGraphLoading: (loading: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -29,6 +42,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   messages: [],
   loading: false,
   error: null,
+  // proof display UI defaults
+  isChatOpen: false,
+  isHistoryOpen: false,
+  viewMode: 'steps',
+  graphData: null,
+  isGraphLoading: false,
 
   startProof: async (problem: string) => {
     const trimmed = problem.trim();
@@ -74,6 +93,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   reset: () => {
-    set({ view: "home", problem: null, sublemmas: [], messages: [], loading: false, error: null });
+    set({ view: "home", problem: null, sublemmas: [], messages: [], loading: false, error: null, isChatOpen: false, isHistoryOpen: false, viewMode: 'steps', graphData: null, isGraphLoading: false });
   },
+
+  // UI actions
+  setIsChatOpen: (open) => {
+    if (typeof open === 'function') {
+      set((state) => ({ isChatOpen: (open as (prev: boolean) => boolean)(state.isChatOpen) }));
+    } else {
+      set({ isChatOpen: open });
+    }
+  },
+  setIsHistoryOpen: (open) => {
+    if (typeof open === 'function') {
+      set((state) => ({ isHistoryOpen: (open as (prev: boolean) => boolean)(state.isHistoryOpen) }));
+    } else {
+      set({ isHistoryOpen: open });
+    }
+  },
+  setViewMode: (mode) => set({ viewMode: mode }),
+  setGraphData: (data) => {
+    if (typeof data === 'function') {
+      set((state) => ({ graphData: (data as (prev: GraphData | null) => GraphData | null)(state.graphData) }));
+    } else {
+      set({ graphData: data });
+    }
+  },
+  setIsGraphLoading: (loading) => set({ isGraphLoading: loading }),
 }));
