@@ -19,7 +19,7 @@ import { LogoSmall } from './logo-small';
 import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 import { validateStatementAction } from '@/app/actions';
-import { ProofGraph, type GraphData } from './proof-graph';
+import { ProofGraphView } from './proof-graph-view';
 import { useAppStore } from '@/state/app-store';
 
 interface ProofDisplayProps {
@@ -103,32 +103,6 @@ export default function ProofDisplay({
     setEditError(null);
   }, [initialProblem]);
 
-  const generateGraph = async (steps: Sublemma[]) => {
-    setIsGraphLoading(true);
-    try {
-      const result = await generateProofGraphAction(steps);
-      if ('nodes' in result && 'edges' in result) {
-        setGraphData({
-          nodes: result.nodes.map(n => {
-            const m = n.id.match(/step-(\d+)/);
-            const idx = m ? parseInt(m[1], 10) - 1 : -1;
-            const content = idx >= 0 && idx < steps.length ? steps[idx].content : '';
-            return { ...n, content };
-          }),
-          edges: result.edges
-        });
-      } else {
-        setGraphData(null);
-        toast({
-          title: 'Graph Generation Failed',
-          description: 'error' in result ? result.error : 'Unknown error.',
-          variant: 'destructive',
-        });
-      }
-    } finally {
-      setIsGraphLoading(false);
-    }
-  };
 
   useEffect(() => {
     setSublemmas(initialSublemmas);
@@ -140,8 +114,7 @@ export default function ProofDisplay({
       setActiveVersionIndex(0);
       setLastValidatedSublemmas(null);
       setIsProofEdited(true);
-      setGraphData(null); // Clear previous graph data
-      generateGraph(initialSublemmas);
+      setGraphData(null);
     }
   }, [initialSublemmas]);
 
@@ -181,8 +154,7 @@ export default function ProofDisplay({
       }
       // For other edits, leave graph structure as-is
     } else {
-      setGraphData(null); // Invalidate old graph data
-      generateGraph(newSublemmas);
+      setGraphData(null); // Invalidate old graph data; ProofGraphView will generate on demand if open
     }
   };
 
@@ -409,20 +381,7 @@ export default function ProofDisplay({
                   </Accordion>
                 </div>
               ) : (
-                isGraphLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                      <p className="text-lg font-medium">Generating dependency graph...</p>
-                    </div>
-                  </div>
-                ) : graphData ? (
-                  <ProofGraph graphData={graphData} />
-                ) : (
-                  <div className="text-center py-16 text-muted-foreground">
-                    <p>Could not generate graph.</p>
-                  </div>
-                )
+                <ProofGraphView />
               )}
 
               <div className="pt-4 space-y-4">
