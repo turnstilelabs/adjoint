@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import { create } from "zustand";
-import { type Sublemma } from "@/ai/flows/llm-proof-decomposition";
-import { type Message } from "@/components/interactive-chat";
-import { type GraphData } from "@/components/proof-graph";
-import { decomposeProblemAction } from "@/app/actions";
+import { create } from 'zustand';
+import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { type Message } from '@/components/interactive-chat';
+import { type GraphData } from '@/components/proof-graph';
+import { decomposeProblemAction } from '@/app/actions';
 
-export type View = "home" | "proof";
+export type View = 'home' | 'proof';
 
 interface AppState {
   // Types colocated for store consumers
   // Validation result for proof review
   // Duplicated minimal types to avoid circular deps
-  
+
   // State fields
   view: View;
   problem: string | null;
@@ -48,7 +48,13 @@ interface AppState {
   setIsGraphLoading: (loading: boolean) => void;
   // Proof state setters
   setSublemmas: (updater: ((prev: Sublemma[]) => Sublemma[]) | Sublemma[]) => void;
-  setProofHistory: (updater: ((prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) | { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => void;
+  setProofHistory: (
+    updater:
+      | ((
+          prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[],
+        ) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[])
+      | { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[],
+  ) => void;
   setActiveVersionIndex: (index: number) => void;
   setIsProofEdited: (edited: boolean) => void;
   setProofValidationResult: (val: { isValid: boolean; feedback: string } | null) => void;
@@ -79,7 +85,7 @@ type StoreData = {
 };
 
 const initialState: StoreData = {
-  view: "home",
+  view: 'home',
   problem: null,
   sublemmas: [],
   messages: [],
@@ -109,7 +115,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!trimmed) return;
 
     // Initialize state for a new proof run
-    set({ view: "proof", problem: trimmed, sublemmas: [], messages: [], loading: true, error: null });
+    set({
+      view: 'proof',
+      problem: trimmed,
+      sublemmas: [],
+      messages: [],
+      loading: true,
+      error: null,
+    });
 
     try {
       // small delay to allow UI to render
@@ -117,34 +130,56 @@ export const useAppStore = create<AppState>((set, get) => ({
       const result = await decomposeProblemAction(trimmed);
       if (result.success && result.sublemmas) {
         const assistantMessage: Message = {
-          role: "assistant",
+          role: 'assistant',
           content:
             `Of course. I've broken down the problem into the following steps:\n\n` +
-            result.sublemmas.map((s: Sublemma, i: number) => `**${s.title}:** ${s.content}`).join("\n\n"),
+            result.sublemmas
+              .map((s: Sublemma, i: number) => `**${s.title}:** ${s.content}`)
+              .join('\n\n'),
         };
-        set({ sublemmas: result.sublemmas, messages: [assistantMessage], loading: false, error: null });
+        set({
+          sublemmas: result.sublemmas,
+          messages: [assistantMessage],
+          loading: false,
+          error: null,
+        });
       } else {
-        set({ loading: false, error: result.error || "Failed to decompose the problem." });
+        set({
+          loading: false,
+          error: result.error || 'Failed to decompose the problem.',
+        });
       }
     } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : "Unexpected error." });
+      set({
+        loading: false,
+        error: e instanceof Error ? e.message : 'Unexpected error.',
+      });
     }
   },
 
   setMessages: (updater) => {
-    if (typeof updater === "function") {
-      set((state) => ({ messages: (updater as (prev: Message[]) => Message[])(state.messages) }));
+    if (typeof updater === 'function') {
+      set((state) => ({
+        messages: (updater as (prev: Message[]) => Message[])(state.messages),
+      }));
     } else {
       set({ messages: updater });
     }
   },
 
   cancelProof: () => {
-    set({ view: "home", problem: null, sublemmas: [], messages: [], loading: false, error: null });
+    set({
+      view: 'home',
+      problem: null,
+      sublemmas: [],
+      messages: [],
+      loading: false,
+      error: null,
+    });
   },
 
   goHome: () => {
-    set({ view: "home" });
+    set({ view: 'home' });
   },
 
   reset: () => {
@@ -154,14 +189,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   // UI actions
   setIsChatOpen: (open) => {
     if (typeof open === 'function') {
-      set((state) => ({ isChatOpen: (open as (prev: boolean) => boolean)(state.isChatOpen) }));
+      set((state) => ({
+        isChatOpen: (open as (prev: boolean) => boolean)(state.isChatOpen),
+      }));
     } else {
       set({ isChatOpen: open });
     }
   },
   setIsHistoryOpen: (open) => {
     if (typeof open === 'function') {
-      set((state) => ({ isHistoryOpen: (open as (prev: boolean) => boolean)(state.isHistoryOpen) }));
+      set((state) => ({
+        isHistoryOpen: (open as (prev: boolean) => boolean)(state.isHistoryOpen),
+      }));
     } else {
       set({ isHistoryOpen: open });
     }
@@ -169,7 +208,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setViewMode: (mode) => set({ viewMode: mode }),
   setGraphData: (data) => {
     if (typeof data === 'function') {
-      set((state) => ({ graphData: (data as (prev: GraphData | null) => GraphData | null)(state.graphData) }));
+      set((state) => ({
+        graphData: (data as (prev: GraphData | null) => GraphData | null)(state.graphData),
+      }));
     } else {
       set({ graphData: data });
     }
@@ -179,14 +220,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Proof state setters
   setSublemmas: (updater) => {
     if (typeof updater === 'function') {
-      set((state) => ({ sublemmas: (updater as (prev: Sublemma[]) => Sublemma[])(state.sublemmas) }));
+      set((state) => ({
+        sublemmas: (updater as (prev: Sublemma[]) => Sublemma[])(state.sublemmas),
+      }));
     } else {
       set({ sublemmas: updater });
     }
   },
   setProofHistory: (updater) => {
     if (typeof updater === 'function') {
-      set((state) => ({ proofHistory: (updater as (prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[])(state.proofHistory) }));
+      set((state) => ({
+        proofHistory: (
+          updater as (
+            prev: {
+              sublemmas: Sublemma[];
+              timestamp: Date;
+              isValid?: boolean;
+            }[],
+          ) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]
+        )(state.proofHistory),
+      }));
     } else {
       set({ proofHistory: updater });
     }

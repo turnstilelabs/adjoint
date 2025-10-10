@@ -1,6 +1,25 @@
 'use client';
-import { useState, useEffect, useTransition, useRef, type Dispatch, type SetStateAction } from 'react';
-import { Info, CheckCircle, PanelRightClose, PanelRightOpen, Loader2, ShieldCheck, History, GitMerge, XCircle, FileDown, AlertTriangle } from 'lucide-react';
+import {
+  useState,
+  useEffect,
+  useTransition,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
+import {
+  Info,
+  CheckCircle,
+  PanelRightClose,
+  PanelRightOpen,
+  Loader2,
+  ShieldCheck,
+  History,
+  GitMerge,
+  XCircle,
+  FileDown,
+  AlertTriangle,
+} from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
 import { InteractiveChat, type Message } from './interactive-chat';
@@ -50,20 +69,29 @@ export default function ProofDisplay({
 }: ProofDisplayProps) {
   const { toast } = useToast();
   // Global UI state from store
-  const { isChatOpen, isHistoryOpen, viewMode, graphData, isGraphLoading } = useAppStore(s => ({
+  const { isChatOpen, isHistoryOpen, viewMode, graphData, isGraphLoading } = useAppStore((s) => ({
     isChatOpen: s.isChatOpen,
     isHistoryOpen: s.isHistoryOpen,
     viewMode: s.viewMode,
     graphData: s.graphData,
     isGraphLoading: s.isGraphLoading,
   }));
-  const setIsChatOpen = useAppStore(s => s.setIsChatOpen);
-  const setIsHistoryOpen = useAppStore(s => s.setIsHistoryOpen);
-  const setViewMode = useAppStore(s => s.setViewMode);
-  const setGraphData = useAppStore(s => s.setGraphData);
-  const setIsGraphLoading = useAppStore(s => s.setIsGraphLoading);
+  const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
+  const setIsHistoryOpen = useAppStore((s) => s.setIsHistoryOpen);
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const setGraphData = useAppStore((s) => s.setGraphData);
+  const setIsGraphLoading = useAppStore((s) => s.setIsGraphLoading);
 
-  const { sublemmas, proofHistory, activeVersionIndex, isProofEdited, lastReviewStatus, lastReviewedAt, proofValidationResult, lastValidatedSublemmas } = useAppStore(s => ({
+  const {
+    sublemmas,
+    proofHistory,
+    activeVersionIndex,
+    isProofEdited,
+    lastReviewStatus,
+    lastReviewedAt,
+    proofValidationResult,
+    lastValidatedSublemmas,
+  } = useAppStore((s) => ({
     sublemmas: s.sublemmas,
     proofHistory: s.proofHistory,
     activeVersionIndex: s.activeVersionIndex,
@@ -73,14 +101,14 @@ export default function ProofDisplay({
     proofValidationResult: s.proofValidationResult,
     lastValidatedSublemmas: s.lastValidatedSublemmas,
   }));
-  const setSublemmas = useAppStore(s => s.setSublemmas);
-  const setProofHistory = useAppStore(s => s.setProofHistory);
-  const setActiveVersionIndex = useAppStore(s => s.setActiveVersionIndex);
-  const setIsProofEdited = useAppStore(s => s.setIsProofEdited);
-  const setLastReviewStatus = useAppStore(s => s.setLastReviewStatus);
-  const setLastReviewedAt = useAppStore(s => s.setLastReviewedAt);
-  const setProofValidationResult = useAppStore(s => s.setProofValidationResult);
-  const setLastValidatedSublemmas = useAppStore(s => s.setLastValidatedSublemmas);
+  const setSublemmas = useAppStore((s) => s.setSublemmas);
+  const setProofHistory = useAppStore((s) => s.setProofHistory);
+  const setActiveVersionIndex = useAppStore((s) => s.setActiveVersionIndex);
+  const setIsProofEdited = useAppStore((s) => s.setIsProofEdited);
+  const setLastReviewStatus = useAppStore((s) => s.setLastReviewStatus);
+  const setLastReviewedAt = useAppStore((s) => s.setLastReviewedAt);
+  const setProofValidationResult = useAppStore((s) => s.setProofValidationResult);
+  const setLastValidatedSublemmas = useAppStore((s) => s.setLastValidatedSublemmas);
 
   const [isProofValidating, startProofValidationTransition] = useTransition();
 
@@ -103,7 +131,6 @@ export default function ProofDisplay({
     setEditError(null);
   }, [initialProblem]);
 
-
   useEffect(() => {
     setSublemmas(initialSublemmas);
     setLastReviewStatus('ready');
@@ -118,7 +145,15 @@ export default function ProofDisplay({
     }
   }, [initialSublemmas]);
 
-  const updateProof = (newSublemmas: Sublemma[], changeDescription: string, opts?: { recomputeGraph?: boolean; changedIndex?: number; change?: 'title' | 'content' }) => {
+  const updateProof = (
+    newSublemmas: Sublemma[],
+    changeDescription: string,
+    opts?: {
+      recomputeGraph?: boolean;
+      changedIndex?: number;
+      change?: 'title' | 'content';
+    },
+  ) => {
     const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
     const newVersion = { sublemmas: newSublemmas, timestamp: new Date() };
 
@@ -133,21 +168,21 @@ export default function ProofDisplay({
       // Update graph locally without recomputing
       if (opts?.change === 'title' && typeof opts.changedIndex === 'number') {
         const changedIndex = opts.changedIndex;
-        setGraphData(prev => {
+        setGraphData((prev) => {
           if (!prev) return prev;
           const nodeId = `step-${changedIndex + 1}`;
-          const updatedNodes = prev.nodes.map(n =>
-            n.id === nodeId ? { ...n, label: newSublemmas[changedIndex].title } : n
+          const updatedNodes = prev.nodes.map((n) =>
+            n.id === nodeId ? { ...n, label: newSublemmas[changedIndex].title } : n,
           );
           return { ...prev, nodes: updatedNodes };
         });
       } else if (opts?.change === 'content' && typeof opts.changedIndex === 'number') {
         const changedIndex = opts.changedIndex;
-        setGraphData(prev => {
+        setGraphData((prev) => {
           if (!prev) return prev;
           const nodeId = `step-${changedIndex + 1}`;
-          const updatedNodes = prev.nodes.map(n =>
-            n.id === nodeId ? { ...n, content: newSublemmas[changedIndex].content } : n
+          const updatedNodes = prev.nodes.map((n) =>
+            n.id === nodeId ? { ...n, content: newSublemmas[changedIndex].content } : n,
           );
           return { ...prev, nodes: updatedNodes };
         });
@@ -161,22 +196,33 @@ export default function ProofDisplay({
   const handleSublemmaChange = (index: number, newContent: string) => {
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
-    updateProof(newSublemmas, `Step ${index + 1} was manually edited.`, { recomputeGraph: false, changedIndex: index, change: 'content' });
+    updateProof(newSublemmas, `Step ${index + 1} was manually edited.`, {
+      recomputeGraph: false,
+      changedIndex: index,
+      change: 'content',
+    });
   };
 
   const handleSublemmaTitleChange = (index: number, newTitle: string) => {
     const newSublemmas = [...sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], title: newTitle };
-    updateProof(newSublemmas, `Step ${index + 1} title renamed.`, { recomputeGraph: false, changedIndex: index, change: 'title' });
+    updateProof(newSublemmas, `Step ${index + 1} title renamed.`, {
+      recomputeGraph: false,
+      changedIndex: index,
+      change: 'title',
+    });
   };
 
   const handleProofRevisionFromChat = (newSublemmas: Sublemma[]) => {
     updateProof(newSublemmas, 'Proof revised by AI assistant.');
-  }
+  };
 
   const handleValidateProof = () => {
     // Prevent re-running when nothing changed since last review
-    if (!isProofEdited && (lastReviewStatus === 'reviewed_ok' || lastReviewStatus === 'reviewed_issues')) {
+    if (
+      !isProofEdited &&
+      (lastReviewStatus === 'reviewed_ok' || lastReviewStatus === 'reviewed_issues')
+    ) {
       return;
     }
     // If already validating, clicking acts as Abort
@@ -195,7 +241,10 @@ export default function ProofDisplay({
         const res = await fetch('/api/validate-proof', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem: initialProblem, proofSteps: sublemmas }),
+          body: JSON.stringify({
+            problem: initialProblem,
+            proofSteps: sublemmas,
+          }),
           signal: controller.signal,
         });
 
@@ -224,7 +273,7 @@ export default function ProofDisplay({
           setLastReviewStatus(validationResult.isValid ? 'reviewed_ok' : 'reviewed_issues');
           setLastReviewedAt(new Date());
 
-          setProofHistory(prev => {
+          setProofHistory((prev) => {
             const updatedHistory = [...prev];
             const activeVersion = updatedHistory[activeVersionIndex];
             if (activeVersion && isEqual(activeVersion.sublemmas, sublemmas)) {
@@ -262,14 +311,12 @@ export default function ProofDisplay({
     }
   };
 
-
-
   return (
     <div className="flex h-screen bg-background">
       <ProofSidebar />
       {isHistoryOpen && (
         <aside className="w-80 border-r flex flex-col h-screen bg-card">
-            <ProofHistory />
+          <ProofHistory />
         </aside>
       )}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -281,7 +328,7 @@ export default function ProofDisplay({
               </div>
             )}
             <Card className="mb-1">
-              <CardContent className='pt-6'>
+              <CardContent className="pt-6">
                 {isEditingProblem ? (
                   <div>
                     <Textarea
@@ -304,9 +351,13 @@ export default function ProofDisplay({
                               const startProof = useAppStore.getState().startProof;
                               await startProof(trimmed);
                             } else if ('validity' in result) {
-                              setEditError("Looks like that’s not math! This app only works with math problems.");
+                              setEditError(
+                                'Looks like that’s not math! This app only works with math problems.',
+                              );
                             } else {
-                              const errorMessage = result.error || "An unexpected error occurred while validating the problem.";
+                              const errorMessage =
+                                result.error ||
+                                'An unexpected error occurred while validating the problem.';
                               setEditError(errorMessage);
                               toast({
                                 title: 'Validation Error',
@@ -332,7 +383,9 @@ export default function ProofDisplay({
                         Validating...
                       </div>
                     ) : (
-                      <div className="text-sm text-muted-foreground mt-2">Press Enter to submit, Shift+Enter for newline, Esc to cancel.</div>
+                      <div className="text-sm text-muted-foreground mt-2">
+                        Press Enter to submit, Shift+Enter for newline, Esc to cancel.
+                      </div>
                     )}
                     {editError && (
                       <Alert variant="destructive" className="mt-4">
@@ -341,13 +394,18 @@ export default function ProofDisplay({
                     )}
                   </div>
                 ) : (
-                  <div onDoubleClick={() => { setIsEditingProblem(true); setEditingProblemText(initialProblem); }} style={{ cursor: 'pointer' }}>
+                  <div
+                    onDoubleClick={() => {
+                      setIsEditingProblem(true);
+                      setEditingProblemText(initialProblem);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <KatexRenderer content={initialProblem} />
                   </div>
                 )}
               </CardContent>
             </Card>
-
           </div>
         </div>
 
@@ -367,7 +425,11 @@ export default function ProofDisplay({
                 </div>
               ) : viewMode === 'steps' ? (
                 <div className="space-y-4">
-                  <Accordion type="multiple" defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)} className="w-full space-y-4 border-b-0">
+                  <Accordion
+                    type="multiple"
+                    defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)}
+                    className="w-full space-y-4 border-b-0"
+                  >
                     {sublemmas.map((sublemma, index) => (
                       <SublemmaItem
                         key={`${activeVersionIndex}-${index}`}
@@ -386,13 +448,24 @@ export default function ProofDisplay({
 
               <div className="pt-4 space-y-4">
                 {proofValidationResult && (
-                  <Alert variant={proofValidationResult.isValid ? "default" : "destructive"} className="bg-card">
-                    {proofValidationResult.isValid ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                    <AlertTitle>{proofValidationResult.isValid ? "Reviewed by AI" : "AI found issues"}</AlertTitle>
+                  <Alert
+                    variant={proofValidationResult.isValid ? 'default' : 'destructive'}
+                    className="bg-card"
+                  >
+                    {proofValidationResult.isValid ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    <AlertTitle>
+                      {proofValidationResult.isValid ? 'Reviewed by AI' : 'AI found issues'}
+                    </AlertTitle>
                     <AlertDescription>
                       <KatexRenderer content={proofValidationResult.feedback} />
                       <div className="mt-2 text-xs text-muted-foreground">
-                        {proofValidationResult.isValid ? "Assessed by AI" : "Flagged by AI; please double-check."}
+                        {proofValidationResult.isValid
+                          ? 'Assessed by AI'
+                          : 'Flagged by AI; please double-check.'}
                       </div>
                     </AlertDescription>
                   </Alert>
@@ -412,7 +485,9 @@ export default function ProofDisplay({
                         <CheckCircle className="mr-2 h-4 w-4" />
                         <span>Reviewed by AI</span>
                         {lastReviewedAt && (
-                          <span className="ml-2 text-xs">• {lastReviewedAt.toLocaleTimeString()}</span>
+                          <span className="ml-2 text-xs">
+                            • {lastReviewedAt.toLocaleTimeString()}
+                          </span>
                         )}
                       </>
                     )}
@@ -438,7 +513,13 @@ export default function ProofDisplay({
                     )}
                     <Button
                       onClick={handleValidateProof}
-                      disabled={isProofValidating || sublemmas.length === 0 || (!isProofEdited && (lastReviewStatus === 'reviewed_ok' || lastReviewStatus === 'reviewed_issues'))}
+                      disabled={
+                        isProofValidating ||
+                        sublemmas.length === 0 ||
+                        (!isProofEdited &&
+                          (lastReviewStatus === 'reviewed_ok' ||
+                            lastReviewStatus === 'reviewed_issues'))
+                      }
                     >
                       {isProofValidating ? (
                         <>

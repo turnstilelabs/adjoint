@@ -12,16 +12,21 @@ import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 
 const DecomposeProofInputSchema = z.object({
-  problem: z.string().describe('The mathematical problem to decompose into sublemmas, in LaTeX or natural language.'),
+  problem: z
+    .string()
+    .describe(
+      'The mathematical problem to decompose into sublemmas, in LaTeX or natural language.',
+    ),
 });
 export type DecomposeProofInput = z.infer<typeof DecomposeProofInputSchema>;
 
 const DecomposeProofOutputSchema = z.object({
-  sublemmas: z.array(SublemmaSchema).describe('A sequence of sublemmas that form a proof of the given problem.'),
+  sublemmas: z
+    .array(SublemmaSchema)
+    .describe('A sequence of sublemmas that form a proof of the given problem.'),
 });
 export type DecomposeProofOutput = z.infer<typeof DecomposeProofOutputSchema>;
 export type Sublemma = z.infer<typeof SublemmaSchema>;
-
 
 export async function decomposeProof(input: DecomposeProofInput): Promise<DecomposeProofOutput> {
   return decomposeProofFlow(input);
@@ -65,11 +70,11 @@ const decomposeProofFlow = ai.defineFlow(
     inputSchema: DecomposeProofInputSchema,
     outputSchema: DecomposeProofOutputSchema,
   },
-  async input => {
+  async (input) => {
     const { output } = await decomposeProofPrompt(input);
     if (!output || !output.sublemmas) {
       throw new Error('The AI failed to decompose the problem into steps.');
     }
     return output;
-  }
+  },
 );

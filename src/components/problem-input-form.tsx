@@ -17,7 +17,7 @@ export default function ProblemInputForm() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const startProof = useAppStore(s => s.startProof);
+  const startProof = useAppStore((s) => s.startProof);
 
   const submitProblem = async (text: string) => {
     const trimmedProblem = text.trim();
@@ -32,9 +32,10 @@ export default function ProblemInputForm() {
       await startProof(trimmedProblem);
     } else if ('validity' in validationResult) {
       // The statement was validated but not as a valid math problem
-      setError("Looks like that’s not math! This app only works with math problems.");
+      setError('Looks like that’s not math! This app only works with math problems.');
     } else {
-      const errorMessage = validationResult.error || "An unexpected error occurred while validating the problem.";
+      const errorMessage =
+        validationResult.error || 'An unexpected error occurred while validating the problem.';
       setError(errorMessage);
       toast({
         title: 'Validation Error',
@@ -60,7 +61,6 @@ export default function ProblemInputForm() {
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
 
-
   return (
     <Card className="shadow-lg transition-shadow border-gray-200">
       <CardContent className="p-6">
@@ -78,26 +78,21 @@ export default function ProblemInputForm() {
                 }
               }}
               className={cn(
-                "w-full p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none overflow-y-hidden pr-14",
-                error && "border-destructive focus:ring-destructive"
+                'w-full p-4 text-base border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none overflow-y-hidden pr-14',
+                error && 'border-destructive focus:ring-destructive',
               )}
               placeholder="Prove that for any integer n, if n^2 is even, then n is even..."
               disabled={isPending}
               rows={1}
             />
-
           </div>
 
           {error && (
             <Alert variant="destructive" className="mt-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {error}
-              </AlertDescription>
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
-
         </form>
       </CardContent>
     </Card>

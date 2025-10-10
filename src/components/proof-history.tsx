@@ -13,10 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 export function ProofHistory() {
   const { toast } = useToast();
 
-  const {
-    proofHistory,
-    activeVersionIndex,
-  } = useAppStore((s) => ({
+  const { proofHistory, activeVersionIndex } = useAppStore((s) => ({
     proofHistory: s.proofHistory,
     activeVersionIndex: s.activeVersionIndex,
   }));
@@ -47,7 +44,7 @@ export function ProofHistory() {
       title: 'Proof Restored',
       description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
     });
-    setGraphData(null)
+    setGraphData(null);
   };
 
   return (
@@ -72,10 +69,10 @@ export function ProofHistory() {
                   key={originalIndex}
                   className={cn(
                     'group hover:bg-muted/50 transition-colors',
-                    isActive && 'bg-primary/10 border-primary'
+                    isActive && 'bg-primary/10 border-primary',
                   )}
                 >
-                  <CardContent className='p-3'>
+                  <CardContent className="p-3">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         {version.isValid === true && (
@@ -85,19 +82,28 @@ export function ProofHistory() {
                           <CheckCircle className="h-4 w-4 text-destructive shrink-0" />
                         )}
                         <div className="flex-1">
-                          <p className="text-sm font-medium">Version {proofHistory.length - index}</p>
+                          <p className="text-sm font-medium">
+                            Version {proofHistory.length - index}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {version.timestamp.toLocaleTimeString()}
                           </p>
                         </div>
                       </div>
-                      <div className='flex items-center gap-2'>
-                        {isActive && <Badge variant="secondary" className="text-xs">Current</Badge>}
+                      <div className="flex items-center gap-2">
+                        {isActive && (
+                          <Badge variant="secondary" className="text-xs">
+                            Current
+                          </Badge>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => restoreVersion(originalIndex)}
-                          className={cn('opacity-0 group-hover:opacity-100 transition-opacity', isActive && 'opacity-100')}
+                          className={cn(
+                            'opacity-0 group-hover:opacity-100 transition-opacity',
+                            isActive && 'opacity-100',
+                          )}
                           disabled={isActive}
                         >
                           <Undo2 className="mr-2 h-4 w-4" />

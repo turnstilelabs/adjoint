@@ -1,0 +1,20 @@
+# Dependencies and build outputs
+node_modules
+.next
+out
+dist
+coverage
+
+# Lockfiles / metadata
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Misc
+.DS_Store
+.vercel
+.idea
+*.log
+
+# TypeScript build info
+*.tsbuildinfo

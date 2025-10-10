@@ -56,8 +56,9 @@ export function InteractiveChat({
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollableNode =
-        scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+      const scrollableNode = scrollAreaRef.current.querySelector(
+        'div[data-radix-scroll-area-viewport]',
+      );
       if (scrollableNode) {
         scrollableNode.scrollTo({
           top: scrollableNode.scrollHeight,
@@ -153,13 +154,17 @@ export function InteractiveChat({
 
     const userMessage: Message = { role: 'user', content: request };
     const newMessages = [...messages, userMessage];
-    const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
+    const typingMessage: Message = {
+      role: 'assistant',
+      content: '',
+      isTyping: true,
+    };
     setMessages([...newMessages, typingMessage]);
     setInput('');
 
     startTransition(async () => {
       try {
-        const history = newMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
+        const history = newMessages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
         // Start authoritative impact in parallel with streaming
         const impactPromise = fetch('/api/chat/impact', {
           method: 'POST',
@@ -189,18 +194,22 @@ export function InteractiveChat({
           if (value) {
             const chunk = decoder.decode(value, { stream: !done });
             accumulated += chunk;
-            setMessages(prev => {
+            setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               const last = updated[lastIdx];
-              updated[lastIdx] = { ...last, content: accumulated, isTyping: true };
+              updated[lastIdx] = {
+                ...last,
+                content: accumulated,
+                isTyping: true,
+              };
               return updated;
             });
           }
         }
 
         // Mark typing complete
-        setMessages(prev => {
+        setMessages((prev) => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           const last = updated[lastIdx];
@@ -223,22 +232,40 @@ export function InteractiveChat({
         }
 
         if (preliminary) {
-          setMessages(prev => {
+          setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             const last = updated[lastIdx];
 
-            if ((preliminary!.revisionType === 'DIRECT_REVISION' || preliminary!.revisionType === 'SUGGESTED_REVISION') && preliminary!.revisedSublemmas && preliminary!.revisedSublemmas.length > 0) {
+            if (
+              (preliminary!.revisionType === 'DIRECT_REVISION' ||
+                preliminary!.revisionType === 'SUGGESTED_REVISION') &&
+              preliminary!.revisedSublemmas &&
+              preliminary!.revisedSublemmas.length > 0
+            ) {
               updated[lastIdx] = {
                 ...last,
                 noImpact: false,
                 offTopic: false,
-                suggestion: { revisedSublemmas: preliminary!.revisedSublemmas, isHandled: false },
+                suggestion: {
+                  revisedSublemmas: preliminary!.revisedSublemmas,
+                  isHandled: false,
+                },
               };
             } else if (preliminary!.revisionType === 'NO_REVISION') {
-              updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+              updated[lastIdx] = {
+                ...last,
+                noImpact: true,
+                offTopic: false,
+                suggestion: undefined,
+              };
             } else if (preliminary!.revisionType === 'OFF_TOPIC') {
-              updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
+              updated[lastIdx] = {
+                ...last,
+                offTopic: true,
+                noImpact: false,
+                suggestion: undefined,
+              };
             }
 
             return updated;
@@ -267,15 +294,19 @@ export function InteractiveChat({
           const recRes = await fetch('/api/chat/impact-text', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problem, proofSteps: sublemmas, assistantText: accumulated }),
+            body: JSON.stringify({
+              problem,
+              proofSteps: sublemmas,
+              assistantText: accumulated,
+            }),
           });
           if (recRes.ok) {
-            const reconciled = await recRes.json() as {
+            const reconciled = (await recRes.json()) as {
               revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
               revisedSublemmas?: Sublemma[] | null;
             };
 
-            setMessages(prev => {
+            setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               const last = updated[lastIdx];
@@ -285,23 +316,43 @@ export function InteractiveChat({
                 return updated;
               }
 
-              if ((reconciled.revisionType === 'DIRECT_REVISION' || reconciled.revisionType === 'SUGGESTED_REVISION') && reconciled.revisedSublemmas && reconciled.revisedSublemmas.length > 0) {
+              if (
+                (reconciled.revisionType === 'DIRECT_REVISION' ||
+                  reconciled.revisionType === 'SUGGESTED_REVISION') &&
+                reconciled.revisedSublemmas &&
+                reconciled.revisedSublemmas.length > 0
+              ) {
                 const currentRevised = last.suggestion?.revisedSublemmas;
                 if (!sameRevised(currentRevised, reconciled.revisedSublemmas)) {
                   updated[lastIdx] = {
                     ...last,
                     noImpact: false,
                     offTopic: false,
-                    suggestion: { ...(last.suggestion || { isHandled: false }), revisedSublemmas: reconciled.revisedSublemmas, isHandled: false, updated: true },
+                    suggestion: {
+                      ...(last.suggestion || { isHandled: false }),
+                      revisedSublemmas: reconciled.revisedSublemmas,
+                      isHandled: false,
+                      updated: true,
+                    },
                   };
                 }
               } else if (reconciled.revisionType === 'NO_REVISION') {
                 if (!last.noImpact) {
-                  updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                  updated[lastIdx] = {
+                    ...last,
+                    noImpact: true,
+                    offTopic: false,
+                    suggestion: undefined,
+                  };
                 }
               } else if (reconciled.revisionType === 'OFF_TOPIC') {
                 if (!last.offTopic) {
-                  updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
+                  updated[lastIdx] = {
+                    ...last,
+                    offTopic: true,
+                    noImpact: false,
+                    suggestion: undefined,
+                  };
                 }
               }
 
@@ -330,15 +381,17 @@ export function InteractiveChat({
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+              className={`flex gap-3 text-sm items-end ${
+                msg.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
             >
-              { /* Assistant avatar removed per user request - name is shown above the message bubble */}
+              {/* Assistant avatar removed per user request - name is shown above the message bubble */}
               <div
-                className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'bg-muted border border-muted-foreground/10 shadow-sm'
-                  }`}
+                className={`p-4 rounded-2xl max-w-xl break-words ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-muted border border-muted-foreground/10 shadow-sm'
+                }`}
               >
                 {msg.role === 'assistant' && (
                   <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
@@ -358,7 +411,9 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
-                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
+                        {msg.suggestion?.updated && (
+                          <span className="ml-2 italic opacity-80">(updated)</span>
+                        )}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {msg.suggestion.revisedSublemmas.map((s, i) => (
@@ -374,11 +429,19 @@ export function InteractiveChat({
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="secondary" size="sm" onClick={() => handleSuggestion(index, true)}>
-                        <ThumbsUp className='mr-2' /> Accept Proposed Changes
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleSuggestion(index, true)}
+                      >
+                        <ThumbsUp className="mr-2" /> Accept Proposed Changes
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleSuggestion(index, false)}>
-                        <ThumbsDown className='mr-2' /> Decline
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSuggestion(index, false)}
+                      >
+                        <ThumbsDown className="mr-2" /> Decline
                       </Button>
                     </div>
                   </div>
@@ -405,7 +468,9 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
-                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
+                        {msg.suggestion?.updated && (
+                          <span className="ml-2 italic opacity-80">(updated)</span>
+                        )}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {msg.suggestion.revisedSublemmas.map((s, i) => (
@@ -426,7 +491,8 @@ export function InteractiveChat({
                           Revert changes
                         </Button>
                       )}
-                      {(msg.suggestion.status === 'declined' || msg.suggestion.status === 'reverted') && (
+                      {(msg.suggestion.status === 'declined' ||
+                        msg.suggestion.status === 'reverted') && (
                         <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
                           Adopt proposal
                         </Button>

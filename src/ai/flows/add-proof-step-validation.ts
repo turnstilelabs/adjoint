@@ -24,7 +24,9 @@ const AddProofStepOutputSchema = z.object({
 });
 export type AddProofStepOutput = z.infer<typeof AddProofStepOutputSchema>;
 
-export async function addProofStepWithLLMValidation(input: AddProofStepInput): Promise<AddProofStepOutput> {
+export async function addProofStepWithLLMValidation(
+  input: AddProofStepInput,
+): Promise<AddProofStepOutput> {
   return addProofStepValidationFlow(input);
 }
 
@@ -56,8 +58,8 @@ const addProofStepValidationFlow = ai.defineFlow(
     inputSchema: AddProofStepInputSchema,
     outputSchema: AddProofStepOutputSchema,
   },
-  async input => {
+  async (input) => {
     const { output } = await prompt(input);
     return output!;
-  }
+  },
 );

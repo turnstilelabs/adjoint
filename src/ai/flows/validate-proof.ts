@@ -11,10 +11,11 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 
-
 const ValidateProofInputSchema = z.object({
   problem: z.string().describe('The original mathematical problem.'),
-  proofSteps: z.array(SublemmaSchema).describe('The sequence of sublemmas that constitute the proof.'),
+  proofSteps: z
+    .array(SublemmaSchema)
+    .describe('The sequence of sublemmas that constitute the proof.'),
 });
 export type ValidateProofInput = z.infer<typeof ValidateProofInputSchema>;
 
@@ -23,7 +24,6 @@ const ValidateProofOutputSchema = z.object({
   feedback: z.string().describe('Detailed feedback on the proof, explaining any errors or gaps.'),
 });
 export type ValidateProofOutput = z.infer<typeof ValidateProofOutputSchema>;
-
 
 export async function validateProof(input: ValidateProofInput): Promise<ValidateProofOutput> {
   return validateProofFlow(input);
@@ -57,11 +57,11 @@ const validateProofFlow = ai.defineFlow(
     inputSchema: ValidateProofInputSchema,
     outputSchema: ValidateProofOutputSchema,
   },
-  async input => {
+  async (input) => {
     const { output } = await prompt(input);
     if (!output) {
       throw new Error('The AI failed to provide a validation result.');
     }
     return output;
-  }
+  },
 );
