@@ -10,6 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
+import { env } from '@/env';
+import { decomposeProblemFixture } from '@/app/actions.mocks';
 
 const DecomposeProofInputSchema = z.object({
   problem: z
@@ -29,6 +31,10 @@ export type DecomposeProofOutput = z.infer<typeof DecomposeProofOutputSchema>;
 export type Sublemma = z.infer<typeof SublemmaSchema>;
 
 export async function decomposeProof(input: DecomposeProofInput): Promise<DecomposeProofOutput> {
+  if (env.USE_MOCK_API) {
+    return decomposeProblemFixture;
+  }
+
   return decomposeProofFlow(input);
 }
 
