@@ -62,15 +62,26 @@ export default function ProofDisplay({
   const setGraphData = useAppStore(s => s.setGraphData);
   const setIsGraphLoading = useAppStore(s => s.setIsGraphLoading);
 
-  const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
+  const { sublemmas, proofHistory, activeVersionIndex, isProofEdited, lastReviewStatus, lastReviewedAt, proofValidationResult, lastValidatedSublemmas } = useAppStore(s => ({
+    sublemmas: s.sublemmas,
+    proofHistory: s.proofHistory,
+    activeVersionIndex: s.activeVersionIndex,
+    isProofEdited: s.isProofEdited,
+    lastReviewStatus: s.lastReviewStatus,
+    lastReviewedAt: s.lastReviewedAt,
+    proofValidationResult: s.proofValidationResult,
+    lastValidatedSublemmas: s.lastValidatedSublemmas,
+  }));
+  const setSublemmas = useAppStore(s => s.setSublemmas);
+  const setProofHistory = useAppStore(s => s.setProofHistory);
+  const setActiveVersionIndex = useAppStore(s => s.setActiveVersionIndex);
+  const setIsProofEdited = useAppStore(s => s.setIsProofEdited);
+  const setLastReviewStatus = useAppStore(s => s.setLastReviewStatus);
+  const setLastReviewedAt = useAppStore(s => s.setLastReviewedAt);
+  const setProofValidationResult = useAppStore(s => s.setProofValidationResult);
+  const setLastValidatedSublemmas = useAppStore(s => s.setLastValidatedSublemmas);
+
   const [isProofValidating, startProofValidationTransition] = useTransition();
-  const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
-  const [lastValidatedSublemmas, setLastValidatedSublemmas] = useState<Sublemma[] | null>(null);
-  const [isProofEdited, setIsProofEdited] = useState(true); // Start as true to allow initial validation
-  const [lastReviewStatus, setLastReviewStatus] = useState<'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error'>('ready');
-  const [lastReviewedAt, setLastReviewedAt] = useState<Date | null>(null);
-  const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
-  const [activeVersionIndex, setActiveVersionIndex] = useState(0);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   // Abort in-flight validation if component unmounts

@@ -9,6 +9,11 @@ import { decomposeProblemAction } from "@/app/actions";
 export type View = "home" | "proof";
 
 interface AppState {
+  // Types colocated for store consumers
+  // Validation result for proof review
+  // Duplicated minimal types to avoid circular deps
+  
+  // State fields
   view: View;
   problem: string | null;
   sublemmas: Sublemma[];
@@ -21,6 +26,14 @@ interface AppState {
   viewMode: 'steps' | 'graph';
   graphData: GraphData | null;
   isGraphLoading: boolean;
+  // Proof review/history state
+  proofHistory: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[];
+  activeVersionIndex: number;
+  isProofEdited: boolean;
+  proofValidationResult: { isValid: boolean; feedback: string } | null;
+  lastValidatedSublemmas: Sublemma[] | null;
+  lastReviewStatus: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error';
+  lastReviewedAt: Date | null;
   // actions
   startProof: (problem: string) => Promise<void>;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
@@ -33,9 +46,39 @@ interface AppState {
   setViewMode: (mode: 'steps' | 'graph') => void;
   setGraphData: (data: GraphData | null | ((prev: GraphData | null) => GraphData | null)) => void;
   setIsGraphLoading: (loading: boolean) => void;
+  // Proof state setters
+  setSublemmas: (updater: ((prev: Sublemma[]) => Sublemma[]) | Sublemma[]) => void;
+  setProofHistory: (updater: ((prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) | { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => void;
+  setActiveVersionIndex: (index: number) => void;
+  setIsProofEdited: (edited: boolean) => void;
+  setProofValidationResult: (val: { isValid: boolean; feedback: string } | null) => void;
+  setLastValidatedSublemmas: (val: Sublemma[] | null) => void;
+  setLastReviewStatus: (status: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error') => void;
+  setLastReviewedAt: (date: Date | null) => void;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+type StoreData = {
+  view: View;
+  problem: string | null;
+  sublemmas: Sublemma[];
+  messages: Message[];
+  loading: boolean;
+  error: string | null;
+  isChatOpen: boolean;
+  isHistoryOpen: boolean;
+  viewMode: 'steps' | 'graph';
+  graphData: GraphData | null;
+  isGraphLoading: boolean;
+  proofHistory: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[];
+  activeVersionIndex: number;
+  isProofEdited: boolean;
+  proofValidationResult: { isValid: boolean; feedback: string } | null;
+  lastValidatedSublemmas: Sublemma[] | null;
+  lastReviewStatus: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error';
+  lastReviewedAt: Date | null;
+};
+
+const initialState: StoreData = {
   view: "home",
   problem: null,
   sublemmas: [],
@@ -48,6 +91,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'steps',
   graphData: null,
   isGraphLoading: false,
+  // proof review/history defaults
+  proofHistory: [],
+  activeVersionIndex: 0,
+  isProofEdited: true,
+  proofValidationResult: null,
+  lastValidatedSublemmas: null,
+  lastReviewStatus: 'ready',
+  lastReviewedAt: null,
+};
+
+export const useAppStore = create<AppState>((set, get) => ({
+  ...initialState,
 
   startProof: async (problem: string) => {
     const trimmed = problem.trim();
@@ -93,7 +148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   reset: () => {
-    set({ view: "home", problem: null, sublemmas: [], messages: [], loading: false, error: null, isChatOpen: false, isHistoryOpen: false, viewMode: 'steps', graphData: null, isGraphLoading: false });
+    set(initialState);
   },
 
   // UI actions
@@ -120,4 +175,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setIsGraphLoading: (loading) => set({ isGraphLoading: loading }),
+
+  // Proof state setters
+  setSublemmas: (updater) => {
+    if (typeof updater === 'function') {
+      set((state) => ({ sublemmas: (updater as (prev: Sublemma[]) => Sublemma[])(state.sublemmas) }));
+    } else {
+      set({ sublemmas: updater });
+    }
+  },
+  setProofHistory: (updater) => {
+    if (typeof updater === 'function') {
+      set((state) => ({ proofHistory: (updater as (prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[]) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[])(state.proofHistory) }));
+    } else {
+      set({ proofHistory: updater });
+    }
+  },
+  setActiveVersionIndex: (index) => set({ activeVersionIndex: index }),
+  setIsProofEdited: (edited) => set({ isProofEdited: edited }),
+  setProofValidationResult: (val) => set({ proofValidationResult: val }),
+  setLastValidatedSublemmas: (val) => set({ lastValidatedSublemmas: val }),
+  setLastReviewStatus: (status) => set({ lastReviewStatus: status }),
+  setLastReviewedAt: (date) => set({ lastReviewedAt: date }),
 }));
