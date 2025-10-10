@@ -10,6 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
+import { env } from '@/env';
+import { generateProofGraphFixture } from '@/app/actions.mocks';
 
 const GraphNodeSchema = z.object({
   id: z.string().describe('A unique identifier for the node (e.g., "step-1").'),
@@ -36,6 +38,9 @@ export type GenerateProofGraphOutput = z.infer<typeof GenerateProofGraphOutputSc
 export async function generateProofGraph(
   input: GenerateProofGraphInput,
 ): Promise<GenerateProofGraphOutput> {
+  if (env.USE_MOCK_API) {
+    return generateProofGraphFixture;
+  }
   return generateProofGraphFlow(input);
 }
 

@@ -7,6 +7,10 @@ const BaseEnvSchema = z
     GEMINI_API_KEY: z.string().min(1).optional(),
     GOOGLE_API_KEY: z.string().min(1).optional(),
     GOOGLE_GENAI_API_KEY: z.string().min(1).optional(),
+    USE_MOCK_API: z
+      .enum(['TRUE', 'FALSE'])
+      .optional()
+      .transform((v) => v === 'TRUE'),
   })
   .passthrough();
 
