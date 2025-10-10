@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from '@/components/ui/toaster';
 import { Inter, Poppins, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css';

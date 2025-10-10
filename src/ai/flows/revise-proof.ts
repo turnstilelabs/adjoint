@@ -78,5 +78,5 @@ const reviseProofFlow = ai.defineFlow(
       throw new Error('The AI failed to process the revision request.');
     }
     return output;
-  }
+  },
 );

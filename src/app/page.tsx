@@ -18,7 +18,7 @@ const exampleProblems = [
   {
     level: "Lagrange's Theorem",
     problem:
-      "Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$.",
+      'Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$.',
   },
   {
     level: 'Banach-Alaoglu Theorem',
@@ -28,16 +28,16 @@ const exampleProblems = [
 ];
 
 export default function Home() {
-  const { view, problem, sublemmas, messages, loading } = useAppStore(s => ({
+  const { view, problem, sublemmas, messages, loading } = useAppStore((s) => ({
     view: s.view,
     problem: s.problem,
     sublemmas: s.sublemmas,
     messages: s.messages,
     loading: s.loading,
   }));
-  const startProof = useAppStore(s => s.startProof);
-  const setMessages = useAppStore(s => s.setMessages);
-  const goHome = useAppStore(s => s.goHome);
+  const startProof = useAppStore((s) => s.startProof);
+  const setMessages = useAppStore((s) => s.setMessages);
+  const goHome = useAppStore((s) => s.goHome);
 
   if (view === 'proof') {
     return (
@@ -46,9 +46,13 @@ export default function Home() {
           <div className="w-full text-center">
             {loading || sublemmas.length === 0 ? (
               <div>
-                <Card className='text-left'>
+                <Card className="text-left">
                   <CardContent className="pt-6">
-                    {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
+                    {problem ? (
+                      <KatexRenderer content={problem} />
+                    ) : (
+                      <p>Loading problem statement...</p>
+                    )}
                   </CardContent>
                 </Card>
                 <div className="mt-12 flex flex-col items-center gap-4 text-muted-foreground">
@@ -85,9 +89,7 @@ export default function Home() {
           <div className="w-full max-w-4xl mx-auto">
             <div className="text-center mb-8">
               <Header />
-              <p className="mt-2 text-lg text-gray-600">
-                Your canonical companion in reasoning.
-              </p>
+              <p className="mt-2 text-lg text-gray-600">Your canonical companion in reasoning.</p>
             </div>
             <ProblemInputForm />
             <div className="mt-16 text-center">
@@ -98,13 +100,19 @@ export default function Home() {
                 {exampleProblems.map((example, index) => (
                   <Card key={index} className="text-left flex flex-col">
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold text-primary">{example.level}</CardTitle>
+                      <CardTitle className="text-base font-semibold text-primary">
+                        {example.level}
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1">
                       <KatexRenderer content={example.problem} className="text-sm" />
                     </CardContent>
                     <div className="p-6 pt-0 mt-auto">
-                      <Button variant="outline" className="w-full" onClick={() => startProof(example.problem)}>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => startProof(example.problem)}
+                      >
                         Explore Proof <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>

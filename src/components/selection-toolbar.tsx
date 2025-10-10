@@ -58,8 +58,12 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
         <div
           style={{
             position: 'absolute',
-            top: target?.getBoundingClientRect().top ? target?.getBoundingClientRect().top + window.scrollY : 0,
-            left: target?.getBoundingClientRect().left ? target?.getBoundingClientRect().left + window.scrollX : 0,
+            top: target?.getBoundingClientRect().top
+              ? target?.getBoundingClientRect().top + window.scrollY
+              : 0,
+            left: target?.getBoundingClientRect().left
+              ? target?.getBoundingClientRect().left + window.scrollX
+              : 0,
           }}
         />
       </PopoverAnchor>
@@ -67,11 +71,17 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
         className="w-auto p-1"
         onOpenAutoFocus={(e) => e.preventDefault()}
         style={{
-          top: '-12px'
+          top: '-12px',
         }}
       >
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={handleCheckAgain} disabled={isPending} title="Check again">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCheckAgain}
+            disabled={isPending}
+            title="Check again"
+          >
             <Check className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={onRevise} title="Revise statement">

@@ -42,7 +42,7 @@ function layoutElements(nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = '
 export function DagreLayout({ nodes, edges, children }: DagreLayoutProps) {
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
     () => layoutElements(nodes, edges, 'TB'),
-    [nodes, edges]
+    [nodes, edges],
   );
 
   return <>{children(layoutedNodes, layoutedEdges)}</>;

@@ -28,7 +28,13 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, content, onContentChange, onTitleChange }: SublemmaItemProps) {
+export function SublemmaItem({
+  step,
+  title,
+  content,
+  onContentChange,
+  onTitleChange,
+}: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
@@ -36,14 +42,21 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
   const [editedTitle, setEditedTitle] = useState(title);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const [selection, setSelection] = useState<{ text: string, target: HTMLElement | null }>({ text: '', target: null });
+  const [selection, setSelection] = useState<{
+    text: string;
+    target: HTMLElement | null;
+  }>({ text: '', target: null });
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
     const currentSelection = window.getSelection();
     const selectedText = currentSelection?.toString().trim();
 
-    if (currentSelection && selectedText && contentRef.current?.contains(currentSelection.anchorNode)) {
+    if (
+      currentSelection &&
+      selectedText &&
+      contentRef.current?.contains(currentSelection.anchorNode)
+    ) {
       const range = currentSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const tempEl = document.createElement('span');
@@ -60,7 +73,6 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
           document.body.removeChild(tempEl);
         }
       }, 0);
-
     } else {
       setSelection({ text: '', target: null });
     }
@@ -141,7 +153,10 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
           selectedText={selection.text}
         />
       )}
-      <AccordionItem value={`item-${step}`} className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border">
+      <AccordionItem
+        value={`item-${step}`}
+        className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border"
+      >
         <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline">
           <div className="flex items-center gap-4">
             <span className={`p-2 rounded-full ${bg}`}>
@@ -180,8 +195,14 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
                   autoFocus
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={handleCancel}><X className="mr-2" />Cancel</Button>
-                  <Button onClick={handleSave}><Save className="mr-2" />Save</Button>
+                  <Button variant="ghost" onClick={handleCancel}>
+                    <X className="mr-2" />
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave}>
+                    <Save className="mr-2" />
+                    Save
+                  </Button>
                 </div>
               </div>
             ) : (

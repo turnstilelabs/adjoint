@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
-import { useAppStore } from "@/state/app-store";
-import { generateProofGraphAction } from "@/app/actions";
-import { useToast } from "@/hooks/use-toast";
-import { ProofGraph } from "./proof-graph";
+import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
+import { useAppStore } from '@/state/app-store';
+import { generateProofGraphAction } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
+import { ProofGraph } from './proof-graph';
 
 /**
  * ProofGraphView
@@ -28,7 +28,7 @@ export function ProofGraphView() {
   useEffect(() => {
     let cancelled = false;
     const maybeGenerate = async () => {
-      if (viewMode !== "graph") return;
+      if (viewMode !== 'graph') return;
       if (graphData || isGraphLoading) return;
       if (!sublemmas || sublemmas.length === 0) return;
 
@@ -36,12 +36,12 @@ export function ProofGraphView() {
       try {
         const result = await generateProofGraphAction(sublemmas);
         if (cancelled) return;
-        if ("nodes" in result && "edges" in result) {
+        if ('nodes' in result && 'edges' in result) {
           setGraphData({
             nodes: result.nodes.map((n) => {
               const m = n.id.match(/step-(\d+)/);
               const idx = m ? parseInt(m[1], 10) - 1 : -1;
-              const content = idx >= 0 && idx < sublemmas.length ? sublemmas[idx].content : "";
+              const content = idx >= 0 && idx < sublemmas.length ? sublemmas[idx].content : '';
               return { ...n, content };
             }),
             edges: result.edges,
@@ -49,9 +49,9 @@ export function ProofGraphView() {
         } else {
           setGraphData(null);
           toast({
-            title: "Graph Generation Failed",
-            description: (result as any)?.error || "Unknown error.",
-            variant: "destructive",
+            title: 'Graph Generation Failed',
+            description: (result as any)?.error || 'Unknown error.',
+            variant: 'destructive',
           });
         }
       } finally {

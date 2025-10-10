@@ -18,7 +18,10 @@ export async function decomposeProblemAction(problem: string) {
   } catch (error) {
     console.error('decomposeProblemAction error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, error: `Failed to decompose the problem with AI: ${errorMessage}` };
+    return {
+      success: false,
+      error: `Failed to decompose the problem with AI: ${errorMessage}`,
+    };
   }
 }
 
@@ -45,11 +48,12 @@ export async function reviseOrAskAction(problem: string, proofSteps: Sublemma[],
   } catch (error) {
     console.error('reviseOrAskAction error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, error: `Failed to process your request with AI: ${errorMessage}` };
+    return {
+      success: false,
+      error: `Failed to process your request with AI: ${errorMessage}`,
+    };
   }
 }
-
-
 
 export async function validateStatementAction(statement: string) {
   if (!statement) {
@@ -60,7 +64,10 @@ export async function validateStatementAction(statement: string) {
     return { success: true, ...result };
   } catch (error) {
     console.error('validateStatementAction error:', error);
-    return { success: false, error: 'Failed to validate the statement with AI.' };
+    return {
+      success: false,
+      error: 'Failed to validate the statement with AI.',
+    };
   }
 }
 
@@ -79,7 +86,10 @@ export async function validateProofAction(problem: string, proofSteps: Sublemma[
 
 export async function generateProofGraphAction(proofSteps: Sublemma[]) {
   if (proofSteps.length === 0) {
-    return { success: false, error: 'There are no proof steps to generate a graph from.' };
+    return {
+      success: false,
+      error: 'There are no proof steps to generate a graph from.',
+    };
   }
   try {
     const result = await generateProofGraph({ proofSteps });
@@ -87,6 +97,9 @@ export async function generateProofGraphAction(proofSteps: Sublemma[]) {
   } catch (error) {
     console.error('generateProofGraphAction error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, error: `Failed to generate proof graph with AI: ${errorMessage}` };
+    return {
+      success: false,
+      error: `Failed to generate proof graph with AI: ${errorMessage}`,
+    };
   }
 }
