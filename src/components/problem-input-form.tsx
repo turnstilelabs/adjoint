@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { Wand2, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
@@ -11,13 +10,14 @@ import { Card, CardContent } from './ui/card';
 import { validateStatementAction } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from './ui/alert';
+import { useAppStore } from '@/state/app-store';
 
 export default function ProblemInputForm() {
   const [problem, setProblem] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
   const { toast } = useToast();
+  const startProof = useAppStore(s => s.startProof);
 
   const submitProblem = async (text: string) => {
     const trimmedProblem = text.trim();
@@ -29,9 +29,7 @@ export default function ProblemInputForm() {
     const validationResult = await validateStatementAction(trimmedProblem);
 
     if ('validity' in validationResult && validationResult.validity === 'VALID') {
-      const params = new URLSearchParams();
-      params.append('problem', trimmedProblem);
-      router.push(`/proof?${params.toString()}`);
+      await startProof(trimmedProblem);
     } else if ('validity' in validationResult) {
       // The statement was validated but not as a valid math problem
       setError("Looks like that’s not math! This app only works with math problems.");

@@ -16,10 +16,10 @@ import { isEqual } from 'lodash';
 import { PageHeader } from './page-header';
 import { LogoSmall } from './logo-small';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { validateStatementAction } from '@/app/actions';
 import { ProofGraph, type GraphData } from './proof-graph';
+import { useAppStore } from '@/state/app-store';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -74,7 +74,6 @@ export default function ProofDisplay({
     };
   }, []);
 
-  const router = useRouter();
   const [isEditingProblem, setIsEditingProblem] = useState(false);
   const [editingProblemText, setEditingProblemText] = useState(initialProblem);
   const [editError, setEditError] = useState<string | null>(null);
@@ -518,9 +517,8 @@ export default function ProofDisplay({
                             const result = await validateStatementAction(trimmed);
                             if ('validity' in result && result.validity === 'VALID') {
                               setIsEditingProblem(false);
-                              const params = new URLSearchParams();
-                              params.append('problem', trimmed);
-                              router.push(`/proof?${params.toString()}`);
+                              const startProof = useAppStore.getState().startProof;
+                              await startProof(trimmed);
                             } else if ('validity' in result) {
                               setEditError("Looks like that’s not math! This app only works with math problems.");
                             } else {
