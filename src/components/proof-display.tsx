@@ -47,9 +47,21 @@ export default function ProofDisplay({
   messages,
   setMessages,
 }: ProofDisplayProps) {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isGraphOpen, setIsGraphOpen] = useState(false);
+  const { toast } = useToast();
+  // Global UI state from store
+  const { isChatOpen, isHistoryOpen, viewMode, graphData, isGraphLoading } = useAppStore(s => ({
+    isChatOpen: s.isChatOpen,
+    isHistoryOpen: s.isHistoryOpen,
+    viewMode: s.viewMode,
+    graphData: s.graphData,
+    isGraphLoading: s.isGraphLoading,
+  }));
+  const setIsChatOpen = useAppStore(s => s.setIsChatOpen);
+  const setIsHistoryOpen = useAppStore(s => s.setIsHistoryOpen);
+  const setViewMode = useAppStore(s => s.setViewMode);
+  const setGraphData = useAppStore(s => s.setGraphData);
+  const setIsGraphLoading = useAppStore(s => s.setIsGraphLoading);
+
   const [sublemmas, setSublemmas] = useState<Sublemma[]>(initialSublemmas);
   const [isProofValidating, startProofValidationTransition] = useTransition();
   const [proofValidationResult, setProofValidationResult] = useState<ValidationResult | null>(null);
@@ -57,13 +69,9 @@ export default function ProofDisplay({
   const [isProofEdited, setIsProofEdited] = useState(true); // Start as true to allow initial validation
   const [lastReviewStatus, setLastReviewStatus] = useState<'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error'>('ready');
   const [lastReviewedAt, setLastReviewedAt] = useState<Date | null>(null);
-  const { toast } = useToast();
   const [proofHistory, setProofHistory] = useState<ProofVersion[]>([]);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
 
-  const [viewMode, setViewMode] = useState<'steps' | 'graph'>('steps');
-  const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [isGraphLoading, startGraphLoadingTransition] = useTransition();
   const abortControllerRef = useRef<AbortController | null>(null);
   // Abort in-flight validation if component unmounts
   useEffect(() => {
@@ -83,8 +91,9 @@ export default function ProofDisplay({
     setEditError(null);
   }, [initialProblem]);
 
-  const generateGraph = (steps: Sublemma[]) => {
-    startGraphLoadingTransition(async () => {
+  const generateGraph = async (steps: Sublemma[]) => {
+    setIsGraphLoading(true);
+    try {
       const result = await generateProofGraphAction(steps);
       if ('nodes' in result && 'edges' in result) {
         setGraphData({
@@ -104,7 +113,9 @@ export default function ProofDisplay({
           variant: 'destructive',
         });
       }
-    });
+    } finally {
+      setIsGraphLoading(false);
+    }
   };
 
   useEffect(() => {
