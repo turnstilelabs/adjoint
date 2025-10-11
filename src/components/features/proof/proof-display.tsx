@@ -1,21 +1,19 @@
 'use client';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useTransition } from 'react';
 import { AlertTriangle, CheckCircle, Info, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
-import { SublemmaItem } from './sublemma-item';
-import { InteractiveChat } from './interactive-chat';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { KatexRenderer } from './katex-renderer';
-import { Card, CardContent } from './ui/card';
-import { Button } from './ui/button';
+import { SublemmaItem } from '../../sublemma-item';
+import { InteractiveChat } from '../../interactive-chat';
+import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
+import { KatexRenderer } from '../../katex-renderer';
+import { Button } from '../../ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { validateStatementAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { ProofSidebar } from './proof-sidebar';
+import { ProofSidebar } from '../../proof-sidebar';
 import { isEqual } from 'lodash';
-import { Textarea } from '@/components/ui/textarea';
-import { ProofGraphView } from './proof-graph-view';
+import { ProofGraphView } from '../../proof-graph-view';
 import { useAppStore } from '@/state/app-store';
+import EditableProblemCard from '@/components/features/proof/editable-problem-card';
 
 interface ProofDisplayProps {
   initialProblem: string;
@@ -77,15 +75,6 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
       }
     };
   }, []);
-
-  const [isEditingProblem, setIsEditingProblem] = useState(false);
-  const [editingProblemText, setEditingProblemText] = useState(initialProblem);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [isValidatingProblem, startProblemValidationTransition] = useTransition();
-  useEffect(() => {
-    setEditingProblemText(initialProblem);
-    setEditError(null);
-  }, [initialProblem]);
 
   const updateProof = (
     newSublemmas: Sublemma[],
@@ -259,85 +248,7 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
-            <Card className="mb-1">
-              <CardContent className="pt-6">
-                {isEditingProblem ? (
-                  <div>
-                    <Textarea
-                      value={editingProblemText}
-                      onChange={(e) => setEditingProblemText(e.target.value)}
-                      onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          if (isValidatingProblem) return;
-                          startProblemValidationTransition(async () => {
-                            setEditError(null);
-                            const trimmed = editingProblemText.trim();
-                            if (!trimmed) {
-                              setEditError('Please enter a problem to solve.');
-                              return;
-                            }
-                            const result = await validateStatementAction(trimmed);
-                            if ('validity' in result && result.validity === 'VALID') {
-                              setIsEditingProblem(false);
-                              const startProof = useAppStore.getState().startProof;
-                              await startProof(trimmed);
-                            } else if ('validity' in result) {
-                              setEditError(
-                                'Looks like that’s not math! This app only works with math problems.',
-                              );
-                            } else {
-                              const errorMessage =
-                                result.error ||
-                                'An unexpected error occurred while validating the problem.';
-                              setEditError(errorMessage);
-                              toast({
-                                title: 'Validation Error',
-                                description: errorMessage,
-                                variant: 'destructive',
-                              });
-                            }
-                          });
-                        } else if (e.key === 'Escape') {
-                          setIsEditingProblem(false);
-                          setEditingProblemText(initialProblem);
-                          setEditError(null);
-                        }
-                      }}
-                      autoFocus
-                      rows={3}
-                      className="w-full"
-                      disabled={isValidatingProblem}
-                    />
-                    {isValidatingProblem ? (
-                      <div className="flex items-center text-sm text-muted-foreground mt-2">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                        Validating...
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground mt-2">
-                        Press Enter to submit, Shift+Enter for newline, Esc to cancel.
-                      </div>
-                    )}
-                    {editError && (
-                      <Alert variant="destructive" className="mt-4">
-                        <AlertDescription>{editError}</AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                ) : (
-                  <div
-                    onDoubleClick={() => {
-                      setIsEditingProblem(true);
-                      setEditingProblemText(initialProblem);
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <KatexRenderer content={initialProblem} />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <EditableProblemCard />
           </div>
         </div>
 
