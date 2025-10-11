@@ -1,6 +1,5 @@
-import { useState, useTransition, useRef, useEffect } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import { Send, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +8,6 @@ import { ScrollArea } from './ui/scroll-area';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/state/app-store';
-import { pick } from 'lodash';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -45,9 +43,9 @@ export function InteractiveChat({
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const { problem, sublemmas, messages } = useAppStore((s) =>
-    pick(s, ['problem', 'sublemmas', 'messages']),
-  );
+  const proof = useAppStore((s) => s.proof());
+  const problem = useAppStore((s) => s.problem);
+  const messages = useAppStore((s) => s.messages);
 
   const setMessages = useAppStore((s) => s.setMessages);
 
@@ -73,7 +71,7 @@ export function InteractiveChat({
 
     if (accept) {
       // Capture the current proof as a snapshot to enable revert
-      const previous = sublemmas;
+      const previous = proof.sublemmas;
       onProofRevision(message.suggestion.revisedSublemmas);
       newMessages[messageIndex] = {
         ...message,
@@ -127,7 +125,7 @@ export function InteractiveChat({
 
     try {
       // Snapshot current proof before adopting so we can revert again
-      const previous = sublemmas;
+      const previous = proof.sublemmas;
       onProofRevision(proposal);
       const newMessages = [...messages];
       newMessages[messageIndex] = {
@@ -166,14 +164,14 @@ export function InteractiveChat({
         const impactPromise = fetch('/api/chat/impact', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem, proofSteps: sublemmas, request }),
+          body: JSON.stringify({ problem, proofSteps: proof.sublemmas, request }),
         });
 
         // Begin streaming free-form assistant text
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem, sublemmas, request, history }),
+          body: JSON.stringify({ problem, sublemmas: proof.sublemmas, request, history }),
         });
 
         if (!res.ok || !res.body) {
@@ -293,7 +291,7 @@ export function InteractiveChat({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               problem,
-              proofSteps: sublemmas,
+              proofSteps: proof.sublemmas,
               assistantText: accumulated,
             }),
           });
