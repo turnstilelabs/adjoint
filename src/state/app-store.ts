@@ -21,35 +21,29 @@ export type ProofValidationResult = {
   timestamp: Date;
 };
 
-interface AppState {
-  // Types colocated for store consumers
-  // Validation result for proof review
-  // Duplicated minimal types to avoid circular deps
-
-  // State fields
+type StoreData = {
   view: View;
   problem: string | null;
   messages: Message[];
   loading: boolean;
   error: string | null;
-  // Proof display UI state
   isChatOpen: boolean;
   isHistoryOpen: boolean;
   viewMode: 'steps' | 'graph';
-  graphData: GraphData | null;
-  // Proof review/history state
   proofHistory: ProofVersion[];
   activeVersionIdx: number;
+};
 
-  // actions
+interface AppState extends StoreData {
+  reset: () => void;
+
   startProof: (problem: string) => Promise<void>;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
-  reset: () => void;
+
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setViewMode: (mode: 'steps' | 'graph') => void;
-  // Proof state setters
 
   // Proof version management
   setActiveVersionIndex: (index: number) => void;
@@ -59,29 +53,9 @@ interface AppState {
   proof: () => ProofVersion;
 }
 
-type StoreData = {
-  view: View;
-  problem: string | null;
-  sublemmas: Sublemma[];
-  messages: Message[];
-  loading: boolean;
-  error: string | null;
-  isChatOpen: boolean;
-  isHistoryOpen: boolean;
-  viewMode: 'steps' | 'graph';
-  graphData: GraphData | null;
-  proofHistory: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[];
-  activeVersionIdx: number;
-  isProofEdited: boolean;
-  proofValidationResult: { isValid: boolean; feedback: string } | null;
-  lastReviewStatus: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error';
-  lastReviewedAt: Date | null;
-};
-
 const initialState: StoreData = {
   view: 'home',
   problem: null,
-  sublemmas: [],
   messages: [],
   loading: false,
   error: null,
@@ -89,14 +63,9 @@ const initialState: StoreData = {
   isChatOpen: false,
   isHistoryOpen: false,
   viewMode: 'steps',
-  graphData: null,
   // proof review/history defaults
   proofHistory: [],
   activeVersionIdx: 0,
-  isProofEdited: true,
-  proofValidationResult: null,
-  lastReviewStatus: 'ready',
-  lastReviewedAt: null,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
