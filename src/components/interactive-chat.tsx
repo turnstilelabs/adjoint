@@ -32,11 +32,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-export function InteractiveChat({
-  onProofRevision,
-}: {
-  onProofRevision: (newSublemmas: Sublemma[]) => void;
-}) {
+export function InteractiveChat() {
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -62,6 +58,10 @@ export function InteractiveChat({
       }
     }
   }, [messages]);
+
+  const addProofVersion = useAppStore((s) => s.addProofVersion);
+
+  const onProofRevision = (sublemmas: Sublemma[]) => addProofVersion({ sublemmas });
 
   const handleSuggestion = (messageIndex: number, accept: boolean) => {
     const message = messages[messageIndex];
