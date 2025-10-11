@@ -9,28 +9,13 @@ import { useAppStore } from '@/state/app-store';
 import EditableProblemCard from '@/components/features/proof/editable-problem-card';
 import ProofValidationFooter from '@/components/features/proof/proof-validation-footer';
 
-interface ProofDisplayProps {
-  initialProblem: string;
-}
+export default function ProofDisplay() {
+  const isChatOpen = useAppStore((s) => s.isChatOpen);
+  const viewMode = useAppStore((s) => s.viewMode);
+  const activeVersionIndex = useAppStore((s) => s.activeVersionIdx);
+  const proof = useAppStore((s) => s.proof());
 
-export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
-  const { isChatOpen, viewMode, sublemmas, proofHistory, activeVersionIndex } = useAppStore(
-    (s) => ({
-      isChatOpen: s.isChatOpen,
-      viewMode: s.viewMode,
-      sublemmas: s.sublemmas,
-      proofHistory: s.proofHistory,
-      activeVersionIndex: s.activeVersionIndex,
-    }),
-  );
-
-  const setGraphData = useAppStore((s) => s.setGraphData);
-  const setSublemmas = useAppStore((s) => s.setSublemmas);
-  const setProofHistory = useAppStore((s) => s.setProofHistory);
-  const setActiveVersionIndex = useAppStore((s) => s.setActiveVersionIndex);
-  const setIsProofEdited = useAppStore((s) => s.setIsProofEdited);
-  const setLastReviewStatus = useAppStore((s) => s.setLastReviewStatus);
-  const setLastReviewedAt = useAppStore((s) => s.setLastReviewedAt);
+  const addProofVersion = useAppStore((s) => s.addProofVersion);
 
   const updateProof = (
     newSublemmas: Sublemma[],
@@ -41,16 +26,9 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
       change?: 'title' | 'content';
     },
   ) => {
-    const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
-    const newVersion = { sublemmas: newSublemmas, timestamp: new Date() };
-
-    setProofHistory([...newHistory, newVersion]);
-    setSublemmas(newSublemmas);
-    setActiveVersionIndex(newHistory.length);
-    setIsProofEdited(true);
-    setLastReviewStatus('ready');
-    setLastReviewedAt(null);
-
+    addProofVersion({ sublemmas: newSublemmas });
+    /*
+    TODO keep graph data when needed
     if (opts?.recomputeGraph === false) {
       // Update graph locally without recomputing
       if (opts?.change === 'title' && typeof opts.changedIndex === 'number') {
@@ -78,10 +56,12 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
     } else {
       setGraphData(null); // Invalidate old graph data; ProofGraphView will generate on demand if open
     }
+
+     */
   };
 
   const handleSublemmaChange = (index: number, newContent: string) => {
-    const newSublemmas = [...sublemmas];
+    const newSublemmas = [...proof.sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], content: newContent };
     updateProof(newSublemmas, `Step ${index + 1} was manually edited.`, {
       recomputeGraph: false,
@@ -91,7 +71,7 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
   };
 
   const handleSublemmaTitleChange = (index: number, newTitle: string) => {
-    const newSublemmas = [...sublemmas];
+    const newSublemmas = [...proof.sublemmas];
     newSublemmas[index] = { ...newSublemmas[index], title: newTitle };
     updateProof(newSublemmas, `Step ${index + 1} title renamed.`, {
       recomputeGraph: false,
@@ -124,10 +104,10 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
                 <div className="space-y-4">
                   <Accordion
                     type="multiple"
-                    defaultValue={sublemmas.map((_, i) => `item-${i + 1}`)}
+                    defaultValue={proof.sublemmas.map((_, i) => `item-${i + 1}`)}
                     className="w-full space-y-4 border-b-0"
                   >
-                    {sublemmas.map((sublemma, index) => (
+                    {proof.sublemmas.map((sublemma, index) => (
                       <SublemmaItem
                         key={`${activeVersionIndex}-${index}`}
                         step={index + 1}

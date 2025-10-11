@@ -2,12 +2,11 @@
 
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
-import { PanelLeftClose, Undo2, CheckCircle } from 'lucide-react';
+import { CheckCircle, PanelLeftClose, Undo2 } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 import { Badge } from './ui/badge';
 import { useAppStore } from '@/state/app-store';
-import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 
 export function ProofHistory() {
@@ -15,15 +14,11 @@ export function ProofHistory() {
 
   const { proofHistory, activeVersionIndex } = useAppStore((s) => ({
     proofHistory: s.proofHistory,
-    activeVersionIndex: s.activeVersionIndex,
+    activeVersionIndex: s.activeVersionIdx,
   }));
 
   const setIsHistoryOpen = useAppStore((s) => s.setIsHistoryOpen);
-  const setSublemmas = useAppStore((s) => s.setSublemmas);
   const setActiveVersionIndex = useAppStore((s) => s.setActiveVersionIndex);
-  const setIsProofEdited = useAppStore((s) => s.setIsProofEdited);
-  const setProofValidationResult = useAppStore((s) => s.setProofValidationResult);
-  const setGraphData = useAppStore((s) => s.setGraphData);
 
   const reversedHistory = [...proofHistory].reverse();
   const reversedActiveIndex = proofHistory.length - 1 - activeVersionIndex;
@@ -31,20 +26,13 @@ export function ProofHistory() {
   const handleClose = () => setIsHistoryOpen(false);
 
   const restoreVersion = async (index: number) => {
-    const versionToRestore = proofHistory[index];
-    if (!versionToRestore) return;
-
-    // Update proof state
-    setSublemmas(versionToRestore.sublemmas);
     setActiveVersionIndex(index);
-    setIsProofEdited(true);
-    setProofValidationResult(null);
 
+    const versionToRestore = proofHistory[index];
     toast({
       title: 'Proof Restored',
       description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
     });
-    setGraphData(null);
   };
 
   return (
@@ -75,10 +63,10 @@ export function ProofHistory() {
                   <CardContent className="p-3">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        {version.isValid === true && (
+                        {version.validationResult?.isValid === true && (
                           <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                         )}
-                        {version.isValid === false && (
+                        {version.validationResult?.isValid === false && (
                           <CheckCircle className="h-4 w-4 text-destructive shrink-0" />
                         )}
                         <div className="flex-1">

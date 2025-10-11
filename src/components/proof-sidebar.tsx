@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { History, GitMerge, PanelRightClose, PanelRightOpen, FileDown } from 'lucide-react';
+import { FileDown, GitMerge, History, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -11,10 +10,12 @@ import { ProofHistory } from '@/components/proof-history';
 
 export function ProofSidebar() {
   const { toast } = useToast();
-  const { isChatOpen, viewMode, sublemmas, problem, isHistoryOpen } = useAppStore((s) => ({
+
+  const proof = useAppStore((s) => s.proof());
+
+  const { isChatOpen, viewMode, problem, isHistoryOpen } = useAppStore((s) => ({
     isChatOpen: s.isChatOpen,
     viewMode: s.viewMode,
-    sublemmas: s.sublemmas,
     problem: s.problem,
     isHistoryOpen: s.isHistoryOpen,
   }));
@@ -46,7 +47,7 @@ export function ProofSidebar() {
   const onExportTex = () => {
     try {
       const prob = problem || '';
-      exportProofTex(prob, sublemmas);
+      exportProofTex(prob, proof.sublemmas);
       toast({
         title: 'Exported',
         description: 'LaTeX file downloaded as proof.tex',
@@ -60,7 +61,7 @@ export function ProofSidebar() {
     }
   };
 
-  const exportDisabled = sublemmas.length === 0;
+  const exportDisabled = proof.sublemmas.length === 0;
 
   return (
     <>

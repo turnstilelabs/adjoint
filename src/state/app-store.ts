@@ -8,6 +8,19 @@ import { decomposeProblemAction } from '@/app/actions';
 
 export type View = 'home' | 'proof';
 
+export type ProofVersion = {
+  sublemmas: Sublemma[];
+  timestamp: Date;
+  validationResult?: ProofValidationResult;
+  graphData?: GraphData;
+};
+export type ProofValidationResult = {
+  isError?: boolean;
+  isValid?: boolean;
+  feedback: string;
+  timestamp: Date;
+};
+
 interface AppState {
   // Types colocated for store consumers
   // Validation result for proof review
@@ -16,7 +29,6 @@ interface AppState {
   // State fields
   view: View;
   problem: string | null;
-  sublemmas: Sublemma[];
   messages: Message[];
   loading: boolean;
   error: string | null;
@@ -25,41 +37,26 @@ interface AppState {
   isHistoryOpen: boolean;
   viewMode: 'steps' | 'graph';
   graphData: GraphData | null;
-  isGraphLoading: boolean;
   // Proof review/history state
-  proofHistory: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[];
-  activeVersionIndex: number;
-  isProofEdited: boolean;
-  proofValidationResult: { isValid: boolean; feedback: string } | null;
-  lastValidatedSublemmas: Sublemma[] | null;
-  lastReviewStatus: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error';
-  lastReviewedAt: Date | null;
+  proofHistory: ProofVersion[];
+  activeVersionIdx: number;
+
   // actions
   startProof: (problem: string) => Promise<void>;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
-  cancelProof: () => void;
   reset: () => void;
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setViewMode: (mode: 'steps' | 'graph') => void;
-  setGraphData: (data: GraphData | null | ((prev: GraphData | null) => GraphData | null)) => void;
-  setIsGraphLoading: (loading: boolean) => void;
   // Proof state setters
-  setSublemmas: (updater: ((prev: Sublemma[]) => Sublemma[]) | Sublemma[]) => void;
-  setProofHistory: (
-    updater:
-      | ((
-          prev: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[],
-        ) => { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[])
-      | { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[],
-  ) => void;
+
+  // Proof version management
   setActiveVersionIndex: (index: number) => void;
-  setIsProofEdited: (edited: boolean) => void;
-  setProofValidationResult: (val: { isValid: boolean; feedback: string } | null) => void;
-  setLastValidatedSublemmas: (val: Sublemma[] | null) => void;
-  setLastReviewStatus: (status: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error') => void;
-  setLastReviewedAt: (date: Date | null) => void;
+  addProofVersion: (version: Omit<ProofVersion, 'timestamp'>) => void;
+  updateCurrentProofVersion: (updates: Partial<ProofVersion>) => void;
+
+  proof: () => ProofVersion;
 }
 
 type StoreData = {
@@ -73,12 +70,10 @@ type StoreData = {
   isHistoryOpen: boolean;
   viewMode: 'steps' | 'graph';
   graphData: GraphData | null;
-  isGraphLoading: boolean;
   proofHistory: { sublemmas: Sublemma[]; timestamp: Date; isValid?: boolean }[];
-  activeVersionIndex: number;
+  activeVersionIdx: number;
   isProofEdited: boolean;
   proofValidationResult: { isValid: boolean; feedback: string } | null;
-  lastValidatedSublemmas: Sublemma[] | null;
   lastReviewStatus: 'ready' | 'reviewed_ok' | 'reviewed_issues' | 'error';
   lastReviewedAt: Date | null;
 };
@@ -95,13 +90,11 @@ const initialState: StoreData = {
   isHistoryOpen: false,
   viewMode: 'steps',
   graphData: null,
-  isGraphLoading: false,
   // proof review/history defaults
   proofHistory: [],
-  activeVersionIndex: 0,
+  activeVersionIdx: 0,
   isProofEdited: true,
   proofValidationResult: null,
-  lastValidatedSublemmas: null,
   lastReviewStatus: 'ready',
   lastReviewedAt: null,
 };
@@ -117,7 +110,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       view: 'proof',
       problem: trimmed,
-      sublemmas: [],
       messages: [],
       loading: true,
       error: null,
@@ -137,11 +129,11 @@ export const useAppStore = create<AppState>((set, get) => ({
               .join('\n\n'),
         };
         set({
-          sublemmas: result.sublemmas,
           messages: [assistantMessage],
           loading: false,
           error: null,
           proofHistory: [{ sublemmas: result.sublemmas, timestamp: new Date() }],
+          activeVersionIdx: 0,
         });
       } else {
         set({
@@ -165,17 +157,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       set({ messages: updater });
     }
-  },
-
-  cancelProof: () => {
-    set({
-      view: 'home',
-      problem: null,
-      sublemmas: [],
-      messages: [],
-      loading: false,
-      error: null,
-    });
   },
 
   reset: () => {
@@ -202,40 +183,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setViewMode: (mode) => set({ viewMode: mode }),
-  setGraphData: (data) => {
-    if (typeof data === 'function') {
-      set((state) => ({
-        graphData: data(state.graphData),
-      }));
-    } else {
-      set({ graphData: data });
-    }
-  },
-  setIsGraphLoading: (loading) => set({ isGraphLoading: loading }),
 
-  // Proof state setters
-  setSublemmas: (updater) => {
-    if (typeof updater === 'function') {
-      set((state) => ({
-        sublemmas: updater(state.sublemmas),
-      }));
-    } else {
-      set({ sublemmas: updater });
-    }
-  },
-  setProofHistory: (updater) => {
-    if (typeof updater === 'function') {
-      set((state) => ({
-        proofHistory: updater(state.proofHistory),
-      }));
-    } else {
-      set({ proofHistory: updater });
-    }
-  },
-  setActiveVersionIndex: (index) => set({ activeVersionIndex: index }),
-  setIsProofEdited: (edited) => set({ isProofEdited: edited }),
-  setProofValidationResult: (val) => set({ proofValidationResult: val }),
-  setLastValidatedSublemmas: (val) => set({ lastValidatedSublemmas: val }),
-  setLastReviewStatus: (status) => set({ lastReviewStatus: status }),
-  setLastReviewedAt: (date) => set({ lastReviewedAt: date }),
+  setActiveVersionIndex: (index) => set({ activeVersionIdx: index }),
+
+  addProofVersion: (version) =>
+    set((state) => ({
+      proofHistory: [...state.proofHistory, { ...version, timestamp: new Date() }],
+      activeVersionIdx: state.proofHistory.length,
+    })),
+  updateCurrentProofVersion: (updates: Partial<ProofVersion>) =>
+    set((state) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, ...updates } : version,
+      ),
+    })),
+
+  proof: () => get().proofHistory[get().activeVersionIdx],
 }));
