@@ -13,17 +13,9 @@ export default function ProofView() {
   }));
   const reset = useAppStore((s) => s.reset);
 
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <main className="flex-1 flex items-center justify-center">
-        <div className="w-full text-center">
-          {loading || sublemmas.length === 0 ? (
-            <ProofLoading problem={problem} onReset={reset} />
-          ) : (
-            <ProofDisplay initialProblem={problem!} />
-          )}
-        </div>
-      </main>
-    </div>
+  return loading || sublemmas.length === 0 ? (
+    <ProofLoading problem={problem} onReset={reset} />
+  ) : (
+    <ProofDisplay initialProblem={problem!} />
   );
 }

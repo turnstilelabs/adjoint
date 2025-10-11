@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 export function ProofLoading(props: { problem: string | null; onReset: () => void }) {
   return (
-    <div>
+    <div className="max-w-5xl flex flex-col items-center justify-center p-8">
       <Card className="text-left">
         <CardContent className="pt-6">
           {props.problem ? (
@@ -20,12 +20,10 @@ export function ProofLoading(props: { problem: string | null; onReset: () => voi
         <p className="text-lg font-medium">Generating proof steps...</p>
         <p className="text-sm">The AI is thinking. This may take a moment.</p>
       </div>
-      <div className="mt-8">
-        <Button variant="outline" onReset={props.onReset}>
-          <X className="mr-2 h-4 w-4" />
-          Cancel
-        </Button>
-      </div>
+      <Button variant="outline" onClick={props.onReset} className="mt-8">
+        <X className="mr-2 h-4 w-4" />
+        Cancel
+      </Button>
     </div>
   );
 }
