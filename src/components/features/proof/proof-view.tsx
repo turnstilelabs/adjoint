@@ -1,8 +1,8 @@
 'use client';
 
-import ProofDisplay from '@/components/proof-display';
+import ProofDisplay from '@/components/features/proof/proof-display';
 import { useAppStore } from '@/state/app-store';
-import { ProofLoading } from '@/components/proof-loading';
+import { ProofLoading } from '@/components/features/proof/proof-loading';
 
 export default function ProofView() {
   const { problem, sublemmas, messages, loading } = useAppStore((s) => ({
