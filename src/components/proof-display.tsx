@@ -1,43 +1,19 @@
 'use client';
-import {
-  useState,
-  useEffect,
-  useTransition,
-  useRef,
-  type Dispatch,
-  type SetStateAction,
-} from 'react';
-import {
-  Info,
-  CheckCircle,
-  PanelRightClose,
-  PanelRightOpen,
-  Loader2,
-  ShieldCheck,
-  History,
-  GitMerge,
-  XCircle,
-  FileDown,
-  AlertTriangle,
-} from 'lucide-react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { AlertTriangle, CheckCircle, Info, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from './sublemma-item';
-import { InteractiveChat, type Message } from './interactive-chat';
+import { InteractiveChat } from './interactive-chat';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { KatexRenderer } from './katex-renderer';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { generateProofGraphAction } from '@/app/actions';
+import { validateStatementAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { ProofHistory } from './proof-history';
 import { ProofSidebar } from './proof-sidebar';
 import { isEqual } from 'lodash';
-import { PageHeader } from './page-header';
-import { LogoSmall } from './logo-small';
-import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
-import { validateStatementAction } from '@/app/actions';
 import { ProofGraphView } from './proof-graph-view';
 import { useAppStore } from '@/state/app-store';
 
@@ -278,7 +254,7 @@ export default function ProofDisplay({ initialProblem }: ProofDisplayProps) {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen w-full">
       <ProofSidebar />
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="p-4 flex-shrink-0">
