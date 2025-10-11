@@ -131,7 +131,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const assistantMessage: Message = {
           role: 'assistant',
           content:
-            `Of course. I've broken down the problem into the following steps:\n\n` +
+            `I've broken down the problem into the following steps:\n\n` +
             result.sublemmas
               .map((s: Sublemma, i: number) => `**${s.title}:** ${s.content}`)
               .join('\n\n'),
@@ -141,6 +141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           messages: [assistantMessage],
           loading: false,
           error: null,
+          proofHistory: [{ sublemmas: result.sublemmas, timestamp: new Date() }],
         });
       } else {
         set({
@@ -223,7 +224,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setProofHistory: (updater) => {
-    console.log('setProofHistory', updater);
     if (typeof updater === 'function') {
       set((state) => ({
         proofHistory: updater(state.proofHistory),
