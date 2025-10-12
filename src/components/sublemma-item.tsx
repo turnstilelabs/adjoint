@@ -196,13 +196,13 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
                   className="h-8 text-base font-medium font-headline"
                 />
               ) : (
-                <span
+                <div
                   className="text-base font-medium text-gray-900 font-headline"
                   onDoubleClick={handleTitleDoubleClick}
                   title="Double-click to rename"
                 >
-                  {title}
-                </span>
+                  <KatexRenderer content={title} className="inline" autoWrap={false} />
+                </div>
               )}
             </div>
           </div>

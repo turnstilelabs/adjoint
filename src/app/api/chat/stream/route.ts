@@ -44,13 +44,13 @@ ${sublemmas
 `
             : 'Current Proof Steps: (none provided)\n';
 
-    // Free-form, non-JSON output for streaming. We still keep the same policy constraints.
+    // Prompt instructs: stream answer first, then make exactly one propose_changes call with the final revised steps.
     return `${ADJOINT_SYSTEM_POLICY}
 
 You are an expert mathematician and AI assistant embedded in an interactive proof environment.
 
 Instructions for this turn:
-- Provide a clear, free-form answer. Do NOT output JSON.
+- Provide a clear, free-form answer. Do NOT output JSON in your natural language response.
 - Never claim that changes have already been applied. Do not use phrases like "I've added", "I updated", "I applied", or "I changed".
 - When proposing edits, use proposal language only, e.g., "I propose adding a new Lemma 4 …" or "Proposed change: … Would you like me to apply these changes?"
 - Stay within the scope of the provided problem/proof context. If off-topic, say so briefly.
@@ -63,8 +63,14 @@ ${historyText}
 User's new request:
 "${request}"
 
-Now respond naturally (free text).`;
+Now respond naturally (free text). At the very end of your answer, append exactly one control frame on a new line with the following format:
+[[PROPOSAL]]{"revisedSublemmas":[{"title":string,"statement":string,"proof":string}]}
+Rules:
+- Do not include JSON in the free-form text; only include the JSON inside the control frame.
+- Emit the control frame once, after your free-form answer is complete.
+- If you believe no changes are needed, emit [[PROPOSAL]]{"revisedSublemmas":[]} and nothing else after it.`;
 }
+
 
 export async function POST(req: Request) {
     try {
@@ -124,16 +130,16 @@ export async function POST(req: Request) {
         const streamingResponse = new ReadableStream<Uint8Array>({
             async start(controller) {
                 try {
+
                     if (provider === 'openai') {
                         const client = new OpenAI({ apiKey: openaiKey! });
                         let model = process.env.LLM_MODEL ?? 'gpt-5-mini';
 
                         console.info(`[AI] Streaming provider=openai model=${model}`);
 
-                        // Attempt streaming with configured model
-                        try {
+                        const runOpenAI = async (useModel: string) => {
                             const stream = await client.chat.completions.create({
-                                model,
+                                model: useModel,
                                 messages: [{ role: 'user', content: prompt }],
                                 stream: true,
                             });
@@ -144,49 +150,40 @@ export async function POST(req: Request) {
                                     controller.enqueue(encoder.encode(delta));
                                 }
                             }
-                            controller.close();
+                        };
+
+                        try {
+                            await runOpenAI(model);
                         } catch (primaryErr: any) {
-                            // Fallback once with gpt-4o-mini if the configured model is not accessible
                             const fallbackModel = 'gpt-4o-mini';
                             if (model !== fallbackModel) {
                                 try {
                                     console.warn(`[AI] Streaming OPENAI primary model failed (${model}); falling back to ${fallbackModel}`);
-                                    const stream = await client.chat.completions.create({
-                                        model: fallbackModel,
-                                        messages: [{ role: 'user', content: prompt }],
-                                        stream: true,
-                                    });
-
-                                    for await (const part of stream) {
-                                        const delta = part.choices?.[0]?.delta?.content;
-                                        if (delta) {
-                                            controller.enqueue(encoder.encode(delta));
-                                        }
-                                    }
-                                    controller.close();
+                                    await runOpenAI(fallbackModel);
                                 } catch (fallbackErr: any) {
                                     const msg = typeof fallbackErr?.message === 'string' ? fallbackErr.message : 'Streaming failed.';
                                     controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
-                                    controller.close();
                                 }
                             } else {
                                 const msg = typeof primaryErr?.message === 'string' ? primaryErr.message : 'Streaming failed.';
                                 controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
-                                controller.close();
                             }
                         }
+
+                        controller.close();
                     } else {
-                        // Google (Gemini) streaming
+                        // Google (Gemini) streaming (no tools): stream text first
                         const result = await googleModel!.generateContentStream({
                             contents: [{ role: 'user', parts: [{ text: prompt }] }],
                         });
 
-                        for await (const chunk of result.stream) {
-                            const text = chunk?.text();
+                        for await (const chunk of result.stream as any) {
+                            const text = chunk?.text?.();
                             if (text) {
                                 controller.enqueue(encoder.encode(text));
                             }
                         }
+
                         controller.close();
                     }
                 } catch (err: any) {

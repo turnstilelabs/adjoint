@@ -41,6 +41,92 @@ const TypingIndicator = () => (
   </div>
 );
 
+/**
+ * Minimal diff between current proof and a proposed revision.
+ * Aligns by index (fast) and flags only changed parts for display.
+ * This keeps the preview concise and performant.
+ */
+type Change =
+  | { kind: 'add'; at: number; step: Sublemma }
+  | { kind: 'remove'; at: number; step: Sublemma }
+  | {
+    kind: 'modify';
+    at: number;
+    old: Sublemma;
+    next: Sublemma;
+    titleChanged?: boolean;
+    statementChanged?: boolean;
+    proofChanged?: boolean;
+  };
+
+function computeProofDiff(currentSteps: Sublemma[], revisedSteps: Sublemma[]): Change[] {
+  const changes: Change[] = [];
+  const maxLen = Math.max(currentSteps.length, revisedSteps.length);
+  for (let i = 0; i < maxLen; i++) {
+    const a = currentSteps[i];
+    const b = revisedSteps[i];
+    if (a && !b) {
+      changes.push({ kind: 'remove', at: i, step: a });
+    } else if (!a && b) {
+      changes.push({ kind: 'add', at: i, step: b });
+    } else if (a && b) {
+      const titleChanged = (a.title || '') !== (b.title || '');
+      const statementChanged = (a.statement || '') !== (b.statement || '');
+      const proofChanged = (a.proof || '') !== (b.proof || '');
+      if (titleChanged || statementChanged || proofChanged) {
+        changes.push({ kind: 'modify', at: i, old: a, next: b, titleChanged, statementChanged, proofChanged });
+      }
+    }
+  }
+  return changes;
+}
+
+/**
+ * Heuristics to interpret proposal payloads that may not include the full step list.
+ * - If the proposal length equals current length, treat as full replacement.
+ * - If it contains a single step, replace the inferred target step (by numeric prefix in title or default to last step).
+ * - Otherwise, attempt a title-based overlay (keep unmatched steps unchanged).
+ */
+function inferTargetIndex(currentSteps: Sublemma[], revised: Sublemma[]): number | null {
+  if (revised.length !== 1) return null;
+  const t = (revised[0].title || '').trim();
+  const m = t.match(/^\s*(?:Step\s*)?(\d+)[\.\)]?/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= currentSteps.length) return n - 1;
+  }
+  // Default heuristic: last step
+  return currentSteps.length > 0 ? currentSteps.length - 1 : null;
+}
+
+function mergeRevised(currentSteps: Sublemma[], revised: Sublemma[]): Sublemma[] {
+  if (revised.length === currentSteps.length) {
+    return revised;
+  }
+  if (revised.length === 1) {
+    const idx = inferTargetIndex(currentSteps, revised);
+    if (idx !== null && idx >= 0 && idx < currentSteps.length) {
+      const next = [...currentSteps];
+      next[idx] = revised[0];
+      return next;
+    }
+  }
+  // Fallback: overlay by normalized titles
+  const norm = (s: string) => (s || '').toLowerCase().replace(/^\s*(?:step\s*)?\d+[\.\)]?\s*/, '').trim();
+  const curMap = new Map(currentSteps.map((s, i) => [norm(s.title || `step-${i + 1}`), { step: s, index: i }]));
+  const next = [...currentSteps];
+  let changed = false;
+  for (const r of revised) {
+    const key = norm(r.title || '');
+    const found = curMap.get(key);
+    if (found) {
+      next[found.index] = r;
+      changed = true;
+    }
+  }
+  return changed ? next : currentSteps;
+}
+
 export function InteractiveChat({
   problem,
   sublemmas,
@@ -76,7 +162,8 @@ export function InteractiveChat({
     if (accept) {
       // Capture the current proof as a snapshot to enable revert
       const previous = sublemmas;
-      onProofRevision(message.suggestion.revisedSublemmas);
+      const effective = mergeRevised(sublemmas, message.suggestion.revisedSublemmas);
+      onProofRevision(effective);
       newMessages[messageIndex] = {
         ...message,
         suggestion: {
@@ -130,7 +217,8 @@ export function InteractiveChat({
     try {
       // Snapshot current proof before adopting so we can revert again
       const previous = sublemmas;
-      onProofRevision(proposal);
+      const effective = mergeRevised(sublemmas, proposal);
+      onProofRevision(effective);
       const newMessages = [...messages];
       newMessages[messageIndex] = {
         ...message,
@@ -160,12 +248,6 @@ export function InteractiveChat({
     startTransition(async () => {
       try {
         const history = newMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
-        // Start authoritative impact in parallel with streaming
-        const impactPromise = fetch('/api/chat/impact', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem, proofSteps: sublemmas, request }),
-        });
 
         // Begin streaming free-form assistant text
         const res = await fetch('/api/chat/stream', {
@@ -182,6 +264,7 @@ export function InteractiveChat({
         const decoder = new TextDecoder();
         let done = false;
         let accumulated = '';
+        let proposalHandled = false;
 
         while (!done) {
           const { value, done: doneReading } = await reader.read();
@@ -196,6 +279,54 @@ export function InteractiveChat({
               updated[lastIdx] = { ...last, content: accumulated, isTyping: true };
               return updated;
             });
+
+            // Attempt early proposal parsing during stream to avoid post-text delay
+            const earlyMatch = accumulated.match(/[\r\n]\[\[PROPOSAL\]\]([\s\S]+)$/);
+            if (earlyMatch && !proposalHandled) {
+              const jsonText = earlyMatch[1].trim();
+              try {
+                const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
+                const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
+                // Update message text immediately (remove control frame)
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  const last = updated[lastIdx];
+                  updated[lastIdx] = { ...last, content: cleaned, isTyping: false };
+                  return updated;
+                });
+                const revised = Array.isArray(payload?.revisedSublemmas)
+                  ? (payload.revisedSublemmas as Sublemma[])
+                  : [];
+                if (revised.length > 0) {
+                  setMessages(prev => {
+                    const updated = [...prev];
+                    const lastIdx = updated.length - 1;
+                    const last = updated[lastIdx];
+                    updated[lastIdx] = {
+                      ...last,
+                      noImpact: false,
+                      offTopic: false,
+                      suggestion: { revisedSublemmas: revised, isHandled: false },
+                    };
+                    return updated;
+                  });
+                } else {
+                  setMessages(prev => {
+                    const updated = [...prev];
+                    const lastIdx = updated.length - 1;
+                    const last = updated[lastIdx];
+                    updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                    return updated;
+                  });
+                }
+                proposalHandled = true;
+                try { await reader.cancel(); } catch { /* ignore */ }
+                done = true;
+              } catch {
+                // ignore malformed in-flight proposal; final parsing will run after completion
+              }
+            }
           }
         }
 
@@ -208,109 +339,50 @@ export function InteractiveChat({
           return updated;
         });
 
-        // Attach preliminary impact result (await parallel promise)
-        let preliminary: {
-          revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
-          revisedSublemmas?: Sublemma[] | null;
-        } | null = null;
-        try {
-          const ipRes = await impactPromise;
-          if (ipRes.ok) {
-            preliminary = await ipRes.json();
-          }
-        } catch {
-          // ignore
-        }
-
-        if (preliminary) {
-          setMessages(prev => {
-            const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            const last = updated[lastIdx];
-
-            if ((preliminary!.revisionType === 'DIRECT_REVISION' || preliminary!.revisionType === 'SUGGESTED_REVISION') && preliminary!.revisedSublemmas && preliminary!.revisedSublemmas.length > 0) {
-              updated[lastIdx] = {
-                ...last,
-                noImpact: false,
-                offTopic: false,
-                suggestion: { revisedSublemmas: preliminary!.revisedSublemmas, isHandled: false },
-              };
-            } else if (preliminary!.revisionType === 'NO_REVISION') {
-              updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
-            } else if (preliminary!.revisionType === 'OFF_TOPIC') {
-              updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
-            }
-
-            return updated;
-          });
-        } else {
-          toast({
-            title: 'Impact check failed',
-            description: 'Could not classify effect on the proof.',
-            variant: 'destructive',
-          });
-        }
-
-        // Reconcile with assistant's final text to match exact wording
-        const sameRevised = (a?: Sublemma[] | null, b?: Sublemma[] | null) => {
-          if (!a && !b) return true;
-          if (!a || !b) return false;
-          if (a.length !== b.length) return false;
-          for (let i = 0; i < a.length; i++) {
-            if ((a[i].title || '') !== (b[i].title || '')) return false;
-            if ((a[i].statement || '') !== (b[i].statement || '')) return false;
-            if ((a[i].proof || '') !== (b[i].proof || '')) return false;
-          }
-          return true;
-        };
-
-        try {
-          const recRes = await fetch('/api/chat/impact-text', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problem, proofSteps: sublemmas, assistantText: accumulated }),
-          });
-          if (recRes.ok) {
-            const reconciled = await recRes.json() as {
-              revisionType: 'DIRECT_REVISION' | 'SUGGESTED_REVISION' | 'NO_REVISION' | 'OFF_TOPIC';
-              revisedSublemmas?: Sublemma[] | null;
-            };
-
+        // Parse [[PROPOSAL]] control frame appended by the server
+        const proposalMatch = accumulated.match(/[\r\n]\[\[PROPOSAL\]\]([\s\S]+)$/);
+        if (proposalMatch) {
+          const jsonText = proposalMatch[1].trim();
+          try {
+            const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
+            const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
+            // Update last assistant message text without the control frame
             setMessages(prev => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               const last = updated[lastIdx];
-
-              // Do not override decisions already handled by the user
-              if (last.suggestion?.isHandled) {
-                return updated;
-              }
-
-              if ((reconciled.revisionType === 'DIRECT_REVISION' || reconciled.revisionType === 'SUGGESTED_REVISION') && reconciled.revisedSublemmas && reconciled.revisedSublemmas.length > 0) {
-                const currentRevised = last.suggestion?.revisedSublemmas;
-                if (!sameRevised(currentRevised, reconciled.revisedSublemmas)) {
-                  updated[lastIdx] = {
-                    ...last,
-                    noImpact: false,
-                    offTopic: false,
-                    suggestion: { ...(last.suggestion || { isHandled: false }), revisedSublemmas: reconciled.revisedSublemmas, isHandled: false, updated: true },
-                  };
-                }
-              } else if (reconciled.revisionType === 'NO_REVISION') {
-                if (!last.noImpact) {
-                  updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
-                }
-              } else if (reconciled.revisionType === 'OFF_TOPIC') {
-                if (!last.offTopic) {
-                  updated[lastIdx] = { ...last, offTopic: true, noImpact: false, suggestion: undefined };
-                }
-              }
-
+              updated[lastIdx] = { ...last, content: cleaned, isTyping: false };
               return updated;
             });
+            const revised = Array.isArray(payload?.revisedSublemmas)
+              ? (payload.revisedSublemmas as Sublemma[])
+              : [];
+            if (revised.length > 0) {
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                const last = updated[lastIdx];
+                updated[lastIdx] = {
+                  ...last,
+                  noImpact: false,
+                  offTopic: false,
+                  suggestion: { revisedSublemmas: revised, isHandled: false },
+                };
+                return updated;
+              });
+            } else {
+              // Explicitly mark no impact when revised is an empty array
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                const last = updated[lastIdx];
+                updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                return updated;
+              });
+            }
+          } catch {
+            // If proposal payload is invalid JSON, ignore silently (no proposal)
           }
-        } catch {
-          // ignore reconciliation errors
         }
       } catch (error: any) {
         toast({
@@ -362,23 +434,110 @@ export function InteractiveChat({
                         {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
-                        {msg.suggestion.revisedSublemmas.map((s, i) => (
-                          <div key={i} className="rounded border border-muted-foreground/10 p-2">
-                            <div className="text-sm font-semibold">
-                              {s.title || `Step ${i + 1}`}
-                            </div>
-                            <div className="mt-1 text-sm space-y-2">
-                              <div>
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
-                                <KatexRenderer content={s.statement} />
+                        {(() => {
+                          const revisedRaw = msg.suggestion!.revisedSublemmas;
+                          const effective = mergeRevised(sublemmas, revisedRaw);
+                          const changes = computeProofDiff(sublemmas, effective);
+                          if (!changes.length) {
+                            return (
+                              <div className="text-xs text-muted-foreground">
+                                No impact on the proof.
                               </div>
-                              <div>
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
-                                <KatexRenderer content={s.proof} />
+                            );
+                          }
+                          return changes.map((ch, i) => {
+                            if (ch.kind === 'add') {
+                              return (
+                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                  <div className="text-sm font-semibold">
+                                    Add step at position {ch.at + 1}:{' '}
+                                    <KatexRenderer
+                                      content={ch.step.title || `Step ${ch.at + 1}`}
+                                      className="inline"
+                                      autoWrap={false}
+                                    />
+                                  </div>
+                                  <div className="mt-1 text-sm space-y-2">
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                      <KatexRenderer content={ch.step.statement} />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                      <KatexRenderer content={ch.step.proof} />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            if (ch.kind === 'remove') {
+                              return (
+                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                  <div className="text-sm font-semibold">
+                                    Remove step at position {ch.at + 1}:{' '}
+                                    <KatexRenderer
+                                      content={ch.step.title || `Step ${ch.at + 1}`}
+                                      className="inline"
+                                      autoWrap={false}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            }
+                            // modify
+                            return (
+                              <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div className="text-sm font-semibold">
+                                  Modify step at position {ch.at + 1}:{' '}
+                                  <KatexRenderer
+                                    content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
+                                    className="inline"
+                                    autoWrap={false}
+                                  />
+                                </div>
+                                <div className="mt-1 text-sm space-y-2">
+                                  {ch.titleChanged && (
+                                    <div className="text-xs">
+                                      <span className="font-medium text-muted-foreground">Title</span>{' '}
+                                      <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
+                                        updated
+                                      </span>
+                                      <div className="mt-1">
+                                        <KatexRenderer
+                                          content={ch.old.title || `Step ${ch.at + 1}`}
+                                          className="inline line-through opacity-70"
+                                          autoWrap={false}
+                                        />
+                                        <span className="mx-2">→</span>
+                                        <KatexRenderer
+                                          content={ch.next.title || `Step ${ch.at + 1}`}
+                                          className="inline font-medium"
+                                          autoWrap={false}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {ch.statementChanged && (
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Statement <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                      </div>
+                                      <KatexRenderer content={ch.next.statement} />
+                                    </div>
+                                  )}
+                                  {ch.proofChanged && (
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Proof <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                      </div>
+                                      <KatexRenderer content={ch.next.proof} />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -416,23 +575,109 @@ export function InteractiveChat({
                         {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
-                        {msg.suggestion.revisedSublemmas.map((s, i) => (
-                          <div key={i} className="rounded border border-muted-foreground/10 p-2">
-                            <div className="text-sm font-semibold">
-                              {s.title || `Step ${i + 1}`}
-                            </div>
-                            <div className="mt-1 text-sm space-y-2">
-                              <div>
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
-                                <KatexRenderer content={s.statement} />
+                        {(() => {
+                          const revisedRaw = msg.suggestion!.revisedSublemmas;
+                          const effective = mergeRevised(sublemmas, revisedRaw);
+                          const changes = computeProofDiff(sublemmas, effective);
+                          if (!changes.length) {
+                            return (
+                              <div className="text-xs text-muted-foreground">
+                                No impact on the proof.
                               </div>
-                              <div>
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
-                                <KatexRenderer content={s.proof} />
+                            );
+                          }
+                          return changes.map((ch, i) => {
+                            if (ch.kind === 'add') {
+                              return (
+                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                  <div className="text-sm font-semibold">
+                                    Add step at position {ch.at + 1}:{' '}
+                                    <KatexRenderer
+                                      content={ch.step.title || `Step ${ch.at + 1}`}
+                                      className="inline"
+                                      autoWrap={false}
+                                    />
+                                  </div>
+                                  <div className="mt-1 text-sm space-y-2">
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                      <KatexRenderer content={ch.step.statement} />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                      <KatexRenderer content={ch.step.proof} />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            if (ch.kind === 'remove') {
+                              return (
+                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                  <div className="text-sm font-semibold">
+                                    Remove step at position {ch.at + 1}:{' '}
+                                    <KatexRenderer
+                                      content={ch.step.title || `Step ${ch.at + 1}`}
+                                      className="inline"
+                                      autoWrap={false}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div className="text-sm font-semibold">
+                                  Modify step at position {ch.at + 1}:{' '}
+                                  <KatexRenderer
+                                    content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
+                                    className="inline"
+                                    autoWrap={false}
+                                  />
+                                </div>
+                                <div className="mt-1 text-sm space-y-2">
+                                  {ch.titleChanged && (
+                                    <div className="text-xs">
+                                      <span className="font-medium text-muted-foreground">Title</span>{' '}
+                                      <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
+                                        updated
+                                      </span>
+                                      <div className="mt-1">
+                                        <KatexRenderer
+                                          content={ch.old.title || `Step ${ch.at + 1}`}
+                                          className="inline line-through opacity-70"
+                                          autoWrap={false}
+                                        />
+                                        <span className="mx-2">→</span>
+                                        <KatexRenderer
+                                          content={ch.next.title || `Step ${ch.at + 1}`}
+                                          className="inline font-medium"
+                                          autoWrap={false}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {ch.statementChanged && (
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Statement <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                      </div>
+                                      <KatexRenderer content={ch.next.statement} />
+                                    </div>
+                                  )}
+                                  {ch.proofChanged && (
+                                    <div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Proof <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                      </div>
+                                      <KatexRenderer content={ch.next.proof} />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                     <div className="flex gap-2">
