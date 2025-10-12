@@ -76,11 +76,26 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   // Common TeX symbol fixes for bare words
   s = s.replace(/\bsum_/g, '\\sum_');
 
+  // Normalize cyclic/symmetric subscripts for sum whether or not the backslash is present:
+  // Handles: "\sum_{cyc}", "sum_{cyc}", "\sum_cyc", "sum_cyc" (and sym/all)
+  s = s.replace(/\\?sum_(?:\{(cyc|sym|all)\}|(cyc|sym|all))/gi, (_m, g1, g2) => {
+    const tag = (g1 || g2).toLowerCase();
+    return `\\sum_{\\mathrm{${tag}}}`;
+  });
+
   // Subscript text semantics in common notations
   s = s.replace(/_\{(cyc|sym|all)\}/gi, (_m, g1) => `_{\\mathrm{${g1}}}`);
 
   // Normalize ASCII comparisons to TeX words
   s = s.replace(/>=/g, '\\ge ').replace(/<=/g, '\\le ');
+
+  // Ensure standalone \sum(...) with (optional) subscript is wrapped even if grouping misses it.
+  // e.g., "\sum_{cyc}(bc)^2/(a(b+c))" -> "$\sum_{\\mathrm{cyc}}(bc)^2/(a(b+c))$"
+  // (Safe here because we only run autoWrap when no '$' exists in the input.)
+  s = s.replace(
+    /(\\sum(?:_\{[^}]+\}|_[A-Za-z]+)?\([^)]*\))/g,
+    (_m, g1) => `$${g1}$`
+  );
 
   // Split by whitespace (preserve spaces) and group consecutive math-like tokens into a single $...$ run.
   const parts = s.split(/(\s+)/);
@@ -88,12 +103,25 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   const isWhitespace = (t: string) => /^\s+$/.test(t);
   // A token is math-like if it contains operators, parens/brackets/braces, backslash commands,
   // digits mixed with letters, or common punctuation used inside formulas.
-  const isMathToken = (t: string) =>
-    /[=<>^_+\-*/\\(){}\[\]\|]|,|;|:/.test(t) ||
-    /^\d/.test(t) ||
-    /\\(ge|le|frac|sum|int|neq|to|sin|cos|tan|log|ln|sqrt)\b/.test(t) ||
-    /[a-zA-Z]\d/.test(t) ||
-    /\d[a-zA-Z]/.test(t);
+  // Avoid false positives for pure words or hyphenated words like "left-hand".
+  const isMathToken = (t: string) => {
+    // Pure word or hyphenated word (letters only) -> not math
+    if (/^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(t)) return false;
+
+    // Any TeX command e.g. \sum, \frac, \sin, \cdots, \langle ...
+    if (/\\[A-Za-z]+/.test(t)) return true;
+
+    // Operators, delimiters, or bars
+    if (/[=<>^_+\-*/(){}\[\]\|]/.test(t)) return true;
+
+    // Punctuation that commonly appears in formulas
+    if (/[,;:]/.test(t)) return true;
+
+    // Digits mixed with letters, or standalone numbers
+    if ((/\d/.test(t) && /[A-Za-z]/.test(t)) || /^\d+(\.\d+)?$/.test(t)) return true;
+
+    return false;
+  };
 
   let out: string[] = [];
   let run: string[] = [];
