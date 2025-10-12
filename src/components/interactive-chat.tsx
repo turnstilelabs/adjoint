@@ -44,6 +44,7 @@ export function InteractiveChat() {
   const messages = useAppStore((s) => s.messages);
 
   const setMessages = useAppStore((s) => s.setMessages);
+  const reset = useAppStore((s) => s.reset);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -385,7 +386,7 @@ export function InteractiveChat() {
                 className={`p-4 rounded-2xl max-w-xl break-words ${
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-muted border border-muted-foreground/10 shadow-sm'
+                    : 'bg-white border border-muted-foreground/10 shadow-sm'
                 }`}
               >
                 {msg.role === 'assistant' && (
@@ -448,7 +449,7 @@ export function InteractiveChat() {
                 )}
                 {msg.offTopic && (
                   <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => router.push('/')}>
+                    <Button variant="secondary" size="sm" onClick={reset}>
                       Start new task
                     </Button>
                   </div>
