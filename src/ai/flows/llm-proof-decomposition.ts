@@ -35,7 +35,7 @@ const decomposeProofPrompt = ai.definePrompt({
 
 Instructions
 Input: A mathematical problem (theorem, proposition, or extended argument)
-Output: A restructured version with appropriate decomposition. Your output must be a JSON object with a 'sublemmas' key containing an array of objects, where each object has a 'title' and 'content'.
+Output: A restructured version with appropriate decomposition. Your output must be a JSON object with a 'sublemmas' key containing an array of objects, where each object has a 'title', a 'statement', and a 'proof'. Use LaTeX delimiters: inline math with $...$ and display math with $$...$$.
 
 Decomposition Guidelines
 1. Identify Decomposition Candidates
@@ -56,7 +56,12 @@ Each lemma/proposition should:
 Problem to Decompose:
 "{{{problem}}}"
 
-Decompose the problem into a sequence of sublemmas, each with a title and content.`,
+Decompose the problem into a sequence of sublemmas, each with:
+- a concise 'title',
+- a precise 'statement' (the claim to be proved),
+- a rigorous 'proof' (clear step-by-step reasoning).
+
+Use LaTeX delimiters: inline $...$, display $$...$$.`,
 });
 
 const decomposeProofFlow = ai.defineFlow(
@@ -65,7 +70,7 @@ const decomposeProofFlow = ai.defineFlow(
     inputSchema: DecomposeProofInputSchema,
     outputSchema: DecomposeProofOutputSchema,
   },
-  async input => {
+  async (input: DecomposeProofInput) => {
     const { output } = await decomposeProofPrompt(input);
     if (!output || !output.sublemmas) {
       throw new Error('The AI failed to decompose the problem into steps.');

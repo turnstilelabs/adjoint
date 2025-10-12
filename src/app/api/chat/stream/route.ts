@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from '@/env';
 import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 
@@ -32,7 +33,14 @@ ${history
     const stepsText =
         sublemmas.length > 0
             ? `Current Proof Steps:
-${sublemmas.map((s, i) => `- ${i + 1}. ${s.title}: ${s.content}`).join('\n')}
+${sublemmas
+                .map(
+                    (s, i) =>
+                        `- ${i + 1}. ${s.title}
+  Statement: ${s.statement}
+  Proof: ${s.proof}`
+                )
+                .join('\n')}
 `
             : 'Current Proof Steps: (none provided)\n';
 
@@ -72,23 +80,37 @@ export async function POST(req: Request) {
             );
         }
 
-        const apiKey =
-            (env as any).GOOGLE_API_KEY ||
-            (env as any).GEMINI_API_KEY ||
-            (env as any).GOOGLE_GENAI_API_KEY;
+        const provider = process.env.LLM_PROVIDER ?? 'googleai';
 
-        if (!apiKey) {
-            return NextResponse.json({ error: 'Missing Google API key.' }, { status: 500 });
+        // Prepare provider-specific clients
+        let googleModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
+        let openaiKey: string | undefined;
+
+        if (provider === 'openai') {
+            openaiKey = process.env.OPENAI_API_KEY;
+            if (!openaiKey) {
+                return NextResponse.json({ error: 'Missing OpenAI API key.' }, { status: 500 });
+            }
+        } else {
+            const googleKey =
+                (env as any).GOOGLE_API_KEY ||
+                (env as any).GEMINI_API_KEY ||
+                (env as any).GOOGLE_GENAI_API_KEY;
+
+            if (!googleKey) {
+                return NextResponse.json({ error: 'Missing Google API key.' }, { status: 500 });
+            }
+
+            const genAI = new GoogleGenerativeAI(googleKey);
+            const googleModelName = process.env.LLM_MODEL ?? 'gemini-2.5-flash';
+            console.info(`[AI] Streaming provider=googleai model=${googleModelName}`);
+            googleModel = genAI.getGenerativeModel({
+                model: googleModelName,
+                generationConfig: {
+                    temperature: 0.4,
+                },
+            });
         }
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        // Use a fast, streaming-capable model
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
-            generationConfig: {
-                temperature: 0.4,
-            },
-        });
 
         const prompt = buildPrompt({
             problem,
@@ -102,23 +124,73 @@ export async function POST(req: Request) {
         const streamingResponse = new ReadableStream<Uint8Array>({
             async start(controller) {
                 try {
-                    const result = await model.generateContentStream({
-                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                    });
+                    if (provider === 'openai') {
+                        const client = new OpenAI({ apiKey: openaiKey! });
+                        let model = process.env.LLM_MODEL ?? 'gpt-5-mini';
 
-                    for await (const chunk of result.stream) {
-                        const text = chunk?.text();
-                        if (text) {
-                            controller.enqueue(encoder.encode(text));
+                        console.info(`[AI] Streaming provider=openai model=${model}`);
+
+                        // Attempt streaming with configured model
+                        try {
+                            const stream = await client.chat.completions.create({
+                                model,
+                                messages: [{ role: 'user', content: prompt }],
+                                stream: true,
+                            });
+
+                            for await (const part of stream) {
+                                const delta = part.choices?.[0]?.delta?.content;
+                                if (delta) {
+                                    controller.enqueue(encoder.encode(delta));
+                                }
+                            }
+                            controller.close();
+                        } catch (primaryErr: any) {
+                            // Fallback once with gpt-4o-mini if the configured model is not accessible
+                            const fallbackModel = 'gpt-4o-mini';
+                            if (model !== fallbackModel) {
+                                try {
+                                    console.warn(`[AI] Streaming OPENAI primary model failed (${model}); falling back to ${fallbackModel}`);
+                                    const stream = await client.chat.completions.create({
+                                        model: fallbackModel,
+                                        messages: [{ role: 'user', content: prompt }],
+                                        stream: true,
+                                    });
+
+                                    for await (const part of stream) {
+                                        const delta = part.choices?.[0]?.delta?.content;
+                                        if (delta) {
+                                            controller.enqueue(encoder.encode(delta));
+                                        }
+                                    }
+                                    controller.close();
+                                } catch (fallbackErr: any) {
+                                    const msg = typeof fallbackErr?.message === 'string' ? fallbackErr.message : 'Streaming failed.';
+                                    controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
+                                    controller.close();
+                                }
+                            } else {
+                                const msg = typeof primaryErr?.message === 'string' ? primaryErr.message : 'Streaming failed.';
+                                controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
+                                controller.close();
+                            }
                         }
+                    } else {
+                        // Google (Gemini) streaming
+                        const result = await googleModel!.generateContentStream({
+                            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        });
+
+                        for await (const chunk of result.stream) {
+                            const text = chunk?.text();
+                            if (text) {
+                                controller.enqueue(encoder.encode(text));
+                            }
+                        }
+                        controller.close();
                     }
-                    controller.close();
                 } catch (err: any) {
-                    // Surface an inline error marker to the client stream, then close.
-                    const msg =
-                        typeof err?.message === 'string'
-                            ? err.message
-                            : 'Streaming failed.';
+                    const msg = typeof err?.message === 'string' ? err.message : 'Streaming failed.';
                     controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
                     controller.close();
                 }

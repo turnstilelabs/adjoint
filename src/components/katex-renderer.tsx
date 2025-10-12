@@ -15,6 +15,26 @@ type KatexRendererProps = {
  */
 const sanitizeText = (t: string) => t.replace(/\\\$/g, '$');
 
+// Normalize common math delimiters to $...$ and $$...$$ so KaTeX can parse consistently.
+// - Convert \(...\) -> $...$
+// - Convert \[...\] -> $$...$$
+// - Convert ```math ...``` / ```latex ...``` fenced blocks -> $$...$$
+const normalizeMathDelimiters = (input: string) => {
+  let s = input;
+
+  // Fenced code blocks for math/latex
+  // Accepts optional spaces after the language tag and requires a newline before the block body.
+  s = s.replace(/```(?:math|latex)[\t ]*\r?\n([\s\S]*?)```/g, (_m, g1) => `$$${g1}$$`);
+
+  // \[ ... \] -> $$ ... $$
+  s = s.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, g1) => `$$${g1}$$`);
+
+  // \( ... \) -> $ ... $
+  s = s.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_m, g1) => `$${g1}$`);
+
+  return s;
+};
+
 // Helper function to create a React element from a text part, converting newlines to <br>
 const renderTextWithLineBreaks = (text: string, key: number) => {
   const safe = sanitizeText(text);
@@ -33,8 +53,10 @@ const renderTextWithLineBreaks = (text: string, key: number) => {
 
 export function KatexRenderer({ content, className }: KatexRendererProps) {
   const parts = useMemo(() => {
+    // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
+    const normalized = normalizeMathDelimiters(content);
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
-    const splitByDelimiters = content.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
+    const splitByDelimiters = normalized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
 
     return splitByDelimiters.map((part, index) => {
       if (part.startsWith('$$') && part.endsWith('$$')) {

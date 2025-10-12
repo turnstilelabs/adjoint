@@ -49,7 +49,9 @@ function ProofPageContent() {
       const result = await decomposeProblemAction(problem);
       if (result.success && result.sublemmas) {
         setSublemmas(result.sublemmas);
-        const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${result.sublemmas.map((s, i) => `**${s.title}:** ${s.content}`).join('\n\n')}`;
+        const assistantMessage = `Of course. I've broken down the problem into the following steps:\n\n${result.sublemmas
+          .map((s, i) => `**${s.title}**\nStatement: ${s.statement}\nProof: ${s.proof}`)
+          .join('\n\n')}`;
         setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
       } else {
         setError(result.error || 'Failed to decompose the problem.');

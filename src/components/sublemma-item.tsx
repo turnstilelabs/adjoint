@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma, Save, X } from 'lucide-react';
+import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma, Save, X, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -13,8 +13,10 @@ import type React from 'react';
 interface SublemmaItemProps {
   step: number;
   title: string;
-  content: string;
-  onContentChange: (newContent: string) => void;
+  statement: string;
+  proof: string;
+  onStatementChange: (newStatement: string) => void;
+  onProofChange: (newProof: string) => void;
   onTitleChange: (newTitle: string) => void;
 }
 
@@ -28,10 +30,11 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, content, onContentChange, onTitleChange }: SublemmaItemProps) {
+export function SublemmaItem({ step, title, statement, proof, onStatementChange, onProofChange, onTitleChange }: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(content);
+  const [editedStatement, setEditedStatement] = useState(statement);
+  const [editedProof, setEditedProof] = useState(proof);
   const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -68,22 +71,26 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
 
   const handleDoubleClick = () => {
     setIsEditing(true);
-    setEditedContent(content);
+    setEditedStatement(statement);
+    setEditedProof(proof);
   };
 
   const handleSave = () => {
-    onContentChange(editedContent);
+    onStatementChange(editedStatement);
+    onProofChange(editedProof);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditedContent(content);
+    setEditedStatement(statement);
+    setEditedProof(proof);
   };
 
   const handleReviseFromToolbar = () => {
     setIsEditing(true);
-    setEditedContent(selection.text);
+    // Default to editing the statement with the selected text; user can adjust.
+    setEditedStatement(selection.text);
     setSelection({ text: '', target: null });
   };
 
@@ -116,6 +123,37 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
     }
   };
 
+  // Copy to clipboard helpers and proof collapse state
+  const [isProofCollapsed, setIsProofCollapsed] = useState(false);
+  const [copiedStatement, setCopiedStatement] = useState(false);
+  const [copiedProof, setCopiedProof] = useState(false);
+
+  const handleCopy = async (value: string, which: 'statement' | 'proof') => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        // no-op
+      }
+    }
+    if (which === 'statement') {
+      setCopiedStatement(true);
+      setTimeout(() => setCopiedStatement(false), 1500);
+    } else {
+      setCopiedProof(true);
+      setTimeout(() => setCopiedProof(false), 1500);
+    }
+  };
+
+  const toggleProofCollapsed = () => setIsProofCollapsed(v => !v);
+
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
     return () => {
@@ -126,7 +164,7 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
   useEffect(() => {
     // When editing starts/stops, or content changes, clear selection
     setSelection({ text: '', target: null });
-  }, [isEditing, content]);
+  }, [isEditing, statement, proof]);
 
   useEffect(() => {
     setEditedTitle(title);
@@ -172,21 +210,72 @@ export function SublemmaItem({ step, title, content, onContentChange, onTitleCha
         <AccordionContent className="p-5 pt-0 border-t">
           <div className="py-4">
             {isEditing ? (
-              <div className="space-y-4">
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="w-full h-32 text-base"
-                  autoFocus
-                />
+              <div className="space-y-6">
+                <div>
+                  <div className="text-sm font-semibold mb-2">Statement</div>
+                  <Textarea
+                    value={editedStatement}
+                    onChange={(e) => setEditedStatement(e.target.value)}
+                    className="w-full h-28 text-base"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold mb-2">Proof</div>
+                  <Textarea
+                    value={editedProof}
+                    onChange={(e) => setEditedProof(e.target.value)}
+                    className="w-full h-40 text-base"
+                  />
+                </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={handleCancel}><X className="mr-2" />Cancel</Button>
                   <Button onClick={handleSave}><Save className="mr-2" />Save</Button>
                 </div>
               </div>
             ) : (
-              <div ref={contentRef} onDoubleClick={handleDoubleClick}>
-                <KatexRenderer content={content} />
+              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-3">
+                <div>
+                  <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground mb-1">
+                    <span>Statement</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(statement, 'statement')}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      aria-label="Copy Statement LaTeX"
+                      title="Copy LaTeX"
+                    >
+                      {copiedStatement ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span className="sr-only">Copy Statement</span>
+                    </button>
+                  </div>
+                  <KatexRenderer content={statement} />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground mb-1">
+                    <button
+                      type="button"
+                      onClick={toggleProofCollapsed}
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      aria-label={isProofCollapsed ? 'Expand Proof' : 'Collapse Proof'}
+                      title={isProofCollapsed ? 'Expand Proof' : 'Collapse Proof'}
+                    >
+                      {isProofCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      <span>Proof</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(proof, 'proof')}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      aria-label="Copy Proof LaTeX"
+                      title="Copy LaTeX"
+                    >
+                      {copiedProof ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span className="sr-only">Copy Proof</span>
+                    </button>
+                  </div>
+                  {!isProofCollapsed && <KatexRenderer content={proof} />}
+                </div>
               </div>
             )}
           </div>

@@ -92,7 +92,7 @@ export default function ProofDisplay({
           nodes: result.nodes.map(n => {
             const m = n.id.match(/step-(\d+)/);
             const idx = m ? parseInt(m[1], 10) - 1 : -1;
-            const content = idx >= 0 && idx < steps.length ? steps[idx].content : '';
+            const content = idx >= 0 && idx < steps.length ? steps[idx].statement : '';
             return { ...n, content };
           }),
           edges: result.edges
@@ -123,7 +123,7 @@ export default function ProofDisplay({
     }
   }, [initialSublemmas]);
 
-  const updateProof = (newSublemmas: Sublemma[], changeDescription: string, opts?: { recomputeGraph?: boolean; changedIndex?: number; change?: 'title' | 'content' }) => {
+  const updateProof = (newSublemmas: Sublemma[], changeDescription: string, opts?: { recomputeGraph?: boolean; changedIndex?: number; change?: 'title' | 'statement' | 'proof' }) => {
     const newHistory = proofHistory.slice(0, activeVersionIndex + 1);
     const newVersion = { sublemmas: newSublemmas, timestamp: new Date() };
 
@@ -146,13 +146,13 @@ export default function ProofDisplay({
           );
           return { ...prev, nodes: updatedNodes };
         });
-      } else if (opts?.change === 'content' && typeof opts.changedIndex === 'number') {
+      } else if (opts?.change === 'statement' && typeof opts.changedIndex === 'number') {
         const changedIndex = opts.changedIndex;
         setGraphData(prev => {
           if (!prev) return prev;
           const nodeId = `step-${changedIndex + 1}`;
           const updatedNodes = prev.nodes.map(n =>
-            n.id === nodeId ? { ...n, content: newSublemmas[changedIndex].content } : n
+            n.id === nodeId ? { ...n, content: newSublemmas[changedIndex].statement } : n
           );
           return { ...prev, nodes: updatedNodes };
         });
@@ -164,10 +164,16 @@ export default function ProofDisplay({
     }
   };
 
-  const handleSublemmaChange = (index: number, newContent: string) => {
+  const handleSublemmaStatementChange = (index: number, newStatement: string) => {
     const newSublemmas = [...sublemmas];
-    newSublemmas[index] = { ...newSublemmas[index], content: newContent };
-    updateProof(newSublemmas, `Step ${index + 1} was manually edited.`, { recomputeGraph: false, changedIndex: index, change: 'content' });
+    newSublemmas[index] = { ...newSublemmas[index], statement: newStatement };
+    updateProof(newSublemmas, `Step ${index + 1} statement edited.`, { recomputeGraph: false, changedIndex: index, change: 'statement' });
+  };
+
+  const handleSublemmaProofChange = (index: number, newProof: string) => {
+    const newSublemmas = [...sublemmas];
+    newSublemmas[index] = { ...newSublemmas[index], proof: newProof };
+    updateProof(newSublemmas, `Step ${index + 1} proof edited.`, { recomputeGraph: false, changedIndex: index, change: 'proof' });
   };
 
   const handleSublemmaTitleChange = (index: number, newTitle: string) => {
@@ -367,7 +373,11 @@ export default function ProofDisplay({
     steps.forEach((s, i) => {
       const t = escapeLatexText(s.title || `Step ${i + 1}`);
       const titleWithPunct = /[.?!:]$/.test(t) ? t : `${t}.`;
-      lines.push(`\\item \\textbf{${titleWithPunct}} ${s.content}`);
+      lines.push(`\\item \\textbf{${titleWithPunct}}`);
+      lines.push(`\\begin{description}`);
+      lines.push(`\\item[Statement.] ${s.statement}`);
+      lines.push(`\\item[Proof.] ${s.proof}`);
+      lines.push(`\\end{description}`);
     });
     lines.push('\\end{enumerate}');
     lines.push('');
@@ -591,8 +601,10 @@ export default function ProofDisplay({
                         key={`${activeVersionIndex}-${index}`}
                         step={index + 1}
                         title={sublemma.title}
-                        content={sublemma.content}
-                        onContentChange={(newContent) => handleSublemmaChange(index, newContent)}
+                        statement={sublemma.statement}
+                        proof={sublemma.proof}
+                        onStatementChange={(ns) => handleSublemmaStatementChange(index, ns)}
+                        onProofChange={(np) => handleSublemmaProofChange(index, np)}
                         onTitleChange={(newTitle) => handleSublemmaTitleChange(index, newTitle)}
                       />
                     ))}

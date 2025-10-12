@@ -7,10 +7,9 @@ import { z } from 'genkit';
 export const SublemmaSchema = z.object({
   title: z
     .string()
-    .describe(
-      'A short, descriptive title for the sublemma (e.g., "Lemma 1: Cauchy-Schwarz Inequality").'
-    ),
-  content: z.string().describe('The detailed content of the sublemma statement.'),
+    .describe('A short, descriptive title for the sublemma (e.g., "Lemma 1: Cauchy-Schwarz Inequality").'),
+  statement: z.string().describe('The precise mathematical statement of the sublemma (LaTeX or plain text).'),
+  proof: z.string().describe('A clear, rigorous proof of the sublemma (LaTeX or plain text).'),
 });
 
 export const ReviseProofInputSchema = z.object({

@@ -40,7 +40,9 @@ Original Problem:
 
 Tentative Proof Steps:
 {{#each proofSteps}}
-- **{{this.title}}**: {{this.content}}
+- **{{this.title}}**
+  - Statement: {{this.statement}}
+  - Proof: {{this.proof}}
 {{/each}}
 
 Analyze the entire proof structure. Check for:
@@ -57,7 +59,7 @@ const validateProofFlow = ai.defineFlow(
     inputSchema: ValidateProofInputSchema,
     outputSchema: ValidateProofOutputSchema,
   },
-  async input => {
+  async (input: ValidateProofInput) => {
     const { output } = await prompt(input);
     if (!output) {
       throw new Error('The AI failed to provide a validation result.');

@@ -258,7 +258,8 @@ export function InteractiveChat({
           if (a.length !== b.length) return false;
           for (let i = 0; i < a.length; i++) {
             if ((a[i].title || '') !== (b[i].title || '')) return false;
-            if ((a[i].content || '') !== (b[i].content || '')) return false;
+            if ((a[i].statement || '') !== (b[i].statement || '')) return false;
+            if ((a[i].proof || '') !== (b[i].proof || '')) return false;
           }
           return true;
         };
@@ -366,8 +367,15 @@ export function InteractiveChat({
                             <div className="text-sm font-semibold">
                               {s.title || `Step ${i + 1}`}
                             </div>
-                            <div className="text-sm">
-                              <KatexRenderer content={s.content} />
+                            <div className="mt-1 text-sm space-y-2">
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                <KatexRenderer content={s.statement} />
+                              </div>
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                <KatexRenderer content={s.proof} />
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -413,8 +421,15 @@ export function InteractiveChat({
                             <div className="text-sm font-semibold">
                               {s.title || `Step ${i + 1}`}
                             </div>
-                            <div className="text-sm">
-                              <KatexRenderer content={s.content} />
+                            <div className="mt-1 text-sm space-y-2">
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                <KatexRenderer content={s.statement} />
+                              </div>
+                              <div>
+                                <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                <KatexRenderer content={s.proof} />
+                              </div>
                             </div>
                           </div>
                         ))}

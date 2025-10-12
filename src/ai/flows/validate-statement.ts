@@ -53,7 +53,7 @@ const validateStatementFlow = ai.defineFlow(
     inputSchema: ValidateStatementInputSchema,
     outputSchema: ValidateStatementOutputSchema,
   },
-  async (input) => {
+  async (input: ValidateStatementInput) => {
     const { output } = await prompt(input);
     if (!output?.validity || !output?.reasoning) {
       throw new Error('The AI failed to return a valid validity assessment. The response was malformed.');
