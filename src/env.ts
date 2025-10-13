@@ -10,13 +10,17 @@ const BaseEnvSchema = z
         LLM_PROVIDER: ProviderSchema.optional(), // default applied below
         LLM_MODEL: z.string().min(1).optional(),
 
-        // Google / Gemini keys (any one works)
+        // API keys for supported providers
         GEMINI_API_KEY: z.string().min(1).optional(),
         GOOGLE_API_KEY: z.string().min(1).optional(),
         GOOGLE_GENAI_API_KEY: z.string().min(1).optional(),
-
-        // OpenAI key
         OPENAI_API_KEY: z.string().min(1).optional(),
+
+        // Mock mode toggle (from main)
+        USE_MOCK_API: z
+            .enum(['TRUE', 'FALSE'])
+            .optional()
+            .transform((v) => v === 'TRUE'),
     })
     .passthrough();
 
