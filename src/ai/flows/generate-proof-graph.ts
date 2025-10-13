@@ -61,7 +61,8 @@ const generateProofGraphPrompt = ai.definePrompt({
 **Proof Steps to Analyze:**
 {{#each proofSteps}}
 - Title: {{this.title}}
-  Content: {{this.content}}
+  Statement: {{this.statement}}
+  Proof: {{this.proof}}
 {{/each}}
 
 Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema. Ensure there is one node for every proof step provided.`,
