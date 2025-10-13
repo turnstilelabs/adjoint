@@ -37,7 +37,7 @@ export function ProofGraphView() {
               const m = n.id.match(/step-(\d+)/);
               const idx = m ? parseInt(m[1], 10) - 1 : -1;
               const content =
-                idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].content : '';
+                idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].statement : '';
               return { ...n, content };
             }),
             edges: result.edges,

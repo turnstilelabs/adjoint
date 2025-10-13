@@ -56,7 +56,7 @@ export const buildLatexDocument = (problem: string, steps: Sublemma[]) => {
   steps.forEach((s, i) => {
     const t = escapeLatexText(s.title || `Step ${i + 1}`);
     const titleWithPunct = /[.?!:]$/.test(t) ? t : `${t}.`;
-    lines.push(`\\item \\textbf{${titleWithPunct}} ${s.content}`);
+    lines.push(`\\item \\textbf{${titleWithPunct}} ${s.statement}`);
   });
   lines.push('\\end{enumerate}');
   lines.push('');
