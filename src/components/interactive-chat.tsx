@@ -126,6 +126,7 @@ export function InteractiveChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const proof = useAppStore((s) => s.proof());
+  const sublemmas = proof.sublemmas;
   const problem = useAppStore((s) => s.problem);
   const messages = useAppStore((s) => s.messages);
 
@@ -414,14 +415,14 @@ export function InteractiveChat() {
               {/* Assistant avatar removed per user request - name is shown above the message bubble */}
               <div
                 className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-white border border-muted-foreground/10 shadow-sm'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'bg-white border border-muted-foreground/10 shadow-sm'
                   }`}
               >
                 {msg.role === 'assistant' && (
                   <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
                 )}
-                <KatexRenderer content={msg.content} />
+                <KatexRenderer content={msg.content} autoWrap={false} />
                 {msg.isTyping && (
                   <div className="mt-2 space-y-2">
                     <TypingIndicator />
