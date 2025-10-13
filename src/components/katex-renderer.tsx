@@ -102,17 +102,25 @@ function autoWrapInlineMathIfNeeded(input: string): string {
     // digits mixed with letters, or common punctuation used inside formulas.
     // Avoid false positives for pure words or hyphenated words like "left-hand".
     const isMathToken = (t: string) => {
-      // Pure word or hyphenated word (letters only) -> not math
-      if (/^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(t)) return false;
+      // Allow bracket-wrapped hyphenated words with optional trailing punctuation to remain plain text
+      // Examples that should stay plain: "word,", "word:", "(AM-GM)", "[well-known];"
+      const core = t
+        // remove one leading/trailing bracket if present
+        .replace(/^[({\[]/, '')
+        .replace(/[)}\]]$/, '')
+        // strip leading/trailing commas/colons/semicolons
+        .replace(/^[,;:]+|[,;:]+$/g, '');
 
-      // Any TeX command e.g. \sum, \frac, \sin, \cdots, \langle ...
+      // Pure word or hyphenated word (letters only) -> not math
+      if (/^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(core)) return false;
+
+      // Any TeX command e.g. \sum, \frac, \sin, ...
       if (/\\[A-Za-z]+/.test(t)) return true;
 
-      // Operators, delimiters, or bars
-      if (/[=<>^_+\-*/(){}\[\]\|]/.test(t)) return true;
-
-      // Punctuation that commonly appears in formulas
-      if (/[,;:]/.test(t)) return true;
+      // Strong math operators (exclude brackets so they don't trigger by themselves)
+      // Note: hyphen remains to allow "x-1" etc. to be detected as math, but the "core" guard above
+      // prevents false positives like "(AM-GM)" or "well-known"
+      if (/[=<>^_+\-*/|]/.test(t)) return true;
 
       // Digits mixed with letters, or standalone numbers
       if ((/\d/.test(t) && /[A-Za-z]/.test(t)) || /^\d+(\.\d+)?$/.test(t)) return true;
