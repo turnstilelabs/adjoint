@@ -42,7 +42,6 @@ class OpenAIShim {
         const system = config.system;
 
         return async (input: TIn): Promise<{ output: TOut }> => {
-            // Validate input
             const validatedInput = config.input?.schema
                 ? config.input.schema.parse(input)
                 : (input as any);
@@ -50,11 +49,9 @@ class OpenAIShim {
             // Render prompt with Handlebars (supports {{{var}}}, {{#each}} etc.)
             const userContent = template(validatedInput);
 
-            // Keep prompt text identical across providers
             const userPrompt = userContent;
             console.info(`[AI] OpenAI prompt name=${config.name} model=${this.model}`);
 
-            // Try model-appropriate API and keep parameters minimal for maximum compatibility
             let content: string | null = null;
 
             if (/^gpt-5/i.test(this.model)) {
@@ -64,7 +61,6 @@ class OpenAIShim {
                         model: this.model,
                         input: userPrompt,
                         ...(system ? { instructions: system } : {}),
-                        // Enforce JSON output mode for newer models
                         text: { format: 'json' },
                     });
 
@@ -84,7 +80,6 @@ class OpenAIShim {
                         content = textPart?.text ?? null;
                     }
                 } catch (e) {
-                    // Fallback to minimal chat.completions if Responses API rejects parameters in this project/region
                     try {
                         const completion = await this.client.chat.completions.create({
                             model: this.model,
@@ -135,7 +130,6 @@ class OpenAIShim {
                 );
             }
 
-            // Parse and validate output
             let parsed: unknown;
             try {
                 parsed = JSON.parse(content);
@@ -145,7 +139,6 @@ class OpenAIShim {
                 );
             }
 
-            // Normalize common fields that should be strings but models may return as objects
             const normalized = normalizeCommonFields(parsed);
 
             const output = config.output?.schema
@@ -178,7 +171,6 @@ class OpenAIShim {
                     return hit.value as TOut;
                 }
                 const result = await handler(validatedInput);
-                // Validate output if schema provided
                 const validatedOutput = config.outputSchema
                     ? (config.outputSchema.parse(result) as TOut)
                     : result;
@@ -196,7 +188,6 @@ class OpenAIShim {
 }
 
 function hashJSON(obj: unknown): string {
-    // Simple, stable JSON hash substitute
     const s = JSON.stringify(obj);
     let h = 0;
     for (let i = 0; i < s.length; i++) {
@@ -206,7 +197,6 @@ function hashJSON(obj: unknown): string {
     return h.toString(16);
 }
 
-// Coerce common string fields into strings if models return structured objects.
 function coerceToString(value: any): string {
     if (typeof value === 'string') return value;
     if (value == null) return '';
