@@ -57,29 +57,33 @@ class OpenAIShim {
             if (/^gpt-5/i.test(this.model)) {
                 // GPT-5: use Responses API; request JSON output without schema (schema support varies)
                 try {
+                    // Use structured output with JSON schema for GPT-5 models
                     const resp: any = await (this.client as any).responses.create({
                         model: this.model,
                         input: userPrompt,
+                        response_format: {
+                            type: "json_schema",
+                            json_schema: {
+                                name: config.name,
+                                schema: config.output?.schema
+                                    ? config.output.schema
+                                    : { type: "object" },
+                            },
+                        },
                         ...(system ? { instructions: system } : {}),
-                        text: { format: 'json' },
                     });
 
-                    content = resp?.output_text ?? null;
-
-                    // Fallback extraction for older SDK shapes
-                    if (!content && Array.isArray(resp?.output)) {
-                        const parts = resp.output[0]?.content;
-                        const textPart =
-                            Array.isArray(parts) &&
-                            parts.find(
-                                (p: any) =>
-                                    p?.type === 'output_text' ||
-                                    p?.type === 'text' ||
-                                    typeof p?.text === 'string'
-                            );
-                        content = textPart?.text ?? null;
+                    // Structured output guarantees valid JSON
+                    const parsed = resp?.output_parsed;
+                    if (!parsed) {
+                        throw new Error(`Structured output missing parsed JSON for prompt "${config.name}".`);
                     }
+                    return { output: parsed };
                 } catch (e) {
+                    console.warn(
+                        `Structured output failed for model ${this.model}, falling back to text-based JSON parsing:`,
+                        e
+                    );
                     try {
                         const completion = await this.client.chat.completions.create({
                             model: this.model,
@@ -87,11 +91,14 @@ class OpenAIShim {
                                 ...(system ? [{ role: 'system' as const, content: system as string }] : []),
                                 { role: 'user' as const, content: userPrompt },
                             ],
+                            // Try to enforce JSON on the fallback as well (supported on newer models)
+                            response_format: { type: 'json_object' as const },
+                            temperature: 0.0,
                         });
                         content = completion.choices?.[0]?.message?.content ?? null;
                     } catch (e2) {
                         throw new Error(
-                            `OpenAI Responses API call failed for model ${this.model}: ${e instanceof Error ? e.message : String(e)}; ` +
+                            `OpenAI structured output and fallback both failed for model ${this.model}: ${e instanceof Error ? e.message : String(e)}; ` +
                             `chat.completions fallback failed: ${e2 instanceof Error ? e2.message : String(e2)}`
                         );
                     }
@@ -132,8 +139,26 @@ class OpenAIShim {
 
             let parsed: unknown;
             try {
-                parsed = JSON.parse(content);
+                // Sanitize and extract JSON from model output
+                const cleaned = content
+                    // Normalize any language fences like ```json5 to plain ```
+                    .replace(/```(?:json|json5)/gi, '```')
+                    .replace(/```/g, '')
+                    .trim();
+
+                // Try to match either an object or an array
+                const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+                    // Fallback: if the entire cleaned output is JSON
+                    parsed = JSON.parse(cleaned);
+                } else {
+                    throw new Error('No JSON object found in model output');
+                }
             } catch (e) {
+                console.error('Raw model output:', content);
                 throw new Error(
                     `Model output was not valid JSON for prompt "${config.name}": ${content}`
                 );
@@ -229,6 +254,12 @@ function normalizeCommonFields<T = any>(obj: T): T {
                     const t: any = { ...s };
                     if ('title' in t) t.title = coerceToString(t.title);
                     if ('content' in t) t.content = coerceToString(t.content);
+                    // Normalize alternate field names from model output
+                    if ('statement' in t && !('content' in t)) t.content = coerceToString(t.statement);
+                    if ('proof' in t && !('content' in t)) t.content = coerceToString(t.proof);
+                    // Ensure required fields exist when downstream expects statement/proof
+                    if (!('statement' in t) && 'content' in t) t.statement = coerceToString(t.content);
+                    if (!('proof' in t) && 'content' in t) t.proof = '';
                     return t;
                 }
                 return s;
