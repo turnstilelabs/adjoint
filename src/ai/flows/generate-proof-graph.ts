@@ -10,6 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
+import { env } from '@/env';
+import { generateProofGraphFixture } from '@/app/actions.mocks';
 
 const GraphNodeSchema = z.object({
   id: z.string().describe('A unique identifier for the node (e.g., "step-1").'),
@@ -34,8 +36,11 @@ const GenerateProofGraphOutputSchema = z.object({
 export type GenerateProofGraphOutput = z.infer<typeof GenerateProofGraphOutputSchema>;
 
 export async function generateProofGraph(
-  input: GenerateProofGraphInput
+  input: GenerateProofGraphInput,
 ): Promise<GenerateProofGraphOutput> {
+  if (env.USE_MOCK_API) {
+    return generateProofGraphFixture;
+  }
   return generateProofGraphFlow(input);
 }
 
@@ -71,8 +76,10 @@ const generateProofGraphFlow = ai.defineFlow(
   async (input) => {
     const { output } = await generateProofGraphPrompt(input);
     if (!output || !output.nodes || !output.edges) {
-      throw new Error('The AI failed to generate a valid graph structure. The response was empty or malformed.');
+      throw new Error(
+        'The AI failed to generate a valid graph structure. The response was empty or malformed.',
+      );
     }
     return output;
-  }
+  },
 );

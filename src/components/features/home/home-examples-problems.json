@@ -1,0 +1,14 @@
+[
+  {
+    "level": "IMO-Level Inequality",
+    "problem": "Let $a, b, c$ be positive real numbers such that $abc = 1$. Prove that \\frac{1}{a^3(b+c)} + \\frac{1}{b^3(c+a)} + \\frac{1}{c^3(a+b)} \\ge \\frac{3}{2}."
+  },
+  {
+    "level": "Lagrange's Theorem",
+    "problem": "Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$."
+  },
+  {
+    "level": "Banach-Alaoglu Theorem",
+    "problem": "Prove that the closed unit ball in the dual of a normed vector space is compact in the weak-* topology."
+  }
+]

@@ -10,20 +10,31 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
+import { env } from '@/env';
+import { decomposeProblemFixture } from '@/app/actions.mocks';
 
 const DecomposeProofInputSchema = z.object({
-  problem: z.string().describe('The mathematical problem to decompose into sublemmas, in LaTeX or natural language.'),
+  problem: z
+    .string()
+    .describe(
+      'The mathematical problem to decompose into sublemmas, in LaTeX or natural language.',
+    ),
 });
 export type DecomposeProofInput = z.infer<typeof DecomposeProofInputSchema>;
 
 const DecomposeProofOutputSchema = z.object({
-  sublemmas: z.array(SublemmaSchema).describe('A sequence of sublemmas that form a proof of the given problem.'),
+  sublemmas: z
+    .array(SublemmaSchema)
+    .describe('A sequence of sublemmas that form a proof of the given problem.'),
 });
 export type DecomposeProofOutput = z.infer<typeof DecomposeProofOutputSchema>;
 export type Sublemma = z.infer<typeof SublemmaSchema>;
 
-
 export async function decomposeProof(input: DecomposeProofInput): Promise<DecomposeProofOutput> {
+  if (env.USE_MOCK_API) {
+    return decomposeProblemFixture;
+  }
+
   return decomposeProofFlow(input);
 }
 
@@ -76,5 +87,5 @@ const decomposeProofFlow = ai.defineFlow(
       throw new Error('The AI failed to decompose the problem into steps.');
     }
     return output;
-  }
+  },
 );

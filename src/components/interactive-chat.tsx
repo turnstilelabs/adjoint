@@ -1,7 +1,5 @@
-'use client';
-import { useState, useTransition, useRef, useEffect } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import { Send, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +7,7 @@ import { KatexRenderer } from './katex-renderer';
 import { ScrollArea } from './ui/scroll-area';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { useRouter } from 'next/navigation';
+import { useAppStore } from '@/state/app-store';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -24,14 +23,6 @@ export type Message = {
   offTopic?: boolean;
   noImpact?: boolean;
 };
-
-interface InteractiveChatProps {
-  problem: string;
-  sublemmas: Sublemma[];
-  onProofRevision: (newSublemmas: Sublemma[]) => void;
-  messages: Message[];
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-}
 
 const TypingIndicator = () => (
   <div className="flex items-center gap-1 text-muted-foreground">
@@ -127,23 +118,25 @@ function mergeRevised(currentSteps: Sublemma[], revised: Sublemma[]): Sublemma[]
   return changed ? next : currentSteps;
 }
 
-export function InteractiveChat({
-  problem,
-  sublemmas,
-  onProofRevision,
-  messages,
-  setMessages,
-}: InteractiveChatProps) {
+export function InteractiveChat() {
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  const proof = useAppStore((s) => s.proof());
+  const problem = useAppStore((s) => s.problem);
+  const messages = useAppStore((s) => s.messages);
+
+  const setMessages = useAppStore((s) => s.setMessages);
+  const reset = useAppStore((s) => s.reset);
+
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollableNode =
-        scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+      const scrollableNode = scrollAreaRef.current.querySelector(
+        'div[data-radix-scroll-area-viewport]',
+      );
       if (scrollableNode) {
         scrollableNode.scrollTo({
           top: scrollableNode.scrollHeight,
@@ -152,6 +145,10 @@ export function InteractiveChat({
       }
     }
   }, [messages]);
+
+  const addProofVersion = useAppStore((s) => s.addProofVersion);
+
+  const onProofRevision = (sublemmas: Sublemma[]) => addProofVersion({ sublemmas });
 
   const handleSuggestion = (messageIndex: number, accept: boolean) => {
     const message = messages[messageIndex];
@@ -241,7 +238,11 @@ export function InteractiveChat({
 
     const userMessage: Message = { role: 'user', content: request };
     const newMessages = [...messages, userMessage];
-    const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
+    const typingMessage: Message = {
+      role: 'assistant',
+      content: '',
+      isTyping: true,
+    };
     setMessages([...newMessages, typingMessage]);
     setInput('');
 
@@ -253,7 +254,7 @@ export function InteractiveChat({
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problem, sublemmas, request, history }),
+          body: JSON.stringify({ problem, sublemmas: proof.sublemmas, request, history }),
         });
 
         if (!res.ok || !res.body) {
@@ -272,11 +273,15 @@ export function InteractiveChat({
           if (value) {
             const chunk = decoder.decode(value, { stream: !done });
             accumulated += chunk;
-            setMessages(prev => {
+            setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               const last = updated[lastIdx];
-              updated[lastIdx] = { ...last, content: accumulated, isTyping: true };
+              updated[lastIdx] = {
+                ...last,
+                content: accumulated,
+                isTyping: true,
+              };
               return updated;
             });
 
@@ -331,7 +336,7 @@ export function InteractiveChat({
         }
 
         // Mark typing complete
-        setMessages(prev => {
+        setMessages((prev) => {
           const updated = [...prev];
           const lastIdx = updated.length - 1;
           const last = updated[lastIdx];
@@ -406,11 +411,11 @@ export function InteractiveChat({
               className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
             >
-              { /* Assistant avatar removed per user request - name is shown above the message bubble */}
+              {/* Assistant avatar removed per user request - name is shown above the message bubble */}
               <div
                 className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'bg-muted border border-muted-foreground/10 shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-white border border-muted-foreground/10 shadow-sm'
                   }`}
               >
                 {msg.role === 'assistant' && (
@@ -431,7 +436,9 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
-                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
+                        {msg.suggestion?.updated && (
+                          <span className="ml-2 italic opacity-80">(updated)</span>
+                        )}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {(() => {
@@ -541,11 +548,19 @@ export function InteractiveChat({
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="secondary" size="sm" onClick={() => handleSuggestion(index, true)}>
-                        <ThumbsUp className='mr-2' /> Accept Proposed Changes
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleSuggestion(index, true)}
+                      >
+                        <ThumbsUp className="mr-2" /> Accept Proposed Changes
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleSuggestion(index, false)}>
-                        <ThumbsDown className='mr-2' /> Decline
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSuggestion(index, false)}
+                      >
+                        <ThumbsDown className="mr-2" /> Decline
                       </Button>
                     </div>
                   </div>
@@ -557,7 +572,7 @@ export function InteractiveChat({
                 )}
                 {msg.offTopic && (
                   <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => router.push('/')}>
+                    <Button variant="secondary" size="sm" onClick={reset}>
                       Start new task
                     </Button>
                   </div>
@@ -572,7 +587,9 @@ export function InteractiveChat({
                     <div className="mb-3">
                       <div className="text-xs font-medium text-muted-foreground mb-1">
                         Proposed proof changes (preview)
-                        {msg.suggestion?.updated && <span className="ml-2 italic opacity-80">(updated)</span>}
+                        {msg.suggestion?.updated && (
+                          <span className="ml-2 italic opacity-80">(updated)</span>
+                        )}
                       </div>
                       <div className="space-y-2 max-h-64 overflow-auto pr-1">
                         {(() => {
@@ -686,11 +703,12 @@ export function InteractiveChat({
                           Revert changes
                         </Button>
                       )}
-                      {(msg.suggestion.status === 'declined' || msg.suggestion.status === 'reverted') && (
-                        <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
-                          Adopt proposal
-                        </Button>
-                      )}
+                      {(msg.suggestion.status === 'declined' ||
+                        msg.suggestion.status === 'reverted') && (
+                          <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
+                            Adopt proposal
+                          </Button>
+                        )}
                     </div>
                   </div>
                 )}

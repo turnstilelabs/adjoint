@@ -73,15 +73,19 @@ Before running the application, you should ensure that Node.js 18+ is installed.
    ```
 
 2. Install dependencies by running:
+
    ```
    npm install
    ```
 
 3. Start the development server:
+
    ```
    npm run dev
    ```
+
    If the default port is already in use, you can choose another port:
+
    ```
    npm run dev -- -p 9011
    ```
@@ -129,6 +133,7 @@ The AI chat provides live token streaming and a structured “proposal” workfl
 - If reverted: the message shows “Reverted to previous version.” and an Adopt proposal button to re-apply.
 
 Notes:
+
 - The assistant never claims changes have already been applied. It uses proposal phrasing.
 - On rare occasions the proposal may update right after rendering with a subtle “(updated)” indicator—this aligns the proposal precisely with the assistant’s final wording.
 
@@ -263,7 +268,7 @@ The application consistently uses typed objects to pass content between the UI a
 - Chat message (client state):
   - `Message = { role: 'user' | 'assistant'; content: string; ... }`
   - Suggestion state (if present):  
-    `{ revisedSublemmas: Sublemma[]; prevSublemmas?: Sublemma[]; isHandled: boolean; status?: 'accepted' | 'declined' | 'reverted'; updated?: boolean }`  
+    `{ revisedSublemmas: Sublemma[]; prevSublemmas?: Sublemma[]; isHandled: boolean; status?: 'accepted' | 'declined' | 'reverted'; updated?: boolean }`
     - `prevSublemmas` enables Revert.
     - `updated` indicates the proposal was reconciled to match assistant text.
 
@@ -329,18 +334,18 @@ Because the system uses zod for schemas and TypeScript for types, it is straight
 
 ## Troubleshooting and FAQ
 
-- I don’t see the proposal panel right away after an answer finishes streaming.  
+- I don’t see the proposal panel right away after an answer finishes streaming.
   - The app runs an impact analysis in parallel with streaming and attaches the panel instantly at stream end. If you still see a delay, ensure your API key is set correctly and that your network isn’t throttling API calls.
 
-- The proposal changed and shows “(updated)”.  
+- The proposal changed and shows “(updated)”.
   - That indicates the server reconciled the proposal to match the assistant’s exact final wording. Functionality is the same, the update is just a refinement for consistency.
 
-- Can I undo a proposal I accepted?  
+- Can I undo a proposal I accepted?
   - Yes. Click “Revert changes”. You can also “Adopt proposal” later if you previously declined or reverted.
 
-- What models are used?  
+- What models are used?
   - The default model is `googleai/gemini-2.5-flash`. You can modify this in `src/ai/genkit.ts`. The chat stream uses direct streaming; proposals come from typed flows.
   - When `LLM_PROVIDER=openai`, the default model is `gpt-5-mini` (override with `LLM_MODEL` if desired).
 
-- Port already in use?  
+- Port already in use?
   - Start dev with a different port, e.g. `npm run dev -- -p 9011`.

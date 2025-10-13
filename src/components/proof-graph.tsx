@@ -4,12 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { KatexRenderer } from './katex-renderer';
 
@@ -62,7 +57,7 @@ function borderPointRect(
   towardX: number,
   towardY: number,
   halfW: number,
-  halfH: number
+  halfH: number,
 ) {
   const dx = towardX - cx;
   const dy = towardY - cy;
@@ -88,7 +83,7 @@ function computeEdgeEndpoints(
   tx: number,
   ty: number,
   tHalfW: number,
-  tHalfH: number
+  tHalfH: number,
 ) {
   const sourceBorder = borderPointRect(sx, sy, tx, ty, sHalfW, sHalfH);
   const targetBorder = borderPointRect(tx, ty, sx, sy, tHalfW, tHalfH);
@@ -132,7 +127,10 @@ function getMeasureCtx() {
 function measureTitle(label: string) {
   const ctx = getMeasureCtx();
   if (!ctx) {
-    const fallbackW = Math.min(TITLE_MAX_WIDTH, Math.max(TITLE_MIN_WIDTH, label.length * 7 + TITLE_PADDING_X * 2));
+    const fallbackW = Math.min(
+      TITLE_MAX_WIDTH,
+      Math.max(TITLE_MIN_WIDTH, label.length * 7 + TITLE_PADDING_X * 2),
+    );
     const lineCount = Math.ceil(fallbackW / (TITLE_MAX_WIDTH - TITLE_PADDING_X * 2));
     const h = HEADER_H + TITLE_PADDING_Y * 2 + Math.max(1, lineCount) * TITLE_LINE_HEIGHT;
     return { width: fallbackW, height: h, lines: [label] };
@@ -159,8 +157,8 @@ function measureTitle(label: string) {
     TITLE_MAX_WIDTH,
     Math.max(
       TITLE_MIN_WIDTH,
-      Math.max(...lines.map(line => ctx.measureText(line).width), 0) + TITLE_PADDING_X * 2
-    )
+      Math.max(...lines.map((line) => ctx.measureText(line).width), 0) + TITLE_PADDING_X * 2,
+    ),
   );
   const height = HEADER_H + TITLE_PADDING_Y * 2 + Math.max(1, lines.length) * TITLE_LINE_HEIGHT;
   return { width: textWidth, height, lines };
@@ -260,7 +258,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
           t.x,
           t.y,
           t.width / 2,
-          t.height / 2
+          t.height / 2,
         );
         return {
           id: e.id,
@@ -328,7 +326,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
     movedRef.current = dist > 3;
 
     setNodes((prev) =>
-      prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n))
+      prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n)),
     );
     setEdges((prev) =>
       prev.map((edge) => {
@@ -338,12 +336,12 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
           const { source, target } = computeEdgeEndpoints(
             newX,
             newY,
-            (nodes.find(n => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-            (nodes.find(n => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
+            (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
+            (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
             targetNode.x,
             targetNode.y,
             targetNode.width / 2,
-            targetNode.height / 2
+            targetNode.height / 2,
           );
           return { ...edge, source, target };
         }
@@ -357,13 +355,13 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
             sourceNode.height / 2,
             newX,
             newY,
-            (nodes.find(n => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-            (nodes.find(n => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2
+            (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
+            (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
           );
           return { ...edge, source, target };
         }
         return edge;
-      })
+      }),
     );
   };
 
@@ -384,7 +382,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
       const dist = Math.hypot(newX - dragging.startX, newY - dragging.startY);
       movedRef.current = dist > 3;
       setNodes((prev) =>
-        prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n))
+        prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n)),
       );
       setEdges((prev) =>
         prev.map((edge) => {
@@ -394,12 +392,12 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
             const { source, target } = computeEdgeEndpoints(
               newX,
               newY,
-              (nodes.find(n => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-              (nodes.find(n => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
+              (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
+              (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
               targetNode.x,
               targetNode.y,
               targetNode.width / 2,
-              targetNode.height / 2
+              targetNode.height / 2,
             );
             return { ...edge, source, target };
           }
@@ -413,13 +411,13 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
               sourceNode.height / 2,
               newX,
               newY,
-              (nodes.find(n => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-              (nodes.find(n => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2
+              (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
+              (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
             );
             return { ...edge, source, target };
           }
           return edge;
-        })
+        }),
       );
     };
 
@@ -490,12 +488,16 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
           height={SVG_HEIGHT}
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           className="rounded-lg border bg-muted/10"
-          style={{ cursor: dragging ? 'grabbing' as const : 'default' }}
+          style={{ cursor: dragging ? ('grabbing' as const) : 'default' }}
           onMouseDown={(e) => {
             // If a node already handled the event (node calls preventDefault), don't start panning.
             if ((e as any).defaultPrevented) return;
             const pt = getPoint(e);
-            setPanning({ startX: pt.x, startY: pt.y, startPan: { x: pan.x, y: pan.y } });
+            setPanning({
+              startX: pt.x,
+              startY: pt.y,
+              startPan: { x: pan.x, y: pan.y },
+            });
           }}
           onWheel={(e) => {
             e.preventDefault();
@@ -569,8 +571,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
             {/* background tiled dots that pan/zoom with the graph */}
             <rect x={-2000} y={-2000} width={4000} height={4000} fill="url(#dotPattern)" />
             {edges.map((edge) => {
-              const isActive =
-                hoveredNode === edge.sourceId || hoveredNode === edge.targetId;
+              const isActive = hoveredNode === edge.sourceId || hoveredNode === edge.targetId;
               return (
                 <line
                   key={edge.id}
@@ -657,7 +658,11 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
                           x={12}
                           y={HEADER_H - 8}
                           fill={headerColor}
-                          style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: '0.08em',
+                          }}
                         >
                           {`Step ${stepNumber}`}
                         </text>
@@ -667,7 +672,11 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
                           x={12}
                           y={HEADER_H + TITLE_PADDING_Y + 4}
                           fill="hsl(var(--foreground))"
-                          style={{ fontSize: 14, fontWeight: 600, fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto' }}
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto',
+                          }}
                         >
                           {node.lines.map((ln, i) => (
                             <tspan key={i} x={12} dy={i === 0 ? 0 : TITLE_LINE_HEIGHT}>

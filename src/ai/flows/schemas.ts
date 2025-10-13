@@ -19,7 +19,18 @@ export const ReviseProofInputSchema = z.object({
 });
 
 export const ReviseProofOutputSchema = z.object({
-  revisionType: z.enum(['DIRECT_REVISION', 'SUGGESTED_REVISION', 'NO_REVISION', 'OFF_TOPIC']).describe("The type of revision performed, based on the user's intent. Use 'OFF_TOPIC' when the user's request is outside the scope of the current problem/proof."),
-  revisedSublemmas: z.array(SublemmaSchema).nullable().describe('The new sequence of sublemmas. Null if no changes were made or when OFF_TOPIC.'),
-  explanation: z.string().describe('An explanation of the changes made, an answer to the user\'s question, or a concise decline message when OFF_TOPIC.'),
+  revisionType: z
+    .enum(['DIRECT_REVISION', 'SUGGESTED_REVISION', 'NO_REVISION', 'OFF_TOPIC'])
+    .describe(
+      "The type of revision performed, based on the user's intent. Use 'OFF_TOPIC' when the user's request is outside the scope of the current problem/proof.",
+    ),
+  revisedSublemmas: z
+    .array(SublemmaSchema)
+    .nullable()
+    .describe('The new sequence of sublemmas. Null if no changes were made or when OFF_TOPIC.'),
+  explanation: z
+    .string()
+    .describe(
+      "An explanation of the changes made, an answer to the user's question, or a concise decline message when OFF_TOPIC.",
+    ),
 });

@@ -24,7 +24,9 @@ const InteractiveQuestioningOutputSchema = z.object({
 });
 export type InteractiveQuestioningOutput = z.infer<typeof InteractiveQuestioningOutputSchema>;
 
-export async function interactiveQuestioning(input: InteractiveQuestioningInput): Promise<InteractiveQuestioningOutput> {
+export async function interactiveQuestioning(
+  input: InteractiveQuestioningInput,
+): Promise<InteractiveQuestioningOutput> {
   return interactiveQuestioningFlow(input);
 }
 
@@ -53,10 +55,10 @@ const interactiveQuestioningFlow = ai.defineFlow(
     inputSchema: InteractiveQuestioningInputSchema,
     outputSchema: InteractiveQuestioningOutputSchema,
   },
-  async input => {
+  async (input) => {
     const { output } = await prompt(input);
     return {
       answer: output!.answer,
     };
-  }
+  },
 );

@@ -16,13 +16,16 @@ const ValidateStatementInputSchema = z.object({
 export type ValidateStatementInput = z.infer<typeof ValidateStatementInputSchema>;
 
 const ValidateStatementOutputSchema = z.object({
-  validity: z.enum(['VALID', 'INVALID', 'INCOMPLETE']).describe('The validity of the mathematical statement.'),
+  validity: z
+    .enum(['VALID', 'INVALID', 'INCOMPLETE'])
+    .describe('The validity of the mathematical statement.'),
   reasoning: z.string().describe('A brief explanation for the given validity classification.'),
 });
 export type ValidateStatementOutput = z.infer<typeof ValidateStatementOutputSchema>;
 
-
-export async function validateStatement(input: ValidateStatementInput): Promise<ValidateStatementOutput> {
+export async function validateStatement(
+  input: ValidateStatementInput,
+): Promise<ValidateStatementOutput> {
   return validateStatementFlow(input);
 }
 
@@ -56,8 +59,10 @@ const validateStatementFlow = ai.defineFlow(
   async (input: ValidateStatementInput) => {
     const { output } = await prompt(input);
     if (!output?.validity || !output?.reasoning) {
-      throw new Error('The AI failed to return a valid validity assessment. The response was malformed.');
+      throw new Error(
+        'The AI failed to return a valid validity assessment. The response was malformed.',
+      );
     }
     return output;
-  }
+  },
 );
