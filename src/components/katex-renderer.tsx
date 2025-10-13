@@ -95,10 +95,7 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   // Ensure standalone \sum(...) with (optional) subscript is wrapped even if grouping misses it.
   // e.g., "\sum_{cyc}(bc)^2/(a(b+c))" -> "$\sum_{\\mathrm{cyc}}(bc)^2/(a(b+c))$"
   // (Safe here because we only run autoWrap when no '$' exists in the input.)
-  s = s.replace(
-    /(\\sum(?:_\{[^}]+\}|_[A-Za-z]+)?\([^)]*\))/g,
-    (_m, g1) => `$${g1}$`
-  );
+  s = s.replace(/(\\sum(?:_\{[^}]+\}|_[A-Za-z]+)?\([^)]*\))/g, (_m, g1) => `$${g1}$`);
 
   // If this looks like a full math expression, wrap the whole line once to avoid fragmenting
   // Heuristics: presence of \sum, \frac, subscripts like x_i, comparison ops, ^ exponents, or '='

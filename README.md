@@ -53,6 +53,7 @@ Before running the application, you should ensure that Node.js 18+ is installed.
 1. Create an environment file named `.env.local` in the project root `adjoint/.env.local`. Example configurations:
 
    Google (default):
+
    ```
    LLM_PROVIDER=googleai
    # optional: override default model
@@ -65,6 +66,7 @@ Before running the application, you should ensure that Node.js 18+ is installed.
    ```
 
    OpenAI:
+
    ```
    LLM_PROVIDER=openai
    # optional: override default model
@@ -285,6 +287,7 @@ Server actions are located in `src/app/actions.ts` and act as the entry points f
 - Graph generation: `generate-proof-graph.ts` produces a dependency graph of nodes and edges.
 
 All flows run on the server. They call a provider-selected AI client via `src/ai/genkit.ts`:
+
 - Google path: uses Genkit with `@genkit-ai/googleai`, default model `googleai/gemini-2.5-flash`.
 - OpenAI path: uses a lightweight shim around the OpenAI SDK that mimics Genkit’s `definePrompt`/`defineFlow` surface (no changes needed in flow code).
 
@@ -311,6 +314,7 @@ All user-facing labels and references in the graph use 1‑based indexing. This 
 ### Environment and Configuration
 
 Environment validation is centralized in `src/env.ts` using zod. It is provider-aware:
+
 - If `LLM_PROVIDER=googleai` (default), one of `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` is required.
 - If `LLM_PROVIDER=openai`, `OPENAI_API_KEY` is required.
 

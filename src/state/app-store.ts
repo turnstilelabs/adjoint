@@ -103,9 +103,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           role: 'assistant',
           content:
             `I've broken down the problem into the following steps:\n\n` +
-            normalizedSublemmas
-              .map((s: Sublemma) => `**${s.title}:** ${s.statement}`)
-              .join('\n\n'),
+            normalizedSublemmas.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
         };
         set({
           messages: [assistantMessage],

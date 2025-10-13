@@ -18,12 +18,11 @@ type AICompat = {
       outputSchema: any;
       cache?: { ttl?: number };
     },
-    handler: (input: any) => Promise<any>
+    handler: (input: any) => Promise<any>,
   ): (input: TIn) => Promise<TOut>;
 };
 
-const provider =
-  process.env.LLM_PROVIDER ?? (process.env.OPENAI_API_KEY ? 'openai' : 'googleai');
+const provider = process.env.LLM_PROVIDER ?? (process.env.OPENAI_API_KEY ? 'openai' : 'googleai');
 const model = process.env.LLM_MODEL;
 
 declare global {

@@ -1,6 +1,18 @@
 'use client';
 
-import { CheckCircle2, Rocket, Puzzle, Lightbulb, Sigma, Save, X, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  CheckCircle2,
+  Rocket,
+  Puzzle,
+  Lightbulb,
+  Sigma,
+  Save,
+  X,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -30,7 +42,15 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, statement, proof, onStatementChange, onProofChange, onTitleChange }: SublemmaItemProps) {
+export function SublemmaItem({
+  step,
+  title,
+  statement,
+  proof,
+  onStatementChange,
+  onProofChange,
+  onTitleChange,
+}: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
   const [editedStatement, setEditedStatement] = useState(statement);
@@ -115,7 +135,7 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
   const computeCaretIndexFromSelection = (
     containerEl: HTMLElement,
     source: string,
-    selectedText: string
+    selectedText: string,
   ): number => {
     try {
       const sel = window.getSelection();
@@ -134,13 +154,18 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
 
       // If no selected text (rare on double click), approximate by normalized ratio
       if (!selectedNorm) {
-        const approx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+        const approx = Math.round(
+          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+        );
         return Math.max(0, Math.min(approx, source.length));
       }
 
       // Build small context windows around the click in the normalized visible text
       const ctxLen = 12;
-      const leftCtxVis = prefixNorm.slice(Math.max(0, prefixNorm.length - ctxLen), prefixNorm.length);
+      const leftCtxVis = prefixNorm.slice(
+        Math.max(0, prefixNorm.length - ctxLen),
+        prefixNorm.length,
+      );
       const afterStart = prefixNorm.length + selectedNorm.length;
       const rightCtxVis = visibleAllNorm.slice(afterStart, afterStart + ctxLen);
 
@@ -164,13 +189,15 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
       // Helper scoring
       const commonSuffixLen = (a: string, b: string) => {
         let i = 0;
-        const al = a.length, bl = b.length;
+        const al = a.length,
+          bl = b.length;
         while (i < al && i < bl && a[al - 1 - i] === b[bl - 1 - i]) i++;
         return i;
       };
       const commonPrefixLen = (a: string, b: string) => {
         let i = 0;
-        const al = a.length, bl = b.length;
+        const al = a.length,
+          bl = b.length;
         while (i < al && i < bl && a[i] === b[i]) i++;
         return i;
       };
@@ -220,21 +247,27 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
 
       // Fallback: ratio if still no candidates
       if (candidates.length === 0) {
-        const approx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+        const approx = Math.round(
+          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+        );
         return Math.max(0, Math.min(approx, source.length));
       }
 
       // Choose candidate that best matches left/right context and is closest to approximate position
-      const approxIdx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+      const approxIdx = Math.round(
+        (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+      );
 
       let bestIdx = candidates[0];
       let bestScore = -1;
       let bestDist = Number.MAX_SAFE_INTEGER;
 
       for (const idx of candidates) {
-        const leftSrcNorm = normalizeVisibleToLatex(source.slice(Math.max(0, idx - ctxLen * 2), idx));
+        const leftSrcNorm = normalizeVisibleToLatex(
+          source.slice(Math.max(0, idx - ctxLen * 2), idx),
+        );
         const rightSrcNorm = normalizeVisibleToLatex(
-          source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2)
+          source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2),
         );
         const l = commonSuffixLen(leftSrcNorm, leftCtxVis);
         const r = commonPrefixLen(rightSrcNorm, rightCtxVis);
@@ -257,7 +290,7 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
   // Compute caret index using a snapshot captured BEFORE switching to edit mode.
   const computeCaretIndexFromSnapshot = (
     source: string,
-    snap: { visibleAllNorm: string; prefixNorm: string; selectedNorm: string; yRatio?: number }
+    snap: { visibleAllNorm: string; prefixNorm: string; selectedNorm: string; yRatio?: number },
   ): number => {
     const { visibleAllNorm, prefixNorm, selectedNorm, yRatio } = snap;
 
@@ -268,7 +301,9 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
         const approxY = Math.round(Math.max(0, Math.min(1, yRatio)) * source.length);
         return Math.max(0, Math.min(approxY, source.length));
       }
-      const approx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+      const approx = Math.round(
+        (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+      );
       return Math.max(0, Math.min(approx, source.length));
     }
 
@@ -334,12 +369,16 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
 
     // Fallback: ratio if still no candidates
     if (candidates.length === 0) {
-      const approx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+      const approx = Math.round(
+        (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+      );
       return Math.max(0, Math.min(approx, source.length));
     }
 
     // As tie-breaker, pick candidate closest to approximate position
-    const approxIdx = Math.round((prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length);
+    const approxIdx = Math.round(
+      (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+    );
     let bestIdx = candidates[0];
     let bestDist = Number.MAX_SAFE_INTEGER;
     for (const idx of candidates) {
@@ -410,8 +449,7 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
 
         const selectedNorm = normalizeVisibleToLatex(selectedText || '');
         const rect = containerEl.getBoundingClientRect();
-        const yRatio =
-          rect.height > 0 ? (e.clientY - rect.top) / rect.height : undefined;
+        const yRatio = rect.height > 0 ? (e.clientY - rect.top) / rect.height : undefined;
 
         pendingFocusRef.current = {
           target: inStatement ? 'statement' : 'proof',
@@ -526,7 +564,7 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
     }
   };
 
-  const toggleProofCollapsed = () => setIsProofCollapsed(v => !v);
+  const toggleProofCollapsed = () => setIsProofCollapsed((v) => !v);
 
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
@@ -648,7 +686,11 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
                       aria-label="Copy Statement LaTeX"
                       title="Copy LaTeX"
                     >
-                      {copiedStatement ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedStatement ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
                       <span className="sr-only">Copy Statement</span>
                     </button>
                   </div>
@@ -665,7 +707,11 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
                       aria-label={isProofCollapsed ? 'Expand Proof' : 'Collapse Proof'}
                       title={isProofCollapsed ? 'Expand Proof' : 'Collapse Proof'}
                     >
-                      {isProofCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {isProofCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      )}
                       <span>Proof</span>
                     </button>
                     <button
@@ -675,7 +721,11 @@ export function SublemmaItem({ step, title, statement, proof, onStatementChange,
                       aria-label="Copy Proof LaTeX"
                       title="Copy LaTeX"
                     >
-                      {copiedProof ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedProof ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
                       <span className="sr-only">Copy Proof</span>
                     </button>
                   </div>

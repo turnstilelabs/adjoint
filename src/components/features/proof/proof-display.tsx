@@ -37,14 +37,17 @@ export default function ProofDisplay() {
           if ('nodes' in result && 'edges' in result) {
             updateCurrentProofVersion({
               graphData: {
-                nodes: result.nodes.map(n => {
+                nodes: result.nodes.map((n) => {
                   const m = n.id.match(/step-(\d+)/);
                   const idx = m ? parseInt(m[1], 10) - 1 : -1;
-                  const content = idx >= 0 && idx < latestProof.sublemmas.length ? latestProof.sublemmas[idx].statement : '';
+                  const content =
+                    idx >= 0 && idx < latestProof.sublemmas.length
+                      ? latestProof.sublemmas[idx].statement
+                      : '';
                   return { ...n, content, label: n.label };
                 }),
                 edges: result.edges,
-              }
+              },
             });
           } else {
             toast({
@@ -62,7 +65,7 @@ export default function ProofDisplay() {
     if (!currentProof) return;
     addProofVersion({
       sublemmas: currentProof.sublemmas.map((sublemma, idx) =>
-        idx === index ? { ...sublemma, ...updates } : sublemma
+        idx === index ? { ...sublemma, ...updates } : sublemma,
       ),
       graphData: undefined,
     });
@@ -100,7 +103,9 @@ export default function ProofDisplay() {
                         statement={sublemma.statement}
                         proof={sublemma.proof}
                         onTitleChange={(title) => handleSublemmaChange(index, { title })}
-                        onStatementChange={(statement) => handleSublemmaChange(index, { statement })}
+                        onStatementChange={(statement) =>
+                          handleSublemmaChange(index, { statement })
+                        }
                         onProofChange={(proof) => handleSublemmaChange(index, { proof })}
                       />
                     ))}

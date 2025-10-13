@@ -41,14 +41,14 @@ type Change =
   | { kind: 'add'; at: number; step: Sublemma }
   | { kind: 'remove'; at: number; step: Sublemma }
   | {
-    kind: 'modify';
-    at: number;
-    old: Sublemma;
-    next: Sublemma;
-    titleChanged?: boolean;
-    statementChanged?: boolean;
-    proofChanged?: boolean;
-  };
+      kind: 'modify';
+      at: number;
+      old: Sublemma;
+      next: Sublemma;
+      titleChanged?: boolean;
+      statementChanged?: boolean;
+      proofChanged?: boolean;
+    };
 
 function computeProofDiff(currentSteps: Sublemma[], revisedSteps: Sublemma[]): Change[] {
   const changes: Change[] = [];
@@ -65,7 +65,15 @@ function computeProofDiff(currentSteps: Sublemma[], revisedSteps: Sublemma[]): C
       const statementChanged = (a.statement || '') !== (b.statement || '');
       const proofChanged = (a.proof || '') !== (b.proof || '');
       if (titleChanged || statementChanged || proofChanged) {
-        changes.push({ kind: 'modify', at: i, old: a, next: b, titleChanged, statementChanged, proofChanged });
+        changes.push({
+          kind: 'modify',
+          at: i,
+          old: a,
+          next: b,
+          titleChanged,
+          statementChanged,
+          proofChanged,
+        });
       }
     }
   }
@@ -103,8 +111,14 @@ function mergeRevised(currentSteps: Sublemma[], revised: Sublemma[]): Sublemma[]
     }
   }
   // Fallback: overlay by normalized titles
-  const norm = (s: string) => (s || '').toLowerCase().replace(/^\s*(?:step\s*)?\d+[\.\)]?\s*/, '').trim();
-  const curMap = new Map(currentSteps.map((s, i) => [norm(s.title || `step-${i + 1}`), { step: s, index: i }]));
+  const norm = (s: string) =>
+    (s || '')
+      .toLowerCase()
+      .replace(/^\s*(?:step\s*)?\d+[\.\)]?\s*/, '')
+      .trim();
+  const curMap = new Map(
+    currentSteps.map((s, i) => [norm(s.title || `step-${i + 1}`), { step: s, index: i }]),
+  );
   const next = [...currentSteps];
   let changed = false;
   for (const r of revised) {
@@ -249,7 +263,7 @@ export function InteractiveChat() {
 
     startTransition(async () => {
       try {
-        const history = newMessages.slice(-8).map(m => ({ role: m.role, content: m.content }));
+        const history = newMessages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
 
         // Begin streaming free-form assistant text
         const res = await fetch('/api/chat/stream', {
@@ -294,7 +308,7 @@ export function InteractiveChat() {
                 const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
                 const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
                 // Update message text immediately (remove control frame)
-                setMessages(prev => {
+                setMessages((prev) => {
                   const updated = [...prev];
                   const lastIdx = updated.length - 1;
                   const last = updated[lastIdx];
@@ -305,7 +319,7 @@ export function InteractiveChat() {
                   ? (payload.revisedSublemmas as Sublemma[])
                   : [];
                 if (revised.length > 0) {
-                  setMessages(prev => {
+                  setMessages((prev) => {
                     const updated = [...prev];
                     const lastIdx = updated.length - 1;
                     const last = updated[lastIdx];
@@ -318,16 +332,25 @@ export function InteractiveChat() {
                     return updated;
                   });
                 } else {
-                  setMessages(prev => {
+                  setMessages((prev) => {
                     const updated = [...prev];
                     const lastIdx = updated.length - 1;
                     const last = updated[lastIdx];
-                    updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                    updated[lastIdx] = {
+                      ...last,
+                      noImpact: true,
+                      offTopic: false,
+                      suggestion: undefined,
+                    };
                     return updated;
                   });
                 }
                 proposalHandled = true;
-                try { await reader.cancel(); } catch { /* ignore */ }
+                try {
+                  await reader.cancel();
+                } catch {
+                  /* ignore */
+                }
                 done = true;
               } catch {
                 // ignore malformed in-flight proposal; final parsing will run after completion
@@ -353,7 +376,7 @@ export function InteractiveChat() {
             const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
             const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
             // Update last assistant message text without the control frame
-            setMessages(prev => {
+            setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
               const last = updated[lastIdx];
@@ -364,7 +387,7 @@ export function InteractiveChat() {
               ? (payload.revisedSublemmas as Sublemma[])
               : [];
             if (revised.length > 0) {
-              setMessages(prev => {
+              setMessages((prev) => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
                 const last = updated[lastIdx];
@@ -378,11 +401,16 @@ export function InteractiveChat() {
               });
             } else {
               // Explicitly mark no impact when revised is an empty array
-              setMessages(prev => {
+              setMessages((prev) => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
                 const last = updated[lastIdx];
-                updated[lastIdx] = { ...last, noImpact: true, offTopic: false, suggestion: undefined };
+                updated[lastIdx] = {
+                  ...last,
+                  noImpact: true,
+                  offTopic: false,
+                  suggestion: undefined,
+                };
                 return updated;
               });
             }
@@ -409,15 +437,17 @@ export function InteractiveChat() {
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+              className={`flex gap-3 text-sm items-end ${
+                msg.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
             >
               {/* Assistant avatar removed per user request - name is shown above the message bubble */}
               <div
-                className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'bg-white border border-muted-foreground/10 shadow-sm'
-                  }`}
+                className={`p-4 rounded-2xl max-w-xl break-words ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-white border border-muted-foreground/10 shadow-sm'
+                }`}
               >
                 {msg.role === 'assistant' && (
                   <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
@@ -456,7 +486,10 @@ export function InteractiveChat() {
                           return changes.map((ch, i) => {
                             if (ch.kind === 'add') {
                               return (
-                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div
+                                  key={i}
+                                  className="rounded border border-muted-foreground/10 p-2"
+                                >
                                   <div className="text-sm font-semibold">
                                     Add step at position {ch.at + 1}:{' '}
                                     <KatexRenderer
@@ -467,11 +500,15 @@ export function InteractiveChat() {
                                   </div>
                                   <div className="mt-1 text-sm space-y-2">
                                     <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Statement
+                                      </div>
                                       <KatexRenderer content={ch.step.statement} />
                                     </div>
                                     <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Proof
+                                      </div>
                                       <KatexRenderer content={ch.step.proof} />
                                     </div>
                                   </div>
@@ -480,7 +517,10 @@ export function InteractiveChat() {
                             }
                             if (ch.kind === 'remove') {
                               return (
-                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div
+                                  key={i}
+                                  className="rounded border border-muted-foreground/10 p-2"
+                                >
                                   <div className="text-sm font-semibold">
                                     Remove step at position {ch.at + 1}:{' '}
                                     <KatexRenderer
@@ -494,7 +534,10 @@ export function InteractiveChat() {
                             }
                             // modify
                             return (
-                              <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                              <div
+                                key={i}
+                                className="rounded border border-muted-foreground/10 p-2"
+                              >
                                 <div className="text-sm font-semibold">
                                   Modify step at position {ch.at + 1}:{' '}
                                   <KatexRenderer
@@ -506,7 +549,9 @@ export function InteractiveChat() {
                                 <div className="mt-1 text-sm space-y-2">
                                   {ch.titleChanged && (
                                     <div className="text-xs">
-                                      <span className="font-medium text-muted-foreground">Title</span>{' '}
+                                      <span className="font-medium text-muted-foreground">
+                                        Title
+                                      </span>{' '}
                                       <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
                                         updated
                                       </span>
@@ -528,7 +573,10 @@ export function InteractiveChat() {
                                   {ch.statementChanged && (
                                     <div>
                                       <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                        Statement{' '}
+                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                          updated
+                                        </span>
                                       </div>
                                       <KatexRenderer content={ch.next.statement} />
                                     </div>
@@ -536,7 +584,10 @@ export function InteractiveChat() {
                                   {ch.proofChanged && (
                                     <div>
                                       <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                        Proof{' '}
+                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                          updated
+                                        </span>
                                       </div>
                                       <KatexRenderer content={ch.next.proof} />
                                     </div>
@@ -607,7 +658,10 @@ export function InteractiveChat() {
                           return changes.map((ch, i) => {
                             if (ch.kind === 'add') {
                               return (
-                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div
+                                  key={i}
+                                  className="rounded border border-muted-foreground/10 p-2"
+                                >
                                   <div className="text-sm font-semibold">
                                     Add step at position {ch.at + 1}:{' '}
                                     <KatexRenderer
@@ -618,11 +672,15 @@ export function InteractiveChat() {
                                   </div>
                                   <div className="mt-1 text-sm space-y-2">
                                     <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">Statement</div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Statement
+                                      </div>
                                       <KatexRenderer content={ch.step.statement} />
                                     </div>
                                     <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">Proof</div>
+                                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                                        Proof
+                                      </div>
                                       <KatexRenderer content={ch.step.proof} />
                                     </div>
                                   </div>
@@ -631,7 +689,10 @@ export function InteractiveChat() {
                             }
                             if (ch.kind === 'remove') {
                               return (
-                                <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                                <div
+                                  key={i}
+                                  className="rounded border border-muted-foreground/10 p-2"
+                                >
                                   <div className="text-sm font-semibold">
                                     Remove step at position {ch.at + 1}:{' '}
                                     <KatexRenderer
@@ -644,7 +705,10 @@ export function InteractiveChat() {
                               );
                             }
                             return (
-                              <div key={i} className="rounded border border-muted-foreground/10 p-2">
+                              <div
+                                key={i}
+                                className="rounded border border-muted-foreground/10 p-2"
+                              >
                                 <div className="text-sm font-semibold">
                                   Modify step at position {ch.at + 1}:{' '}
                                   <KatexRenderer
@@ -656,7 +720,9 @@ export function InteractiveChat() {
                                 <div className="mt-1 text-sm space-y-2">
                                   {ch.titleChanged && (
                                     <div className="text-xs">
-                                      <span className="font-medium text-muted-foreground">Title</span>{' '}
+                                      <span className="font-medium text-muted-foreground">
+                                        Title
+                                      </span>{' '}
                                       <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
                                         updated
                                       </span>
@@ -678,7 +744,10 @@ export function InteractiveChat() {
                                   {ch.statementChanged && (
                                     <div>
                                       <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                        Statement{' '}
+                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                          updated
+                                        </span>
                                       </div>
                                       <KatexRenderer content={ch.next.statement} />
                                     </div>
@@ -686,7 +755,10 @@ export function InteractiveChat() {
                                   {ch.proofChanged && (
                                     <div>
                                       <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">updated</span>
+                                        Proof{' '}
+                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                          updated
+                                        </span>
                                       </div>
                                       <KatexRenderer content={ch.next.proof} />
                                     </div>
@@ -706,10 +778,10 @@ export function InteractiveChat() {
                       )}
                       {(msg.suggestion.status === 'declined' ||
                         msg.suggestion.status === 'reverted') && (
-                          <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
-                            Adopt proposal
-                          </Button>
-                        )}
+                        <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
+                          Adopt proposal
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}

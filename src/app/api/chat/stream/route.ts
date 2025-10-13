@@ -23,9 +23,9 @@ function buildPrompt(input: StreamRequest) {
     history.length > 0
       ? `Conversation so far:
 ${history
-        .slice(-8)
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n')}
+  .slice(-8)
+  .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+  .join('\n')}
 
 `
       : '';
@@ -34,13 +34,13 @@ ${history
     sublemmas.length > 0
       ? `Current Proof Steps:
 ${sublemmas
-        .map(
-          (s, i) =>
-            `- ${i + 1}. ${s.title}
+  .map(
+    (s, i) =>
+      `- ${i + 1}. ${s.title}
   Statement: ${s.statement}
-  Proof: ${s.proof}`
-        )
-        .join('\n')}
+  Proof: ${s.proof}`,
+  )
+  .join('\n')}
 `
       : 'Current Proof Steps: (none provided)\n';
 
@@ -70,7 +70,6 @@ Rules:
 - Emit the control frame once, after your free-form answer is complete.
 - If you believe no changes are needed, emit [[PROPOSAL]]{"revisedSublemmas":[]} and nothing else after it.`;
 }
-
 
 export async function POST(req: Request) {
   try {
@@ -133,7 +132,6 @@ export async function POST(req: Request) {
     const streamingResponse = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-
           if (provider === 'openai') {
             const client = new OpenAI({ apiKey: openaiKey! });
             let model = process.env.LLM_MODEL ?? 'gpt-5-mini';
@@ -161,14 +159,22 @@ export async function POST(req: Request) {
               const fallbackModel = 'gpt-4o-mini';
               if (model !== fallbackModel) {
                 try {
-                  console.warn(`[AI] Streaming OPENAI primary model failed (${model}); falling back to ${fallbackModel}`);
+                  console.warn(
+                    `[AI] Streaming OPENAI primary model failed (${model}); falling back to ${fallbackModel}`,
+                  );
                   await runOpenAI(fallbackModel);
                 } catch (fallbackErr: any) {
-                  const msg = typeof fallbackErr?.message === 'string' ? fallbackErr.message : 'Streaming failed.';
+                  const msg =
+                    typeof fallbackErr?.message === 'string'
+                      ? fallbackErr.message
+                      : 'Streaming failed.';
                   controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
                 }
               } else {
-                const msg = typeof primaryErr?.message === 'string' ? primaryErr.message : 'Streaming failed.';
+                const msg =
+                  typeof primaryErr?.message === 'string'
+                    ? primaryErr.message
+                    : 'Streaming failed.';
                 controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
               }
             }
