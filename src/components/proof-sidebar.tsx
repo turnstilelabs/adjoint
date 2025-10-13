@@ -2,7 +2,7 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, GitMerge, History, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { FileDown, Share2, History, MessageCircle } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -75,11 +75,11 @@ export function ProofSidebar() {
             <span className="sr-only">History</span>
           </Button>
           <Button variant="ghost" size="icon" title="Graph" onClick={onToggleGraph}>
-            <GitMerge />
+            <Share2 />
             <span className="sr-only">Graph</span>
           </Button>
           <Button variant="ghost" size="icon" title="Chat" onClick={onToggleChat}>
-            {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            {isChatOpen ? <MessageCircle /> : <MessageCircle />}
             <span className="sr-only">Chat</span>
           </Button>
           <Button
