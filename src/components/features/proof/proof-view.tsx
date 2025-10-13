@@ -3,31 +3,28 @@
 import ProofDisplay from '@/components/features/proof/proof-display';
 import { useAppStore } from '@/state/app-store';
 import { ProofLoading } from '@/components/features/proof/proof-loading';
-import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function ProofView() {
-  const searchParams = useSearchParams();
-  const problemParam = searchParams.get('problem');
   const decompositionRan = useRef(false);
-
   const [initialError, setInitialError] = useState<string | null>(null);
 
-  const { loading, proof, startProof } = useAppStore((s) => ({
+  const { loading, proof, startProof, problem } = useAppStore((s) => ({
     loading: s.loading,
     proof: s.proof,
     startProof: s.startProof,
+    problem: s.problem,
   }));
 
   useEffect(() => {
-    if (problemParam && !decompositionRan.current) {
+    if (problem && !decompositionRan.current) {
       decompositionRan.current = true;
-      startProof(problemParam);
-    } else if (!problemParam && !decompositionRan.current) {
-      setInitialError('No problem statement found in the URL.');
+      startProof(problem);
+    } else if (!problem && !decompositionRan.current) {
+      setInitialError('No problem statement found. Please start from the homepage.');
     }
-  }, [problemParam, startProof]);
+  }, [problem, startProof]);
 
   if (initialError) {
     return (
