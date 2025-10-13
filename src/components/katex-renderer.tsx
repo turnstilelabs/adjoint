@@ -60,9 +60,10 @@ const renderTextWithLineBreaks = (text: string, key: number) => {
  *   (operators: =, <, >, <=, >=, ^, _, \ge, \le, \frac, \sum, \int, etc.)
  */
 function autoWrapInlineMathIfNeeded(input: string): string {
+  if (typeof input !== 'string') return '';
   if (input.includes('$')) return input;
 
-  let s = input;
+  let s = String(input);
 
   // Unicode/operator normalization (common LLM outputs)
   s = s
@@ -75,6 +76,8 @@ function autoWrapInlineMathIfNeeded(input: string): string {
 
   // Common TeX symbol fixes for bare words
   s = s.replace(/\bsum_/g, '\\sum_');
+  // Promote plain 'sum' to '\sum' when it is followed by variables/indices or a parenthesized term
+  s = s.replace(/\bsum\b(?=\s*(?:\(|[A-Za-z](?:_[A-Za-z0-9]+)?))/g, '\\sum');
 
   // Normalize cyclic/symmetric subscripts for sum whether or not the backslash is present:
   // Handles: "\sum_{cyc}", "sum_{cyc}", "\sum_cyc", "sum_cyc" (and sym/all)
@@ -96,6 +99,12 @@ function autoWrapInlineMathIfNeeded(input: string): string {
     /(\\sum(?:_\{[^}]+\}|_[A-Za-z]+)?\([^)]*\))/g,
     (_m, g1) => `$${g1}$`
   );
+
+  // If this looks like a full math expression, wrap the whole line once to avoid fragmenting
+  // Heuristics: presence of \sum, \frac, subscripts like x_i, comparison ops, ^ exponents, or '='
+  if (/(\\sum|\\frac|[A-Za-z]_[A-Za-z0-9]|\\ge|\\le|\\neq|\^|=)/.test(s)) {
+    return `$${s}$`;
+  }
 
   // Split by whitespace (preserve spaces) and group consecutive math-like tokens into a single $...$ run.
   const parts = s.split(/(\s+)/);
@@ -161,8 +170,12 @@ export function KatexRenderer({ content, className, autoWrap = true }: KatexRend
     const hinted = autoWrap ? autoWrapInlineMathIfNeeded(content) : content;
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
     const normalized = normalizeMathDelimiters(hinted);
+
+    // Sanitize: remove $...$ around plain words (e.g., $Substitution$ -> Substitution)
+    const sanitized = normalized.replace(/\$([A-Za-z][A-Za-z\s\-']{0,30})\$/g, '$1');
+
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
-    const splitByDelimiters = normalized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
+    const splitByDelimiters = sanitized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
 
     return splitByDelimiters.map((part, index) => {
       if (part.startsWith('$$') && part.endsWith('$$')) {
