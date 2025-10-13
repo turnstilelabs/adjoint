@@ -55,28 +55,27 @@ class OpenAIShim {
       let content: string | null = null;
 
       if (/^gpt-5/i.test(this.model)) {
-        // GPT-5: use Responses API; request JSON output without schema (schema support varies)
+        // GPT-5: use Responses API with text.format (response_format moved)
         try {
-          // Use structured output with JSON schema for GPT-5 models
+          console.info('[AI] Responses.create debug', { model: this.model, hasInstructions: !!system, textFormatType: 'json_object' });
           const resp: any = await (this.client as any).responses.create({
             model: this.model,
             input: userPrompt,
-            response_format: {
-              type: 'json_schema',
-              json_schema: {
-                name: config.name,
-                schema: config.output?.schema ? config.output.schema : { type: 'object' },
-              },
-            },
             ...(system ? { instructions: system } : {}),
+            text: { format: { type: 'json_object' } },
           });
 
-          // Structured output guarantees valid JSON
-          const parsed = resp?.output_parsed;
-          if (!parsed) {
-            throw new Error(`Structured output missing parsed JSON for prompt "${config.name}".`);
+          // Prefer parsed JSON if provided by Responses API; otherwise read text
+          const parsed = resp?.output_parsed ?? resp?.output?.[0]?.content?.[0]?.parsed;
+          if (parsed) {
+            return { output: parsed };
           }
-          return { output: parsed };
+          content =
+            resp?.output_text ??
+            (resp?.output?.[0]?.content?.[0]?.text ?? null);
+          if (!content) {
+            throw new Error(`Structured output missing text for prompt "${config.name}".`);
+          }
         } catch (e) {
           console.warn(
             `Structured output failed for model ${this.model}, falling back to text-based JSON parsing:`,
@@ -86,18 +85,17 @@ class OpenAIShim {
             const completion = await this.client.chat.completions.create({
               model: this.model,
               messages: [
-                ...(system ? [{ role: 'system' as const, content: system as string }] : []),
+                ...(system
+                  ? [{ role: 'system' as const, content: `${system}\nReturn ONLY valid JSON.` }]
+                  : [{ role: 'system' as const, content: 'Return ONLY valid JSON.' }]),
                 { role: 'user' as const, content: userPrompt },
               ],
-              // Try to enforce JSON on the fallback as well (supported on newer models)
-              response_format: { type: 'json_object' as const },
-              temperature: 0.0,
             });
             content = completion.choices?.[0]?.message?.content ?? null;
           } catch (e2) {
             throw new Error(
               `OpenAI structured output and fallback both failed for model ${this.model}: ${e instanceof Error ? e.message : String(e)}; ` +
-                `chat.completions fallback failed: ${e2 instanceof Error ? e2.message : String(e2)}`,
+              `chat.completions fallback failed: ${e2 instanceof Error ? e2.message : String(e2)}`,
             );
           }
         }
