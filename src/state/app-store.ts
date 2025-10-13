@@ -89,19 +89,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       await new Promise((r) => setTimeout(r, 50));
       const result = await decomposeProblemAction(trimmed);
       if (result.success && result.sublemmas) {
+        // Normalize sublemmas to ensure consistent structure matching Sublemma schema
+        const normalizedSublemmas: Sublemma[] = result.sublemmas.map((s: any) => {
+          const content = s?.content as string | undefined;
+          return {
+            title: s?.title ?? '',
+            statement: s?.statement ?? content ?? '',
+            proof: s?.proof ?? '',
+          };
+        });
+
         const assistantMessage: Message = {
           role: 'assistant',
           content:
             `I've broken down the problem into the following steps:\n\n` +
-            result.sublemmas
-              .map((s: Sublemma, i: number) => `**${s.title}:** ${s.content}`)
+            normalizedSublemmas
+              .map((s: Sublemma) => `**${s.title}:** ${s.statement}`)
               .join('\n\n'),
         };
         set({
           messages: [assistantMessage],
           loading: false,
           error: null,
-          proofHistory: [{ sublemmas: result.sublemmas, timestamp: new Date() }],
+          proofHistory: [
+            {
+              sublemmas: normalizedSublemmas,
+              timestamp: new Date(),
+            },
+          ],
           activeVersionIdx: 0,
         });
       } else {
@@ -114,6 +129,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         loading: false,
         error: e instanceof Error ? e.message : 'Unexpected error.',
+        proofHistory: [],
       });
     }
   },
