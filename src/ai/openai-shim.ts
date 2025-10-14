@@ -53,6 +53,7 @@ class OpenAIShim {
       console.info(`[AI] OpenAI prompt name=${config.name} model=${this.model}`);
 
       let content: string | null = null;
+      let parsed: unknown | null = null;
 
       if (/^gpt-5/i.test(this.model)) {
         // GPT-5: use Responses API with text.format (response_format moved)
@@ -66,19 +67,21 @@ class OpenAIShim {
           });
 
           // Prefer parsed JSON if provided by Responses API; otherwise read text
-          const parsed = resp?.output_parsed ?? resp?.output?.[0]?.content?.[0]?.parsed;
-          if (parsed) {
-            return { output: parsed };
+          const structured = resp?.output_parsed ?? resp?.output?.[0]?.content?.[0]?.parsed;
+          if (structured) {
+            // Defer normalization and schema validation below for consistency
+            parsed = structured;
+          } else {
+            content =
+              resp?.output_text ??
+              (resp?.output?.[0]?.content?.[0]?.text ?? null);
           }
-          content =
-            resp?.output_text ??
-            (resp?.output?.[0]?.content?.[0]?.text ?? null);
           if (!content) {
             throw new Error(`Structured output missing text for prompt "${config.name}".`);
           }
         } catch (e) {
           console.warn(
-            `Structured output failed for model ${this.model}, falling back to text-based JSON parsing:`,
+            `[AI_FALLBACK] The 'responses.create' API failed for model ${this.model}. Falling back to 'chat.completions'. Error:`,
             e,
           );
           try {
@@ -115,6 +118,9 @@ class OpenAIShim {
 
           content = completion.choices?.[0]?.message?.content ?? null;
         } catch {
+          console.warn(
+            `[AI_FALLBACK] Chat completions with 'response_format: json_object' failed for model ${this.model}. Falling back to a standard request. This may happen if the model does not support JSON mode. Error:`, e
+          );
           // Fallback without response_format and extra params
           const completion = await this.client.chat.completions.create({
             model: this.model,
@@ -127,33 +133,34 @@ class OpenAIShim {
         }
       }
 
-      if (!content) {
-        throw new Error(`OpenAI returned empty content for prompt "${config.name}".`);
-      }
-
-      let parsed: unknown;
-      try {
-        // Sanitize and extract JSON from model output
-        const cleaned = content
-          // Normalize any language fences like ```json5 to plain ```
-          .replace(/```(?:json|json5)/gi, '```')
-          .replace(/```/g, '')
-          .trim();
-
-        // Try to match either an object or an array
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-
-        if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0]);
-        } else if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
-          // Fallback: if the entire cleaned output is JSON
-          parsed = JSON.parse(cleaned);
-        } else {
-          throw new Error('No JSON object found in model output');
+      // If we didn't get a structured object above, parse text content into JSON
+      if (parsed == null) {
+        if (!content) {
+          throw new Error(`OpenAI returned empty content for prompt "${config.name}".`);
         }
-      } catch (e) {
-        console.error('Raw model output:', content);
-        throw new Error(`Model output was not valid JSON for prompt "${config.name}": ${content}`);
+        try {
+          // Sanitize and extract JSON from model output
+          const cleaned = content
+            // Normalize any language fences like ```json5 to plain ```
+            .replace(/```(?:json|json5)/gi, '```')
+            .replace(/```/g, '')
+            .trim();
+
+          // Try to match either an object or an array
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+          } else if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+            // Fallback: if the entire cleaned output is JSON
+            parsed = JSON.parse(cleaned);
+          } else {
+            throw new Error('No JSON object found in model output');
+          }
+        } catch (e) {
+          console.error('Raw model output:', content);
+          throw new Error(`Model output was not valid JSON for prompt "${config.name}": ${content}`);
+        }
       }
 
       const normalized = normalizeCommonFields(parsed);
@@ -234,6 +241,41 @@ function normalizeCommonFields<T = any>(obj: T): T {
     if ('feedback' in out) out.feedback = coerceToString(out.feedback);
     if ('reasoning' in out) out.reasoning = coerceToString(out.reasoning);
     if ('explanation' in out) out.explanation = coerceToString(out.explanation);
+
+    // Normalize validity and common aliases
+    if (!('validity' in out) || (out as any).validity == null || (out as any).validity === '') {
+      const validityAliases = ['classification', 'verdict', 'status', 'decision', 'label', 'result', 'valid'];
+      for (const key of validityAliases) {
+        if (key in out) {
+          (out as any).validity = (out as any)[key];
+          break;
+        }
+      }
+      if ('isValid' in out && typeof (out as any).isValid === 'boolean') {
+        (out as any).validity = (out as any).isValid ? 'VALID' : 'INVALID';
+      }
+    }
+    if ('validity' in out) {
+      const raw = coerceToString((out as any).validity).trim().toUpperCase();
+      let mapped = raw;
+      if (raw === 'TRUE' || raw === 'YES') mapped = 'VALID';
+      else if (raw === 'FALSE' || raw === 'NO') mapped = 'INVALID';
+      else if (['UNKNOWN', 'UNCERTAIN', 'PARTIAL', 'NOT_SURE', 'NOT SURE', 'UNSURE', 'AMBIGUOUS', 'INDETERMINATE'].includes(raw)) {
+        mapped = 'INCOMPLETE';
+      } else if (raw.includes('VALID') && !['INVALID', 'INCOMPLETE'].includes(raw)) {
+        mapped = 'VALID';
+      } else if (raw === 'INVALID') mapped = 'INVALID';
+      else if (raw === 'INCOMPLETE') mapped = 'INCOMPLETE';
+      else if (raw === 'VALID') mapped = 'VALID';
+      (out as any).validity = mapped;
+    }
+
+    // Map reasoning synonyms if missing
+    if (!('reasoning' in out) || (out as any).reasoning == null || (out as any).reasoning === '') {
+      if ('reason' in out) (out as any).reasoning = coerceToString((out as any).reason);
+      else if ('rationale' in out) (out as any).reasoning = coerceToString((out as any).rationale);
+      else if ('explanation' in out) (out as any).reasoning = coerceToString((out as any).explanation);
+    }
 
     const fixSublemmas = (arr: any[]) =>
       arr.map((s) => {
