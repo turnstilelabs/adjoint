@@ -117,9 +117,10 @@ class OpenAIShim {
           });
 
           content = completion.choices?.[0]?.message?.content ?? null;
-        } catch {
+        } catch (e) {
           console.warn(
-            `[AI_FALLBACK] Chat completions with 'response_format: json_object' failed for model ${this.model}. Falling back to a standard request. This may happen if the model does not support JSON mode. Error:`, e
+            `[AI_FALLBACK] Chat completions with 'response_format: json_object' failed for model ${this.model}. Falling back to a standard request. This may happen if the model does not support JSON mode. Error:`,
+            e
           );
           // Fallback without response_format and extra params
           const completion = await this.client.chat.completions.create({
