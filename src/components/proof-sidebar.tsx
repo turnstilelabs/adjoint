@@ -65,7 +65,7 @@ export function ProofSidebar() {
 
   return (
     <>
-      <aside className="w-14 flex flex-col items-center py-4 border-r bg-card">
+      <aside className="w-14 flex flex-col items-center py-4 border-r bg-card shrink-0">
         <div className="mb-6 cursor-pointer" onClick={reset}>
           <LogoSmall />
         </div>

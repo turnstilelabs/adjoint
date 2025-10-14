@@ -27,9 +27,7 @@ interface SublemmaItemProps {
   title: string;
   statement: string;
   proof: string;
-  onStatementChange: (newStatement: string) => void;
-  onProofChange: (newProof: string) => void;
-  onTitleChange: (newTitle: string) => void;
+  onChange: (updates: { statement?: string; title?: string; proof?: string }) => void;
 }
 
 const icons = [
@@ -42,15 +40,7 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({
-  step,
-  title,
-  statement,
-  proof,
-  onStatementChange,
-  onProofChange,
-  onTitleChange,
-}: SublemmaItemProps) {
+export function SublemmaItem({ step, title, statement, proof, onChange }: SublemmaItemProps) {
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
   const [editedStatement, setEditedStatement] = useState(statement);
@@ -488,8 +478,7 @@ export function SublemmaItem({
   };
 
   const handleSave = () => {
-    onStatementChange(editedStatement);
-    onProofChange(editedProof);
+    onChange({ statement: editedStatement, proof: editedProof });
     setIsEditing(false);
   };
 
@@ -515,7 +504,7 @@ export function SublemmaItem({
   const commitTitle = () => {
     const trimmed = editedTitle.trim();
     if (trimmed && trimmed !== title) {
-      onTitleChange(trimmed);
+      onChange({ title: trimmed });
     }
     setIsTitleEditing(false);
   };
