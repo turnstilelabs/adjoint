@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { useEffect, useRef, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
 
 function ProofValidationFooter() {
   const { toast } = useToast();
@@ -13,6 +14,7 @@ function ProofValidationFooter() {
   const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
 
   const proof = useAppStore((s) => s.proof());
+  const goBack = useAppStore((s) => s.goBack);
 
   const [isProofValidating, startValidateProof] = useTransition();
 
@@ -88,16 +90,17 @@ function ProofValidationFooter() {
             },
           });
         } else {
+          const friendly = 'Adjoint’s connection to the model was interrupted, please go back and retry.';
           updateCurrentProofVersion({
             validationResult: {
               isError: true,
               timestamp: new Date(),
-              feedback: 'Malformed result',
+              feedback: friendly,
             },
           });
           toast({
-            title: 'Validation Failed',
-            description: 'An unexpected error occurred during validation.',
+            title: 'Validation error',
+            description: friendly,
             variant: 'destructive',
           });
         }
@@ -105,18 +108,24 @@ function ProofValidationFooter() {
         if (error?.name === 'AbortError') {
           // Swallow; user intentionally aborted
         } else {
+          const code = showModelError(toast, error, goBack, 'Validation error');
+          const friendly = code
+            ? getModelErrorMessage(code)
+            : 'Adjoint’s connection to the model was interrupted, please go back and retry.';
           updateCurrentProofVersion({
             validationResult: {
               isError: true,
               timestamp: new Date(),
-              feedback: error?.message || 'An unexpected error occurred during validation.',
+              feedback: friendly,
             },
           });
-          toast({
-            title: 'Validation Failed',
-            description: error?.message || 'An unexpected error occurred during validation.',
-            variant: 'destructive',
-          });
+          if (!code) {
+            toast({
+              title: 'Validation error',
+              description: friendly,
+              variant: 'destructive',
+            });
+          }
         }
       } finally {
         abortControllerRef.current = null;

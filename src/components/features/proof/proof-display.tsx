@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useEffect, useTransition } from 'react';
 import { generateProofGraphAction } from '@/app/actions';
 import { isEqual } from 'lodash';
+import { showModelError } from '@/lib/model-errors';
 
 export default function ProofDisplay() {
   const { toast } = useToast();
@@ -25,6 +26,8 @@ export default function ProofDisplay() {
     addProofVersion,
     updateCurrentProofVersion,
   } = useAppStore();
+
+  const goBack = useAppStore((s) => s.goBack);
 
   const currentProof = proof();
 
@@ -50,11 +53,16 @@ export default function ProofDisplay() {
               },
             });
           } else {
-            toast({
-              title: 'Graph Generation Failed',
-              description: 'error' in result ? result.error : 'Unknown error.',
-              variant: 'destructive',
-            });
+            const fallback =
+              'Adjoint’s connection to the model was interrupted, please go back and retry.';
+            const code = showModelError(toast, (result as any)?.error, goBack, 'Graph error');
+            if (!code) {
+              toast({
+                title: 'Graph error',
+                description: fallback,
+                variant: 'destructive',
+              });
+            }
           }
         }
       });

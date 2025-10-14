@@ -50,6 +50,9 @@ interface AppState extends StoreData {
   addProofVersion: (version: Omit<ProofVersion, 'timestamp'>) => void;
   updateCurrentProofVersion: (updates: Partial<ProofVersion>) => void;
 
+  // Navigation
+  goBack: () => void;
+
   proof: () => ProofVersion;
 }
 
@@ -166,6 +169,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  // Go back to previous proof version (if any) and ensure steps view
+  goBack: () =>
+    set((state) => {
+      const nextIdx = Math.max(0, state.activeVersionIdx - 1);
+      return {
+        activeVersionIdx: nextIdx,
+        viewMode: 'steps',
+      };
+    }),
 
   setActiveVersionIndex: (index) => set({ activeVersionIdx: index }),
 
