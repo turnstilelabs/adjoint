@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Send, ThumbsDown, ThumbsUp, Maximize2, Minimize2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -139,6 +139,7 @@ export function InteractiveChat() {
   const { toast } = useToast();
   const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
   const sublemmas = proof.sublemmas;
@@ -162,6 +163,17 @@ export function InteractiveChat() {
       }
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsFocused(false)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFocused]);
 
   const addProofVersion = useAppStore((s) => s.addProofVersion);
 
@@ -437,390 +449,429 @@ export function InteractiveChat() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
-        <div className="space-y-4 pt-4">
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+    <div
+      className={isFocused ? "fixed inset-0 z-50 bg-black/80 flex items-center justify-center" : "relative flex-1 flex flex-col overflow-hidden"}
+      onClick={() => isFocused && setIsFocused(false)}
+      role={isFocused ? "dialog" : undefined}
+      aria-modal={isFocused ? true : undefined}
+    >
+      <div
+        className={isFocused ? "w-full max-w-3xl h-[85vh] bg-background border rounded-lg shadow-lg flex flex-col overflow-hidden" : "flex-1 flex flex-col overflow-hidden"}
+        onClick={(e) => {
+          if (isFocused) e.stopPropagation()
+        }}
+      >
+        <div className="px-3 py-2 border-b bg-background/60 backdrop-blur flex items-center justify-between">
+          <div
+            className="text-xs font-medium text-muted-foreground cursor-pointer select-none"
+            onClick={() => setIsFocused((v) => !v)}
+          >
+            Chat
+          </div>
+          {isFocused ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Reduce to panel"
+              onClick={() => setIsFocused(false)}
             >
-              {/* Assistant avatar removed per user request - name is shown above the message bubble */}
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Expand chat"
+              onClick={() => setIsFocused(true)}
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
+          <div className="space-y-4 pt-4">
+            {messages.map((msg, index) => (
               <div
-                className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'bg-white border border-muted-foreground/10 shadow-sm'
+                key={index}
+                className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
                   }`}
               >
-                {msg.role === 'assistant' && (
-                  <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
-                )}
-                <KatexRenderer content={msg.content} autoWrap={false} />
-                {msg.isTyping && (
-                  <div className="mt-2 space-y-2">
-                    <TypingIndicator />
-                    <div className="mt-3">
-                      <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
-                      <div className="mt-1 h-2 w-64 bg-muted rounded animate-pulse" />
-                    </div>
-                  </div>
-                )}
-                {msg.suggestion && !msg.suggestion.isHandled && (
-                  <div className="mt-4 pt-3 border-t border-muted-foreground/20">
-                    <div className="mb-3">
-                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                        Proposed proof changes (preview)
-                        {msg.suggestion?.updated && (
-                          <span className="ml-2 italic opacity-80">(updated)</span>
-                        )}
+                {/* Assistant avatar removed per user request - name is shown above the message bubble */}
+                <div
+                  className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground shadow-md'
+                    : 'bg-white border border-muted-foreground/10 shadow-sm'
+                    }`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
+                  )}
+                  <KatexRenderer content={msg.content} autoWrap={false} />
+                  {msg.isTyping && (
+                    <div className="mt-2 space-y-2">
+                      <TypingIndicator />
+                      <div className="mt-3">
+                        <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
+                        <div className="mt-1 h-2 w-64 bg-muted rounded animate-pulse" />
                       </div>
-                      <div className="space-y-2 max-h-64 overflow-auto pr-1">
-                        {(() => {
-                          const revisedRaw = msg.suggestion!.revisedSublemmas;
-                          const effective = mergeRevised(sublemmas, revisedRaw);
-                          const changes = computeProofDiff(sublemmas, effective);
-                          if (!changes.length) {
-                            return (
-                              <div className="text-xs text-muted-foreground">
-                                No impact on the proof.
-                              </div>
-                            );
-                          }
-                          return changes.map((ch, i) => {
-                            if (ch.kind === 'add') {
+                    </div>
+                  )}
+                  {msg.suggestion && !msg.suggestion.isHandled && (
+                    <div className="mt-4 pt-3 border-t border-muted-foreground/20">
+                      <div className="mb-3">
+                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                          Proposed proof changes (preview)
+                          {msg.suggestion?.updated && (
+                            <span className="ml-2 italic opacity-80">(updated)</span>
+                          )}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-auto pr-1">
+                          {(() => {
+                            const revisedRaw = msg.suggestion!.revisedSublemmas;
+                            const effective = mergeRevised(sublemmas, revisedRaw);
+                            const changes = computeProofDiff(sublemmas, effective);
+                            if (!changes.length) {
+                              return (
+                                <div className="text-xs text-muted-foreground">
+                                  No impact on the proof.
+                                </div>
+                              );
+                            }
+                            return changes.map((ch, i) => {
+                              if (ch.kind === 'add') {
+                                return (
+                                  <div
+                                    key={i}
+                                    className="rounded border border-muted-foreground/10 p-2"
+                                  >
+                                    <div className="text-sm font-semibold">
+                                      Add step at position {ch.at + 1}:{' '}
+                                      <KatexRenderer
+                                        content={ch.step.title || `Step ${ch.at + 1}`}
+                                        className="inline"
+                                        autoWrap={false}
+                                      />
+                                    </div>
+                                    <div className="mt-1 text-sm space-y-2">
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Statement
+                                        </div>
+                                        <KatexRenderer content={ch.step.statement} />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Proof
+                                        </div>
+                                        <KatexRenderer content={ch.step.proof} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (ch.kind === 'remove') {
+                                return (
+                                  <div
+                                    key={i}
+                                    className="rounded border border-muted-foreground/10 p-2"
+                                  >
+                                    <div className="text-sm font-semibold">
+                                      Remove step at position {ch.at + 1}:{' '}
+                                      <KatexRenderer
+                                        content={ch.step.title || `Step ${ch.at + 1}`}
+                                        className="inline"
+                                        autoWrap={false}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              // modify
                               return (
                                 <div
                                   key={i}
                                   className="rounded border border-muted-foreground/10 p-2"
                                 >
                                   <div className="text-sm font-semibold">
-                                    Add step at position {ch.at + 1}:{' '}
+                                    Modify step at position {ch.at + 1}:{' '}
                                     <KatexRenderer
-                                      content={ch.step.title || `Step ${ch.at + 1}`}
+                                      content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
                                       className="inline"
                                       autoWrap={false}
                                     />
                                   </div>
                                   <div className="mt-1 text-sm space-y-2">
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement
+                                    {ch.titleChanged && (
+                                      <div className="text-xs">
+                                        <span className="font-medium text-muted-foreground">
+                                          Title
+                                        </span>{' '}
+                                        <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
+                                          updated
+                                        </span>
+                                        <div className="mt-1">
+                                          <KatexRenderer
+                                            content={ch.old.title || `Step ${ch.at + 1}`}
+                                            className="inline line-through opacity-70"
+                                            autoWrap={false}
+                                          />
+                                          <span className="mx-2">→</span>
+                                          <KatexRenderer
+                                            content={ch.next.title || `Step ${ch.at + 1}`}
+                                            className="inline font-medium"
+                                            autoWrap={false}
+                                          />
+                                        </div>
                                       </div>
-                                      <KatexRenderer content={ch.step.statement} />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof
+                                    )}
+                                    {ch.statementChanged && (
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Statement{' '}
+                                          <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                            updated
+                                          </span>
+                                        </div>
+                                        <KatexRenderer content={ch.next.statement} />
                                       </div>
-                                      <KatexRenderer content={ch.step.proof} />
-                                    </div>
+                                    )}
+                                    {ch.proofChanged && (
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Proof{' '}
+                                          <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                            updated
+                                          </span>
+                                        </div>
+                                        <KatexRenderer content={ch.next.proof} />
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
-                            }
-                            if (ch.kind === 'remove') {
-                              return (
-                                <div
-                                  key={i}
-                                  className="rounded border border-muted-foreground/10 p-2"
-                                >
-                                  <div className="text-sm font-semibold">
-                                    Remove step at position {ch.at + 1}:{' '}
-                                    <KatexRenderer
-                                      content={ch.step.title || `Step ${ch.at + 1}`}
-                                      className="inline"
-                                      autoWrap={false}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            }
-                            // modify
-                            return (
-                              <div
-                                key={i}
-                                className="rounded border border-muted-foreground/10 p-2"
-                              >
-                                <div className="text-sm font-semibold">
-                                  Modify step at position {ch.at + 1}:{' '}
-                                  <KatexRenderer
-                                    content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
-                                    className="inline"
-                                    autoWrap={false}
-                                  />
-                                </div>
-                                <div className="mt-1 text-sm space-y-2">
-                                  {ch.titleChanged && (
-                                    <div className="text-xs">
-                                      <span className="font-medium text-muted-foreground">
-                                        Title
-                                      </span>{' '}
-                                      <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
-                                        updated
-                                      </span>
-                                      <div className="mt-1">
-                                        <KatexRenderer
-                                          content={ch.old.title || `Step ${ch.at + 1}`}
-                                          className="inline line-through opacity-70"
-                                          autoWrap={false}
-                                        />
-                                        <span className="mx-2">→</span>
-                                        <KatexRenderer
-                                          content={ch.next.title || `Step ${ch.at + 1}`}
-                                          className="inline font-medium"
-                                          autoWrap={false}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                  {ch.statementChanged && (
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement{' '}
-                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
-                                          updated
-                                        </span>
-                                      </div>
-                                      <KatexRenderer content={ch.next.statement} />
-                                    </div>
-                                  )}
-                                  {ch.proofChanged && (
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof{' '}
-                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
-                                          updated
-                                        </span>
-                                      </div>
-                                      <KatexRenderer content={ch.next.proof} />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          });
-                        })()}
+                            });
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleSuggestion(index, true)}
-                      >
-                        <ThumbsUp className="mr-2" /> Accept Proposed Changes
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleSuggestion(index, false)}
-                      >
-                        <ThumbsDown className="mr-2" /> Decline
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {msg.noImpact && (
-                  <p className="mt-4 pt-3 border-t border-muted-foreground/20 text-xs text-muted-foreground">
-                    No impact on the proof.
-                  </p>
-                )}
-                {msg.offTopic && (
-                  <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={reset}>
-                      Start new task
-                    </Button>
-                  </div>
-                )}
-                {msg.suggestion?.isHandled && msg.suggestion && (
-                  <div className="mt-4 pt-3 border-t border-muted-foreground/20">
-                    <div className="text-xs text-muted-foreground mb-2">
-                      {msg.suggestion.status === 'accepted' && 'Accepted by user.'}
-                      {msg.suggestion.status === 'declined' && 'Declined.'}
-                      {msg.suggestion.status === 'reverted' && 'Reverted to previous version.'}
-                    </div>
-                    <div className="mb-3">
-                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                        Proposed proof changes (preview)
-                        {msg.suggestion?.updated && (
-                          <span className="ml-2 italic opacity-80">(updated)</span>
-                        )}
-                      </div>
-                      <div className="space-y-2 max-h-64 overflow-auto pr-1">
-                        {(() => {
-                          const revisedRaw = msg.suggestion!.revisedSublemmas;
-                          const effective = mergeRevised(sublemmas, revisedRaw);
-                          const changes = computeProofDiff(sublemmas, effective);
-                          if (!changes.length) {
-                            return (
-                              <div className="text-xs text-muted-foreground">
-                                No impact on the proof.
-                              </div>
-                            );
-                          }
-                          return changes.map((ch, i) => {
-                            if (ch.kind === 'add') {
-                              return (
-                                <div
-                                  key={i}
-                                  className="rounded border border-muted-foreground/10 p-2"
-                                >
-                                  <div className="text-sm font-semibold">
-                                    Add step at position {ch.at + 1}:{' '}
-                                    <KatexRenderer
-                                      content={ch.step.title || `Step ${ch.at + 1}`}
-                                      className="inline"
-                                      autoWrap={false}
-                                    />
-                                  </div>
-                                  <div className="mt-1 text-sm space-y-2">
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement
-                                      </div>
-                                      <KatexRenderer content={ch.step.statement} />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof
-                                      </div>
-                                      <KatexRenderer content={ch.step.proof} />
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            if (ch.kind === 'remove') {
-                              return (
-                                <div
-                                  key={i}
-                                  className="rounded border border-muted-foreground/10 p-2"
-                                >
-                                  <div className="text-sm font-semibold">
-                                    Remove step at position {ch.at + 1}:{' '}
-                                    <KatexRenderer
-                                      content={ch.step.title || `Step ${ch.at + 1}`}
-                                      className="inline"
-                                      autoWrap={false}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return (
-                              <div
-                                key={i}
-                                className="rounded border border-muted-foreground/10 p-2"
-                              >
-                                <div className="text-sm font-semibold">
-                                  Modify step at position {ch.at + 1}:{' '}
-                                  <KatexRenderer
-                                    content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
-                                    className="inline"
-                                    autoWrap={false}
-                                  />
-                                </div>
-                                <div className="mt-1 text-sm space-y-2">
-                                  {ch.titleChanged && (
-                                    <div className="text-xs">
-                                      <span className="font-medium text-muted-foreground">
-                                        Title
-                                      </span>{' '}
-                                      <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
-                                        updated
-                                      </span>
-                                      <div className="mt-1">
-                                        <KatexRenderer
-                                          content={ch.old.title || `Step ${ch.at + 1}`}
-                                          className="inline line-through opacity-70"
-                                          autoWrap={false}
-                                        />
-                                        <span className="mx-2">→</span>
-                                        <KatexRenderer
-                                          content={ch.next.title || `Step ${ch.at + 1}`}
-                                          className="inline font-medium"
-                                          autoWrap={false}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                  {ch.statementChanged && (
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Statement{' '}
-                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
-                                          updated
-                                        </span>
-                                      </div>
-                                      <KatexRenderer content={ch.next.statement} />
-                                    </div>
-                                  )}
-                                  {ch.proofChanged && (
-                                    <div>
-                                      <div className="text-xs font-medium text-muted-foreground mb-1">
-                                        Proof{' '}
-                                        <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
-                                          updated
-                                        </span>
-                                      </div>
-                                      <KatexRenderer content={ch.next.proof} />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {msg.suggestion.status === 'accepted' && (
-                        <Button variant="secondary" size="sm" onClick={() => handleRevert(index)}>
-                          Revert changes
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleSuggestion(index, true)}
+                        >
+                          <ThumbsUp className="mr-2" /> Accept Proposed Changes
                         </Button>
-                      )}
-                      {(msg.suggestion.status === 'declined' ||
-                        msg.suggestion.status === 'reverted') && (
-                          <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
-                            Adopt proposal
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSuggestion(index, false)}
+                        >
+                          <ThumbsDown className="mr-2" /> Decline
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {msg.noImpact && (
+                    <p className="mt-4 pt-3 border-t border-muted-foreground/20 text-xs text-muted-foreground">
+                      No impact on the proof.
+                    </p>
+                  )}
+                  {msg.offTopic && (
+                    <div className="mt-4 pt-3 border-t border-muted-foreground/20 flex gap-2">
+                      <Button variant="secondary" size="sm" onClick={reset}>
+                        Start new task
+                      </Button>
+                    </div>
+                  )}
+                  {msg.suggestion?.isHandled && msg.suggestion && (
+                    <div className="mt-4 pt-3 border-t border-muted-foreground/20">
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {msg.suggestion.status === 'accepted' && 'Accepted by user.'}
+                        {msg.suggestion.status === 'declined' && 'Declined.'}
+                        {msg.suggestion.status === 'reverted' && 'Reverted to previous version.'}
+                      </div>
+                      <div className="mb-3">
+                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                          Proposed proof changes (preview)
+                          {msg.suggestion?.updated && (
+                            <span className="ml-2 italic opacity-80">(updated)</span>
+                          )}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-auto pr-1">
+                          {(() => {
+                            const revisedRaw = msg.suggestion!.revisedSublemmas;
+                            const effective = mergeRevised(sublemmas, revisedRaw);
+                            const changes = computeProofDiff(sublemmas, effective);
+                            if (!changes.length) {
+                              return (
+                                <div className="text-xs text-muted-foreground">
+                                  No impact on the proof.
+                                </div>
+                              );
+                            }
+                            return changes.map((ch, i) => {
+                              if (ch.kind === 'add') {
+                                return (
+                                  <div
+                                    key={i}
+                                    className="rounded border border-muted-foreground/10 p-2"
+                                  >
+                                    <div className="text-sm font-semibold">
+                                      Add step at position {ch.at + 1}:{' '}
+                                      <KatexRenderer
+                                        content={ch.step.title || `Step ${ch.at + 1}`}
+                                        className="inline"
+                                        autoWrap={false}
+                                      />
+                                    </div>
+                                    <div className="mt-1 text-sm space-y-2">
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Statement
+                                        </div>
+                                        <KatexRenderer content={ch.step.statement} />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Proof
+                                        </div>
+                                        <KatexRenderer content={ch.step.proof} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (ch.kind === 'remove') {
+                                return (
+                                  <div
+                                    key={i}
+                                    className="rounded border border-muted-foreground/10 p-2"
+                                  >
+                                    <div className="text-sm font-semibold">
+                                      Remove step at position {ch.at + 1}:{' '}
+                                      <KatexRenderer
+                                        content={ch.step.title || `Step ${ch.at + 1}`}
+                                        className="inline"
+                                        autoWrap={false}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div
+                                  key={i}
+                                  className="rounded border border-muted-foreground/10 p-2"
+                                >
+                                  <div className="text-sm font-semibold">
+                                    Modify step at position {ch.at + 1}:{' '}
+                                    <KatexRenderer
+                                      content={ch.next.title || ch.old.title || `Step ${ch.at + 1}`}
+                                      className="inline"
+                                      autoWrap={false}
+                                    />
+                                  </div>
+                                  <div className="mt-1 text-sm space-y-2">
+                                    {ch.titleChanged && (
+                                      <div className="text-xs">
+                                        <span className="font-medium text-muted-foreground">
+                                          Title
+                                        </span>{' '}
+                                        <span className="inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] align-middle ml-1">
+                                          updated
+                                        </span>
+                                        <div className="mt-1">
+                                          <KatexRenderer
+                                            content={ch.old.title || `Step ${ch.at + 1}`}
+                                            className="inline line-through opacity-70"
+                                            autoWrap={false}
+                                          />
+                                          <span className="mx-2">→</span>
+                                          <KatexRenderer
+                                            content={ch.next.title || `Step ${ch.at + 1}`}
+                                            className="inline font-medium"
+                                            autoWrap={false}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    {ch.statementChanged && (
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Statement{' '}
+                                          <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                            updated
+                                          </span>
+                                        </div>
+                                        <KatexRenderer content={ch.next.statement} />
+                                      </div>
+                                    )}
+                                    {ch.proofChanged && (
+                                      <div>
+                                        <div className="text-xs font-medium text-muted-foreground mb-1">
+                                          Proof{' '}
+                                          <span className="ml-1 inline-block px-1 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px]">
+                                            updated
+                                          </span>
+                                        </div>
+                                        <KatexRenderer content={ch.next.proof} />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {msg.suggestion.status === 'accepted' && (
+                          <Button variant="secondary" size="sm" onClick={() => handleRevert(index)}>
+                            Revert changes
                           </Button>
                         )}
+                        {(msg.suggestion.status === 'declined' ||
+                          msg.suggestion.status === 'reverted') && (
+                            <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
+                              Adopt proposal
+                            </Button>
+                          )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+            ))}
+          </div>
+        </ScrollArea>
 
-      <div className="p-6 border-t bg-background">
-        <div className="relative">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!isPending) handleSend();
-              }
-            }}
-            placeholder="Revise the proof or ask a question..."
-            rows={1}
-            className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleSend}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary"
-            disabled={isPending}
-            aria-label="Send message"
-          >
-            <Send className="h-5 w-5" />
-          </Button>
+        <div className="p-6 border-t bg-background">
+          <div className="relative">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isPending) handleSend();
+                }
+              }}
+              placeholder="Revise the proof or ask a question..."
+              rows={1}
+              className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleSend}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary"
+              disabled={isPending}
+              aria-label="Send message"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
