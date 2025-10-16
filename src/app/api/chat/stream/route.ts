@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { env } from '@/env';
 import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import OpenAI from 'openai';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +16,34 @@ type StreamRequest = {
   history?: ChatHistoryItem[];
 };
 
+// Shared tool/function schema for both providers
+const PROPOSE_CHANGES_SCHEMA = {
+  name: 'propose_changes',
+  description:
+    'Return the final revised list of sublemmas for the proof. Do not include commentary; only the structured revised steps.',
+  parameters: {
+    type: 'object',
+    properties: {
+      revisedSublemmas: {
+        type: 'array',
+        description: 'Final revised sublemma steps in order',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            statement: { type: 'string' },
+            proof: { type: 'string' },
+          },
+          required: ['title', 'statement', 'proof'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['revisedSublemmas'],
+    additionalProperties: false,
+  },
+} as const;
+
 function buildPrompt(input: StreamRequest) {
   const { problem, sublemmas, request, history = [] } = input;
 
@@ -23,9 +51,9 @@ function buildPrompt(input: StreamRequest) {
     history.length > 0
       ? `Conversation so far:
 ${history
-  .slice(-8)
-  .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-  .join('\n')}
+        .slice(-8)
+        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n')}
 
 `
       : '';
@@ -34,26 +62,25 @@ ${history
     sublemmas.length > 0
       ? `Current Proof Steps:
 ${sublemmas
-  .map(
-    (s, i) =>
-      `- ${i + 1}. ${s.title}
+        .map(
+          (s, i) =>
+            `- ${i + 1}. ${s.title}
   Statement: ${s.statement}
   Proof: ${s.proof}`,
-  )
-  .join('\n')}
+        )
+        .join('\n')}
 `
       : 'Current Proof Steps: (none provided)\n';
 
-  // Prompt instructs: stream answer first, then make exactly one propose_changes call with the final revised steps.
+  // No control frames. We will use function/tool calling in the same request.
   return `${ADJOINT_SYSTEM_POLICY}
 
 You are an expert mathematician and AI assistant embedded in an interactive proof environment.
 
 Instructions for this turn:
-- Provide a clear, free-form answer. Do NOT output JSON in your natural language response.
-- Never claim that changes have already been applied. Do not use phrases like "I've added", "I updated", "I applied", or "I changed".
-- When proposing edits, use proposal language only, e.g., "I propose adding a new Lemma 4 …" or "Proposed change: … Would you like me to apply these changes?"
-- Stay within the scope of the provided problem/proof context. If off-topic, say so briefly.
+- First, provide a clear, helpful natural-language answer to the user's request. Do NOT include any JSON in your text answer.
+- After you finish the natural-language answer, call the tool "propose_changes" exactly once, passing the final "revisedSublemmas" array (even if empty when no changes are warranted).
+- Do not include any commentary in the tool call arguments.
 
 Problem:
 "${problem}"
@@ -63,12 +90,17 @@ ${historyText}
 User's new request:
 "${request}"
 
-Now respond naturally (free text). At the very end of your answer, append exactly one control frame on a new line with the following format:
-[[PROPOSAL]]{"revisedSublemmas":[{"title":string,"statement":string,"proof":string}]}
-Rules:
-- Do not include JSON in the free-form text; only include the JSON inside the control frame.
-- Emit the control frame once, after your free-form answer is complete.
-- If you believe no changes are needed, emit [[PROPOSAL]]{"revisedSublemmas":[]} and nothing else after it.`;
+Now:
+1) Write your full natural-language answer.
+2) Then call propose_changes with { revisedSublemmas: [{ title, statement, proof }] } representing the final proposed proof revision (use an empty array if no changes are needed).`;
+}
+
+function safeParseJSON<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: Request) {
@@ -131,25 +163,69 @@ export async function POST(req: Request) {
 
     const streamingResponse = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const write = (obj: unknown) => {
+          controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+        };
+
+        const sendProposal = (revised: unknown) => {
+          const arr = Array.isArray(revised) ? (revised as unknown[]) : [];
+          write({ type: 'proposal', revisedSublemmas: arr });
+        };
+
         try {
           if (provider === 'openai') {
             const client = new OpenAI({ apiKey: openaiKey! });
             let model = process.env.LLM_MODEL ?? 'gpt-5-mini';
-
             console.info(`[AI] Streaming provider=openai model=${model}`);
+
+            const tools = [
+              {
+                type: 'function' as const,
+                function: PROPOSE_CHANGES_SCHEMA,
+              },
+            ];
+
+            const messages = [
+              { role: 'system' as const, content: ADJOINT_SYSTEM_POLICY },
+              { role: 'user' as const, content: prompt },
+            ];
 
             const runOpenAI = async (useModel: string) => {
               const stream = await client.chat.completions.create({
                 model: useModel,
-                messages: [{ role: 'user', content: prompt }],
+                messages,
+                tools,
+                // Let the model decide when to call the tool (instructed to do it after text).
                 stream: true,
               });
 
+              // Accumulate function call args for the first propose_changes call we see
+              let toolArgsBuffer = '';
+
               for await (const part of stream) {
-                const delta = part.choices?.[0]?.delta?.content;
-                if (delta) {
-                  controller.enqueue(encoder.encode(delta));
+                const choice = part.choices?.[0];
+                const delta = choice?.delta;
+                if (delta?.content) {
+                  write({ type: 'text', content: delta.content });
                 }
+                const tcs = delta?.tool_calls;
+                if (Array.isArray(tcs)) {
+                  for (const tc of tcs) {
+                    if (tc?.function?.name === PROPOSE_CHANGES_SCHEMA.name && tc.function?.arguments) {
+                      toolArgsBuffer += tc.function.arguments;
+                    }
+                  }
+                }
+              }
+
+              if (toolArgsBuffer.trim().length > 0) {
+                const parsed = safeParseJSON<{ revisedSublemmas?: Sublemma[] }>(toolArgsBuffer) || {
+                  revisedSublemmas: [],
+                };
+                sendProposal(parsed.revisedSublemmas ?? []);
+              } else {
+                // If no tool call came through, fallback to noImpact
+                sendProposal([]);
               }
             };
 
@@ -168,37 +244,83 @@ export async function POST(req: Request) {
                     typeof fallbackErr?.message === 'string'
                       ? fallbackErr.message
                       : 'Streaming failed.';
-                  controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
+                  write({ type: 'error', message: msg });
                 }
               } else {
                 const msg =
                   typeof primaryErr?.message === 'string'
                     ? primaryErr.message
                     : 'Streaming failed.';
-                controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
+                write({ type: 'error', message: msg });
               }
             }
 
+            write({ type: 'done' });
             controller.close();
           } else {
-            // Google (Gemini) streaming (no tools): stream text first
-            const result = await googleModel!.generateContentStream({
+            // Google (Gemini) streaming with functionDeclarations in one call
+            const req: any = {
               contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            });
+              tools: {
+                functionDeclarations: [
+                  {
+                    name: PROPOSE_CHANGES_SCHEMA.name,
+                    description: PROPOSE_CHANGES_SCHEMA.description,
+                    parameters: PROPOSE_CHANGES_SCHEMA.parameters,
+                  },
+                ],
+              },
+            };
 
-            for await (const chunk of result.stream as any) {
+            const result = await googleModel!.generateContentStream(req);
+
+            // Stream text chunks
+            for await (const chunk of (result as any).stream) {
               const text = chunk?.text?.();
               if (text) {
-                controller.enqueue(encoder.encode(text));
+                write({ type: 'text', content: text });
               }
             }
 
+            // After stream ends, read the final response to extract the function call
+            try {
+              const final = await (result as any).response;
+              const candidates: any[] = final?.candidates || [];
+              let revised: Sublemma[] | null = null;
+
+              for (const cand of candidates) {
+                const parts: any[] = cand?.content?.parts || [];
+                for (const p of parts) {
+                  const fc = p?.functionCall;
+                  if (fc?.name === PROPOSE_CHANGES_SCHEMA.name) {
+                    // Gemini provides structured args; they may already be parsed
+                    const args = fc.args ?? {};
+                    const arr = Array.isArray(args?.revisedSublemmas) ? args.revisedSublemmas : [];
+                    revised = arr;
+                    break;
+                  }
+                }
+                if (revised) break;
+              }
+
+              if (!revised) revised = [];
+              sendProposal(revised);
+            } catch {
+              // If we cannot extract a function call, fallback to noImpact
+              sendProposal([]);
+            }
+
+            write({ type: 'done' });
             controller.close();
           }
         } catch (err: any) {
           const msg = typeof err?.message === 'string' ? err.message : 'Streaming failed.';
-          controller.enqueue(encoder.encode(`\n\n[Streaming error] ${msg}`));
-          controller.close();
+          try {
+            write({ type: 'error', message: msg });
+            write({ type: 'done' });
+          } finally {
+            controller.close();
+          }
         }
       },
       cancel() {
@@ -209,7 +331,7 @@ export async function POST(req: Request) {
     return new Response(streamingResponse, {
       status: 200,
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
         'Cache-Control': 'no-store',
       },
     });

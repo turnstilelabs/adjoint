@@ -292,44 +292,45 @@ export function InteractiveChat() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
-        let accumulated = '';
-        let proposalHandled = false;
+        let buffer = '';
+        let accumulatedText = '';
 
         while (!done) {
           const { value, done: doneReading } = await reader.read();
           done = !!doneReading;
           if (value) {
             const chunk = decoder.decode(value, { stream: !done });
-            accumulated += chunk;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              const last = updated[lastIdx];
-              updated[lastIdx] = {
-                ...last,
-                content: accumulated,
-                isTyping: true,
-              };
-              return updated;
-            });
+            buffer += chunk;
 
-            // Attempt early proposal parsing during stream to avoid post-text delay
-            const earlyMatch = accumulated.match(/\[\[PROPOSAL\]\]\s*(\{[\s\S]*\})\s*$/);
-            if (earlyMatch && !proposalHandled) {
-              const jsonText = earlyMatch[1].trim();
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              let evt: any;
               try {
-                const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
-                const cleaned = accumulated.replace(/\s*\[\[PROPOSAL\]\]\s*\{[\s\S]*\}\s*$/, '');
-                // Update message text immediately (remove control frame)
+                evt = JSON.parse(trimmed);
+              } catch {
+                continue;
+              }
+
+              if (evt.type === 'text' && typeof evt.content === 'string') {
+                accumulatedText += evt.content;
                 setMessages((prev) => {
                   const updated = [...prev];
                   const lastIdx = updated.length - 1;
                   const last = updated[lastIdx];
-                  updated[lastIdx] = { ...last, content: cleaned, isTyping: false };
+                  updated[lastIdx] = {
+                    ...last,
+                    content: accumulatedText,
+                    isTyping: true,
+                  };
                   return updated;
                 });
-                const revised = Array.isArray(payload?.revisedSublemmas)
-                  ? (payload.revisedSublemmas as Sublemma[])
+              } else if (evt.type === 'proposal') {
+                const revised = Array.isArray(evt.revisedSublemmas)
+                  ? (evt.revisedSublemmas as Sublemma[])
                   : [];
                 if (revised.length > 0) {
                   setMessages((prev) => {
@@ -358,77 +359,20 @@ export function InteractiveChat() {
                     return updated;
                   });
                 }
-                proposalHandled = true;
-                try {
-                  await reader.cancel();
-                } catch {
-                  /* ignore */
-                }
+              } else if (evt.type === 'error') {
+                // Optional: surface via toast; fallback handled in catch below
+              } else if (evt.type === 'done') {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  const last = updated[lastIdx];
+                  updated[lastIdx] = { ...last, isTyping: false };
+                  return updated;
+                });
                 done = true;
-              } catch {
-                // ignore malformed in-flight proposal; final parsing will run after completion
+                break;
               }
             }
-          }
-        }
-
-        // Mark typing complete
-        setMessages((prev) => {
-          const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          const last = updated[lastIdx];
-          updated[lastIdx] = { ...last, isTyping: false };
-          return updated;
-        });
-
-        // Parse [[PROPOSAL]] control frame appended by the server
-        const proposalMatch = accumulated.match(/\[\[PROPOSAL\]\]\s*(\{[\s\S]*\})\s*$/);
-        if (proposalMatch) {
-          const jsonText = proposalMatch[1].trim();
-          try {
-            const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
-            const cleaned = accumulated.replace(/\s*\[\[PROPOSAL\]\]\s*\{[\s\S]*\}\s*$/, '');
-            // Update last assistant message text without the control frame
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              const last = updated[lastIdx];
-              updated[lastIdx] = { ...last, content: cleaned, isTyping: false };
-              return updated;
-            });
-            const revised = Array.isArray(payload?.revisedSublemmas)
-              ? (payload.revisedSublemmas as Sublemma[])
-              : [];
-            if (revised.length > 0) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const lastIdx = updated.length - 1;
-                const last = updated[lastIdx];
-                updated[lastIdx] = {
-                  ...last,
-                  noImpact: false,
-                  offTopic: false,
-                  suggestion: { revisedSublemmas: revised, isHandled: false },
-                };
-                return updated;
-              });
-            } else {
-              // Explicitly mark no impact when revised is an empty array
-              setMessages((prev) => {
-                const updated = [...prev];
-                const lastIdx = updated.length - 1;
-                const last = updated[lastIdx];
-                updated[lastIdx] = {
-                  ...last,
-                  noImpact: true,
-                  offTopic: false,
-                  suggestion: undefined,
-                };
-                return updated;
-              });
-            }
-          } catch {
-            // If proposal payload is invalid JSON, ignore silently (no proposal)
           }
         }
       } catch (error: any) {
