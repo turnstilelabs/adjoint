@@ -303,12 +303,12 @@ export function InteractiveChat() {
             });
 
             // Attempt early proposal parsing during stream to avoid post-text delay
-            const earlyMatch = accumulated.match(/[\r\n]\[\[PROPOSAL\]\]([\s\S]+)$/);
+            const earlyMatch = accumulated.match(/\[\[PROPOSAL\]\]\s*(\{[\s\S]*\})\s*$/);
             if (earlyMatch && !proposalHandled) {
               const jsonText = earlyMatch[1].trim();
               try {
                 const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
-                const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
+                const cleaned = accumulated.replace(/\s*\[\[PROPOSAL\]\]\s*\{[\s\S]*\}\s*$/, '');
                 // Update message text immediately (remove control frame)
                 setMessages((prev) => {
                   const updated = [...prev];
@@ -371,12 +371,12 @@ export function InteractiveChat() {
         });
 
         // Parse [[PROPOSAL]] control frame appended by the server
-        const proposalMatch = accumulated.match(/[\r\n]\[\[PROPOSAL\]\]([\s\S]+)$/);
+        const proposalMatch = accumulated.match(/\[\[PROPOSAL\]\]\s*(\{[\s\S]*\})\s*$/);
         if (proposalMatch) {
           const jsonText = proposalMatch[1].trim();
           try {
             const payload = JSON.parse(jsonText) as { revisedSublemmas?: Sublemma[] | null };
-            const cleaned = accumulated.replace(/[\r\n]\[\[PROPOSAL\]\][\s\S]+$/, '');
+            const cleaned = accumulated.replace(/\s*\[\[PROPOSAL\]\]\s*\{[\s\S]*\}\s*$/, '');
             // Update last assistant message text without the control frame
             setMessages((prev) => {
               const updated = [...prev];
@@ -449,8 +449,8 @@ export function InteractiveChat() {
               {/* Assistant avatar removed per user request - name is shown above the message bubble */}
               <div
                 className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-white border border-muted-foreground/10 shadow-sm'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'bg-white border border-muted-foreground/10 shadow-sm'
                   }`}
               >
                 {msg.role === 'assistant' && (
