@@ -2,7 +2,7 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, GitMerge, History, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { FileDown, Share2, History, MessageCircle } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -45,9 +45,9 @@ export function ProofSidebar() {
   };
 
   const onExportTex = () => {
+    if (!problem || !proof) return;
     try {
-      const prob = problem || '';
-      exportProofTex(prob, proof.sublemmas);
+      exportProofTex(problem, proof.sublemmas);
       toast({
         title: 'Exported',
         description: 'LaTeX file downloaded as proof.tex',
@@ -61,7 +61,7 @@ export function ProofSidebar() {
     }
   };
 
-  const exportDisabled = proof.sublemmas.length === 0;
+  const exportDisabled = !proof || proof.sublemmas.length === 0;
 
   return (
     <>
@@ -74,17 +74,14 @@ export function ProofSidebar() {
             <History />
             <span className="sr-only">History</span>
           </Button>
-
           <Button variant="ghost" size="icon" title="Graph" onClick={onToggleGraph}>
-            <GitMerge />
+            <Share2 />
             <span className="sr-only">Graph</span>
           </Button>
-
           <Button variant="ghost" size="icon" title="Chat" onClick={onToggleChat}>
-            {isChatOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            {isChatOpen ? <MessageCircle /> : <MessageCircle />}
             <span className="sr-only">Chat</span>
           </Button>
-
           <Button
             variant="ghost"
             size="icon"

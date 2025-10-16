@@ -89,3 +89,27 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+
+  /* Wrapper to ensure math never spills out of its container */
+  .katex-wrap {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    /* allow breaks in long tokens */
+    word-break: break-word;
+  }
+
+  /* Allow inline KaTeX to wrap on lines */
+  .katex-wrap .katex {
+    white-space: normal;
+  }
+
+  /* For display equations, prefer horizontal scroll over spilling out */
+  .katex-wrap .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}

@@ -1,12 +1,22 @@
-import { z } from 'genkit';
+import { z } from 'zod';
+
+// Supported providers (extend as needed)
+const ProviderSchema = z.enum(['googleai', 'openai']);
 
 // Centralized environment validation. Throws at startup if required vars are missing.
 const BaseEnvSchema = z
   .object({
-    // Accept any of these, require at least one to be present.
+    // Provider selection and model
+    LLM_PROVIDER: ProviderSchema.optional(), // default applied below
+    LLM_MODEL: z.string().min(1).optional(),
+
+    // API keys for supported providers
     GEMINI_API_KEY: z.string().min(1).optional(),
     GOOGLE_API_KEY: z.string().min(1).optional(),
     GOOGLE_GENAI_API_KEY: z.string().min(1).optional(),
+    OPENAI_API_KEY: z.string().min(1).optional(),
+
+    // Mock mode toggle (from main)
     USE_MOCK_API: z
       .enum(['TRUE', 'FALSE'])
       .optional()
@@ -14,14 +24,39 @@ const BaseEnvSchema = z
   })
   .passthrough();
 
-const EnvSchema = BaseEnvSchema.refine(
-  (e) => Boolean(e.GEMINI_API_KEY || e.GOOGLE_API_KEY || e.GOOGLE_GENAI_API_KEY),
-  {
-    message: 'One of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY is required',
-  },
-);
+// Provider-aware refinement
+const EnvSchema = BaseEnvSchema.superRefine((e, ctx) => {
+  const provider = (e.LLM_PROVIDER ?? 'googleai').toLowerCase();
 
-export type Env = z.infer<typeof EnvSchema>;
+  if (provider === 'googleai') {
+    if (!(e.GEMINI_API_KEY || e.GOOGLE_API_KEY || e.GOOGLE_GENAI_API_KEY)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['GEMINI_API_KEY'],
+        message:
+          'For LLM_PROVIDER=googleai, one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY is required',
+      });
+    }
+  } else if (provider === 'openai') {
+    if (!e.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPENAI_API_KEY'],
+        message: 'For LLM_PROVIDER=openai, OPENAI_API_KEY is required',
+      });
+    }
+  } else {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['LLM_PROVIDER'],
+      message: `Unsupported LLM_PROVIDER "${provider}". Supported: googleai, openai`,
+    });
+  }
+});
+
+export type Env = z.infer<typeof EnvSchema> & {
+  LLM_PROVIDER?: 'googleai' | 'openai';
+};
 
 // Parse and validate process.env once and export strongly-typed env
 export const env = EnvSchema.parse(process.env);

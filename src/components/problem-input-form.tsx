@@ -11,6 +11,7 @@ import { validateStatementAction } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from './ui/alert';
 import { useAppStore } from '@/state/app-store';
+import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
 
 export default function ProblemInputForm() {
   const [problem, setProblem] = useState('');
@@ -18,6 +19,7 @@ export default function ProblemInputForm() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const startProof = useAppStore((s) => s.startProof);
+  const goBack = useAppStore((s) => s.goBack);
 
   const submitProblem = async (text: string) => {
     const trimmedProblem = text.trim();
@@ -34,14 +36,19 @@ export default function ProblemInputForm() {
       // The statement was validated but not as a valid math problem
       setError('Looks like that’s not math! This app only works with math problems.');
     } else {
-      const errorMessage =
-        validationResult.error || 'An unexpected error occurred while validating the problem.';
-      setError(errorMessage);
-      toast({
-        title: 'Validation Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      const friendlyDefault =
+        'Adjoint’s connection to the model was interrupted, please go back and retry.';
+      const code = showModelError(toast, (validationResult as any).error, goBack, 'Validation error');
+      if (code) {
+        setError(getModelErrorMessage(code));
+      } else {
+        setError(friendlyDefault);
+        toast({
+          title: 'Validation error',
+          description: friendlyDefault,
+          variant: 'destructive',
+        });
+      }
     }
   };
 

@@ -48,16 +48,30 @@ With The Adjoint, you can move fluidly between exploration, editing, and validat
 
 ## Quick Start
 
-Before running the application, you should ensure that Node.js 18+ is installed. You will also need an API key for Google AI (Gemini).
+Before running the application, you should ensure that Node.js 18+ is installed. Choose an LLM provider via environment variables.
 
-1. Create an environment file named `.env.local` in the project root `adjoint/.env.local`. It should contain at least one of the following:
+1. Create an environment file named `.env.local` in the project root `adjoint/.env.local`. Example configurations:
+
+   Google (default):
 
    ```
+   LLM_PROVIDER=googleai
+   # optional: override default model
+   # LLM_MODEL=gemini-2.5-flash
    GEMINI_API_KEY=your-key-here
    # or
    GOOGLE_API_KEY=your-key-here
    # or
    GOOGLE_GENAI_API_KEY=your-key-here
+   ```
+
+   OpenAI:
+
+   ```
+   LLM_PROVIDER=openai
+   # optional: override default model
+   # LLM_MODEL=gpt-5-mini
+   OPENAI_API_KEY=your-openai-key
    ```
 
 2. Install dependencies by running:
@@ -251,7 +265,7 @@ sequenceDiagram
 
 The application consistently uses typed objects to pass content between the UI and flows.
 
-- Sublemma: `{ title: string; content: string }` — represents a single proof step.
+- Sublemma: `{ title: string; statement: string; proof: string }` — structured lemma with separate Statement and Proof sections.
 - ValidationResult: `{ isValid: boolean; feedback: string }` — rendered with KaTeX.
 - Chat message (client state):
   - `Message = { role: 'user' | 'assistant'; content: string; ... }`
@@ -272,7 +286,12 @@ Server actions are located in `src/app/actions.ts` and act as the entry points f
 - Validation: `validateProofAction` calls `validate-proof.ts` to determine validity and generate feedback. There is also a `validate-statement.ts` for single statements.
 - Graph generation: `generate-proof-graph.ts` produces a dependency graph of nodes and edges.
 
-All flows run on the server. They use Genkit’s Google AI plugin (`@genkit-ai/googleai`) via `src/ai/genkit.ts`, which configures the default model (`googleai/gemini-2.5-flash`) and allows swapping or reconfiguring models if needed.
+All flows run on the server. They call a provider-selected AI client via `src/ai/genkit.ts`:
+
+- Google path: uses Genkit with `@genkit-ai/googleai`, default model `googleai/gemini-2.5-flash`.
+- OpenAI path: uses a lightweight shim around the OpenAI SDK that mimics Genkit’s `definePrompt`/`defineFlow` surface (no changes needed in flow code).
+
+Switch providers by setting `LLM_PROVIDER` (and optionally `LLM_MODEL`) in `.env.local`.
 
 ### UI Composition
 
@@ -294,7 +313,12 @@ All user-facing labels and references in the graph use 1‑based indexing. This 
 
 ### Environment and Configuration
 
-Environment validation is centralized in `src/env.ts` using zod. The application requires that at least one of `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` be present. The `src/ai/genkit.ts` module imports this validation so the server fails fast if keys are missing.
+Environment validation is centralized in `src/env.ts` using zod. It is provider-aware:
+
+- If `LLM_PROVIDER=googleai` (default), one of `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENAI_API_KEY` is required.
+- If `LLM_PROVIDER=openai`, `OPENAI_API_KEY` is required.
+
+`src/ai/genkit.ts` imports this validation so the server fails fast if keys are missing.
 
 Next.js build settings are structured so that development can be more permissive, while production builds are strict and fail on type or lint errors. This configuration ensures that you do not accidentally deploy an invalid or poorly typed version.
 
@@ -325,6 +349,7 @@ Because the system uses zod for schemas and TypeScript for types, it is straight
 
 - What models are used?
   - The default model is `googleai/gemini-2.5-flash`. You can modify this in `src/ai/genkit.ts`. The chat stream uses direct streaming; proposals come from typed flows.
+  - When `LLM_PROVIDER=openai`, the default model is `gpt-5-mini` (override with `LLM_MODEL` if desired).
 
 - Port already in use?
   - Start dev with a different port, e.g. `npm run dev -- -p 9011`.

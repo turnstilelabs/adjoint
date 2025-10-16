@@ -5,6 +5,7 @@ import { useEffect, useTransition } from 'react';
 import { useAppStore } from '@/state/app-store';
 import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import { showModelError } from '@/lib/model-errors';
 import { ProofGraph } from './proof-graph';
 
 /**
@@ -17,6 +18,7 @@ export function ProofGraphView() {
   const { toast } = useToast();
   const proof = useAppStore((s) => s.proof());
   const viewMode = useAppStore((s) => s.viewMode);
+  const goBack = useAppStore((s) => s.goBack);
 
   const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
 
@@ -37,7 +39,7 @@ export function ProofGraphView() {
               const m = n.id.match(/step-(\d+)/);
               const idx = m ? parseInt(m[1], 10) - 1 : -1;
               const content =
-                idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].content : '';
+                idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].statement : '';
               return { ...n, content };
             }),
             edges: result.edges,
@@ -45,11 +47,16 @@ export function ProofGraphView() {
         });
       } else {
         updateCurrentProofVersion({ graphData: undefined });
-        toast({
-          title: 'Graph Generation Failed',
-          description: (result as any)?.error || 'Unknown error.',
-          variant: 'destructive',
-        });
+        const fallback =
+          'Adjoint’s connection to the model was interrupted, please go back and retry.';
+        const code = showModelError(toast, (result as any)?.error, goBack, 'Graph error');
+        if (!code) {
+          toast({
+            title: 'Graph error',
+            description: fallback,
+            variant: 'destructive',
+          });
+        }
       }
     });
   }, [viewMode, isGeneratingGraph, proof, updateCurrentProofVersion, toast]);

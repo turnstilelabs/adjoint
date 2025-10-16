@@ -92,7 +92,13 @@ export async function generateProofGraphAction(proofSteps: Sublemma[]) {
     };
   }
   try {
-    const result = await generateProofGraph({ proofSteps });
+    // Normalize to satisfy SublemmaSchema (some upstream steps may only have { title, content })
+    const normalizedSteps: Sublemma[] = proofSteps.map((s: any) => ({
+      title: s?.title ?? '',
+      statement: s?.statement ?? s?.content ?? '',
+      proof: s?.proof ?? s?.content ?? '',
+    }));
+    const result = await generateProofGraph({ proofSteps: normalizedSteps });
     return { success: true, ...result };
   } catch (error) {
     console.error('generateProofGraphAction error:', error);

@@ -34,7 +34,9 @@ The user has provided a mathematical problem, a set of proof steps (sublemmas), 
 
 **Current Proof Steps:**
 {{#each proofSteps}}
-- **{{this.title}}**: {{this.content}}
+- **{{this.title}}**
+  - Statement: {{this.statement}}
+  - Proof: {{this.proof}}
 {{/each}}
 
 **User's Request:**
@@ -72,7 +74,7 @@ const reviseProofFlow = ai.defineFlow(
     inputSchema: ReviseProofInputSchema,
     outputSchema: ReviseProofOutputSchema,
   },
-  async (input) => {
+  async (input: ReviseProofInput) => {
     const { output } = await reviseProofPrompt(input);
     if (!output) {
       throw new Error('The AI failed to process the revision request.');

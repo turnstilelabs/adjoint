@@ -5,6 +5,8 @@ import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { validateStatementAction } from '@/app/actions';
 import { useTransition } from 'react';
+import { useAppStore } from '@/state/app-store';
+import { showModelError } from '@/lib/model-errors';
 
 interface SelectionToolbarProps {
   target: HTMLElement | null;
@@ -15,6 +17,7 @@ interface SelectionToolbarProps {
 export function SelectionToolbar({ target, onRevise, selectedText }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const goBack = useAppStore((s) => s.goBack);
 
   const handleCheckAgain = () => {
     startTransition(async () => {
@@ -43,11 +46,16 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
           variant: r.validity === 'VALID' ? 'default' : 'destructive',
         });
       } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to verify selection.',
-          variant: 'destructive',
-        });
+        const fallback =
+          'Adjoint’s connection to the model was interrupted, please go back and retry.';
+        const code = showModelError(toast, (result as any).error, goBack, 'Error');
+        if (!code) {
+          toast({
+            title: 'Error',
+            description: fallback,
+            variant: 'destructive',
+          });
+        }
       }
     });
   };
