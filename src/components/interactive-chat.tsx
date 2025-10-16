@@ -653,22 +653,30 @@ export function InteractiveChat() {
                           })()}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleSuggestion(index, true)}
-                        >
-                          <ThumbsUp className="mr-2" /> Accept Proposed Changes
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSuggestion(index, false)}
-                        >
-                          <ThumbsDown className="mr-2" /> Decline
-                        </Button>
-                      </div>
+                      {(() => {
+                        const revisedRaw = msg.suggestion!.revisedSublemmas;
+                        const effective = mergeRevised(sublemmas, revisedRaw);
+                        const hasImpact = computeProofDiff(sublemmas, effective).length > 0;
+                        if (!hasImpact) return null;
+                        return (
+                          <div className="flex gap-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleSuggestion(index, true)}
+                            >
+                              <ThumbsUp className="mr-2" /> Accept Proposed Changes
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSuggestion(index, false)}
+                            >
+                              <ThumbsDown className="mr-2" /> Decline
+                            </Button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {msg.noImpact && (
@@ -824,19 +832,27 @@ export function InteractiveChat() {
                           })()}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        {msg.suggestion.status === 'accepted' && (
-                          <Button variant="secondary" size="sm" onClick={() => handleRevert(index)}>
-                            Revert changes
-                          </Button>
-                        )}
-                        {(msg.suggestion.status === 'declined' ||
-                          msg.suggestion.status === 'reverted') && (
-                            <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
-                              Adopt proposal
-                            </Button>
-                          )}
-                      </div>
+                      {(() => {
+                        const revisedRaw = msg.suggestion!.revisedSublemmas;
+                        const effective = mergeRevised(sublemmas, revisedRaw);
+                        const hasImpact = computeProofDiff(sublemmas, effective).length > 0;
+                        if (!hasImpact) return null;
+                        return (
+                          <div className="flex gap-2">
+                            {msg.suggestion.status === 'accepted' && (
+                              <Button variant="secondary" size="sm" onClick={() => handleRevert(index)}>
+                                Revert changes
+                              </Button>
+                            )}
+                            {(msg.suggestion.status === 'declined' ||
+                              msg.suggestion.status === 'reverted') && (
+                                <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
+                                  Adopt proposal
+                                </Button>
+                              )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
