@@ -42,14 +42,14 @@ type Change =
   | { kind: 'add'; at: number; step: Sublemma }
   | { kind: 'remove'; at: number; step: Sublemma }
   | {
-    kind: 'modify';
-    at: number;
-    old: Sublemma;
-    next: Sublemma;
-    titleChanged?: boolean;
-    statementChanged?: boolean;
-    proofChanged?: boolean;
-  };
+      kind: 'modify';
+      at: number;
+      old: Sublemma;
+      next: Sublemma;
+      titleChanged?: boolean;
+      statementChanged?: boolean;
+      proofChanged?: boolean;
+    };
 
 function computeProofDiff(currentSteps: Sublemma[], revisedSteps: Sublemma[]): Change[] {
   const changes: Change[] = [];
@@ -137,7 +137,6 @@ export function InteractiveChat() {
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
-  const router = useRouter();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -167,12 +166,12 @@ export function InteractiveChat() {
   useEffect(() => {
     if (!isFocused) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsFocused(false)
+      if (e.key === 'Escape') {
+        setIsFocused(false);
       }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [isFocused]);
 
   const addProofVersion = useAppStore((s) => s.addProofVersion);
@@ -450,15 +449,23 @@ export function InteractiveChat() {
 
   return (
     <div
-      className={isFocused ? "fixed inset-0 z-50 bg-black/80 flex items-center justify-center" : "relative flex-1 flex flex-col overflow-hidden"}
+      className={
+        isFocused
+          ? 'fixed inset-0 z-50 bg-black/80 flex items-center justify-center'
+          : 'relative flex-1 flex flex-col overflow-hidden'
+      }
       onClick={() => isFocused && setIsFocused(false)}
-      role={isFocused ? "dialog" : undefined}
+      role={isFocused ? 'dialog' : undefined}
       aria-modal={isFocused ? true : undefined}
     >
       <div
-        className={isFocused ? "w-full max-w-3xl h-[85vh] bg-background border rounded-lg shadow-lg flex flex-col overflow-hidden" : "flex-1 flex flex-col overflow-hidden"}
+        className={
+          isFocused
+            ? 'w-full max-w-3xl h-[85vh] bg-background border rounded-lg shadow-lg flex flex-col overflow-hidden'
+            : 'flex-1 flex flex-col overflow-hidden'
+        }
         onClick={(e) => {
-          if (isFocused) e.stopPropagation()
+          if (isFocused) e.stopPropagation();
         }}
       >
         <div className="px-3 py-2 border-b bg-background/60 backdrop-blur flex items-center justify-between">
@@ -493,18 +500,22 @@ export function InteractiveChat() {
             {messages.map((msg, index) => (
               <div
                 key={index}
-                className={`flex gap-3 text-sm items-end ${msg.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
+                className={`flex gap-3 text-sm items-end ${
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
               >
                 {/* Assistant avatar removed per user request - name is shown above the message bubble */}
                 <div
-                  className={`p-4 rounded-2xl max-w-xl break-words ${msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground shadow-md'
-                    : 'bg-white border border-muted-foreground/10 shadow-sm'
-                    }`}
+                  className={`p-4 rounded-2xl max-w-xl break-words ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground shadow-md'
+                      : 'bg-white border border-muted-foreground/10 shadow-sm'
+                  }`}
                 >
                   {msg.role === 'assistant' && (
-                    <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
+                    <div className="text-xs text-muted-foreground mb-1 font-medium">
+                      The Adjoint
+                    </div>
                   )}
                   <KatexRenderer content={msg.content} autoWrap={false} />
                   {msg.isTyping && (
@@ -840,16 +851,24 @@ export function InteractiveChat() {
                         return (
                           <div className="flex gap-2">
                             {msg.suggestion.status === 'accepted' && (
-                              <Button variant="secondary" size="sm" onClick={() => handleRevert(index)}>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleRevert(index)}
+                              >
                                 Revert changes
                               </Button>
                             )}
                             {(msg.suggestion.status === 'declined' ||
                               msg.suggestion.status === 'reverted') && (
-                                <Button variant="secondary" size="sm" onClick={() => handleAdopt(index)}>
-                                  Adopt proposal
-                                </Button>
-                              )}
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleAdopt(index)}
+                              >
+                                Adopt proposal
+                              </Button>
+                            )}
                           </div>
                         );
                       })()}
