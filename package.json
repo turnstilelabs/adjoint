@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -77,6 +78,11 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
-    "prettier": "^3.3.3"
+    "prettier": "^3.3.3",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "15.3.3",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0"
   }
 }
