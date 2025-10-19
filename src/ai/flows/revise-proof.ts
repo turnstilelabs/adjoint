@@ -7,11 +7,21 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { ReviseProofInputSchema, ReviseProofOutputSchema } from './schemas';
+import { ReviseProofOutputSchema, SublemmaSchema } from './schemas';
 import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 
 export type ReviseProofInput = z.infer<typeof ReviseProofInputSchema>;
 export type ReviseProofOutput = z.infer<typeof ReviseProofOutputSchema>;
+
+const ReviseProofInputSchema = z.object({
+  problem: z.string().describe('The original mathematical problem.'),
+  proofSteps: z.array(SublemmaSchema).describe('The current sequence of sublemmas in the proof.'),
+  request: z.string().describe("The user's request for revision or a question about the proof."),
+  history: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() }))
+    .describe('The history of messages between you (the assistant) and the user')
+    .optional(),
+});
 
 export async function reviseProof(input: ReviseProofInput): Promise<ReviseProofOutput> {
   return reviseProofFlow(input);
@@ -23,7 +33,7 @@ const reviseProofPrompt = ai.definePrompt({
   output: { schema: ReviseProofOutputSchema },
   prompt: `${ADJOINT_SYSTEM_POLICY}
 
-You are an expert mathematician and AI assistant. Your task is to analyze a user's request concerning a mathematical proof and take the appropriate action within the above policy.
+You are an expert mathematician and AI assistant embedded in an interactive environment. Your task is to analyze a user's request concerning a mathematical proof and take the appropriate action within the above policy.
 Important: Never claim that changes have been applied. Do not use phrases like "I've added", "I updated", "I applied", or "I changed". For any revisions (DIRECT_REVISION or SUGGESTED_REVISION), present the revised steps as a proposal and explicitly ask for user acceptance using language like "I propose ..." or "Proposed change: ... Would you like me to apply these changes?". The application will gate changes on user Accept/Decline.
 
 

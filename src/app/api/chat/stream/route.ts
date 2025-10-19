@@ -44,16 +44,16 @@ const PROPOSE_CHANGES_SCHEMA = {
   },
 } as const;
 
-function buildPrompt(input: StreamRequest) {
+export function buildPrompt(input: StreamRequest) {
   const { problem, sublemmas, request, history = [] } = input;
 
   const historyText =
     history.length > 0
       ? `Conversation so far:
 ${history
-        .slice(-8)
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n')}
+  .slice(-8)
+  .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+  .join('\n')}
 
 `
       : '';
@@ -62,13 +62,13 @@ ${history
     sublemmas.length > 0
       ? `Current Proof Steps:
 ${sublemmas
-        .map(
-          (s, i) =>
-            `- ${i + 1}. ${s.title}
+  .map(
+    (s, i) =>
+      `- ${i + 1}. ${s.title}
   Statement: ${s.statement}
   Proof: ${s.proof}`,
-        )
-        .join('\n')}
+  )
+  .join('\n')}
 `
       : 'Current Proof Steps: (none provided)\n';
 
@@ -211,7 +211,10 @@ export async function POST(req: Request) {
                 const tcs = delta?.tool_calls;
                 if (Array.isArray(tcs)) {
                   for (const tc of tcs) {
-                    if (tc?.function?.name === PROPOSE_CHANGES_SCHEMA.name && tc.function?.arguments) {
+                    if (
+                      tc?.function?.name === PROPOSE_CHANGES_SCHEMA.name &&
+                      tc.function?.arguments
+                    ) {
                       toolArgsBuffer += tc.function.arguments;
                     }
                   }
