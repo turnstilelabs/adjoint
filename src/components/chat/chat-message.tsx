@@ -11,7 +11,7 @@ function ChatMessage({ message }: { message: Message }) {
       }`}
     >
       <div
-        className={`p-4 rounded-2xl max-w-xl break-words ${
+        className={`p-4 rounded-2xl break-words ${
           message.role === 'user'
             ? 'bg-primary text-primary-foreground shadow-md'
             : 'bg-white border border-muted-foreground/10 shadow-sm'

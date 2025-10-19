@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { useAppStore } from '@/state/app-store';
 import ChatInput from '@/components/chat/chat-input';
 import ChatMessages from '@/components/chat/chat-messages';
 
@@ -25,8 +24,6 @@ export type Message = {
 
 export function InteractiveChat() {
   const [isFocused, setIsFocused] = useState(false);
-
-  const proof = useAppStore((s) => s.proof());
 
   useEffect(() => {
     if (!isFocused) return;
@@ -53,7 +50,7 @@ export function InteractiveChat() {
       <div
         className={
           isFocused
-            ? 'w-full max-w-3xl h-[85vh] bg-background border rounded-lg shadow-lg flex flex-col overflow-hidden'
+            ? 'w-full max-w-[85vw] h-[85vh] bg-background border rounded-lg shadow-lg flex flex-col overflow-hidden'
             : 'flex-1 flex flex-col overflow-hidden'
         }
         onClick={(e) => {
