@@ -1,10 +1,9 @@
 'use server';
 
-import { decomposeProof } from '@/ai/flows/llm-proof-decomposition';
+import { decomposeProof, type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { interactiveQuestioning } from '@/ai/flows/interactive-questioning';
 import { validateStatement } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
-import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { reviseProof } from '@/ai/flows/revise-proof';
 import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 
@@ -73,14 +72,14 @@ export async function validateStatementAction(statement: string) {
 
 export async function validateProofAction(problem: string, proofSteps: Sublemma[]) {
   if (proofSteps.length === 0) {
-    return { success: false, error: 'There are no proof steps to validate.' };
+    return { success: false as const, error: 'There are no proof steps to validate.' };
   }
   try {
     const result = await validateProof({ problem, proofSteps });
-    return { success: true, ...result };
+    return { success: true as const, ...result };
   } catch (error) {
     console.error('validateProofAction error:', error);
-    return { success: false, error: 'Failed to validate the proof with AI.' };
+    return { success: false as const, error: 'Failed to validate the proof with AI.' };
   }
 }
 

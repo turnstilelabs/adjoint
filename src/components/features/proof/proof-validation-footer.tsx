@@ -3,140 +3,66 @@ import { AlertTriangle, CheckCircle, Info, Loader2, ShieldCheck, XCircle } from 
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
-import { useEffect, useRef, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
+import { validateProofAction } from '@/app/actions';
 
 function ProofValidationFooter() {
   const { toast } = useToast();
 
-  const problem = useAppStore((s) => s.problem);
+  const problem = useAppStore((s) => s.problem!);
   const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
 
   const proof = useAppStore((s) => s.proof());
-  const goBack = useAppStore((s) => s.goBack);
 
   const [isProofValidating, startValidateProof] = useTransition();
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  // Abort in-flight validation if component unmounts
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+  const [cancelled, setCancelled] = useState(false);
+  const cancelledRef = useRef(false);
 
   const handleValidateProof = () => {
+    setCancelled(false);
+    cancelledRef.current = false;
     startValidateProof(async () => {
       updateCurrentProofVersion({ validationResult: undefined });
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      try {
-        // TODO go back to using regular action for consistency, use Promise.race like this to handle
-        // cancellation
-        /**
-         *     const cancelPromise = new Promise<never>((_, reject) => {
-         *         cancelRef.current = () => reject(new Error("canceled"));
-         *       });
-         *
-         *    const data = (await Promise.race([
-         *           slowServerAction(), // your real server action call
-         *           cancelPromise,
-         *         ])) as Result;
-         *
-         *         finally {
-         *         // clear cancel hook; transition has settled -> isPending becomes false
-         *         cancelRef.current = null;
-         *       }
-         *
-         *        const cancel = () => {
-         *     // cause the race to reject now -> transition settles -> isPending false
-         *     cancelRef.current?.();
-         *   };
-         */
-        const res = await fetch('/api/validate-proof', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            problem,
-            proofSteps: proof.sublemmas,
-          }),
-          signal: controller.signal,
+
+      const result = await validateProofAction(problem, proof.sublemmas);
+
+      if (cancelledRef.current) {
+        return;
+      }
+
+      if (result.success) {
+        updateCurrentProofVersion({
+          validationResult: {
+            isValid: result.isValid || false,
+            isError: false,
+            feedback: result.feedback || 'No feedback provided.',
+            timestamp: new Date(),
+          },
         });
-
-        if (!res.ok) {
-          // If the client aborted, the fetch throws before reaching here in most browsers.
-          // But handle non-2xx responses too.
-          let message = 'Failed to validate the proof with AI.';
-          try {
-            const data = await res.json();
-            if (data?.error) message = data.error;
-          } catch {
-            // ignore json parse error
-          }
-          throw new Error(message);
-        }
-
-        const result = await res.json();
-        if ('isValid' in result && 'feedback' in result) {
-          updateCurrentProofVersion({
-            validationResult: {
-              isValid: result.isValid || false,
-              isError: false,
-              feedback: result.feedback || 'No feedback provided.',
-              timestamp: new Date(),
-            },
-          });
-        } else {
-          const friendly = 'Adjoint’s connection to the model was interrupted, please go back and retry.';
-          updateCurrentProofVersion({
-            validationResult: {
-              isError: true,
-              timestamp: new Date(),
-              feedback: friendly,
-            },
-          });
-          toast({
-            title: 'Validation error',
-            description: friendly,
-            variant: 'destructive',
-          });
-        }
-      } catch (error: any) {
-        if (error?.name === 'AbortError') {
-          // Swallow; user intentionally aborted
-        } else {
-          const code = showModelError(toast, error, goBack, 'Validation error');
-          const friendly = code
-            ? getModelErrorMessage(code)
-            : 'Adjoint’s connection to the model was interrupted, please go back and retry.';
-          updateCurrentProofVersion({
-            validationResult: {
-              isError: true,
-              timestamp: new Date(),
-              feedback: friendly,
-            },
-          });
-          if (!code) {
-            toast({
-              title: 'Validation error',
-              description: friendly,
-              variant: 'destructive',
-            });
-          }
-        }
-      } finally {
-        abortControllerRef.current = null;
+      } else {
+        const friendly =
+          'Adjoint’s connection to the model was interrupted, please go back and retry.';
+        updateCurrentProofVersion({
+          validationResult: {
+            isError: true,
+            timestamp: new Date(),
+            feedback: friendly,
+          },
+        });
+        toast({
+          title: 'Validation error',
+          description: friendly,
+          variant: 'destructive',
+        });
       }
     });
   };
 
-  const handleAbortValidation = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+  const cancel = () => {
+    setCancelled(true);
+    cancelledRef.current = true;
   };
 
   return (
@@ -200,8 +126,8 @@ function ProofValidationFooter() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {isProofValidating && (
-              <Button variant="outline" size="sm" onClick={handleAbortValidation}>
+            {isProofValidating && !cancelled && (
+              <Button variant="outline" size="sm" onClick={cancel}>
                 <XCircle className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
@@ -209,12 +135,12 @@ function ProofValidationFooter() {
             <Button
               onClick={handleValidateProof}
               disabled={
-                isProofValidating ||
+                (isProofValidating && !cancelled) ||
                 proof.sublemmas.length === 0 ||
                 (proof.validationResult && !proof.validationResult.isError)
               }
             >
-              {isProofValidating ? (
+              {isProofValidating && !cancelled ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Reviewing…
