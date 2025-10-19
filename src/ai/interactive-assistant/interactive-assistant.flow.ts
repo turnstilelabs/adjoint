@@ -3,8 +3,8 @@ import {
   InteractiveAssistantInputSchema,
 } from '@/ai/interactive-assistant/interactive-assistant.schemas';
 import { proposeChangesTool } from '@/ai/interactive-assistant/interactive-assistant.tools';
-import { ai } from '@/ai/interactive-assistant/ai';
 import { interactiveAssistantPrompt } from '@/ai/interactive-assistant/interactive-assistant.prompt';
+import { ai } from '@/ai/genkit';
 
 export const interactiveAssistantFlow = ai.defineFlow(
   {

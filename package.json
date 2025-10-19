@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.2",
+    "@genkit-ai/compat-oai": "^1.19.1",
     "@genkit-ai/googleai": "^1.14.1",
     "@genkit-ai/next": "^1.14.1",
     "@google/generative-ai": "^0.24.1",
@@ -74,15 +75,15 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "genkit-cli": "^1.14.1",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5",
-    "prettier": "^3.3.3",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "15.3.3",
     "eslint-plugin-react-hooks": "^4.6.2",
-    "@typescript-eslint/parser": "^6.21.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0"
+    "genkit-cli": "^1.14.1",
+    "postcss": "^8",
+    "prettier": "^3.3.3",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

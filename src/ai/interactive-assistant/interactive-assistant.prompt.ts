@@ -1,6 +1,6 @@
 import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 import { InteractiveAssistantInputSchema } from '@/ai/interactive-assistant/interactive-assistant.schemas';
-import { ai } from './ai';
+import { ai } from '@/ai/genkit';
 
 export const interactiveAssistantPrompt = ai.definePrompt({
   name: 'interactiveAssistantPrompt',

@@ -1,6 +1,6 @@
 import { SublemmaSchema } from '@/ai/flows/schemas';
 import { z } from 'zod';
-import { ai } from '@/ai/interactive-assistant/ai';
+import { ai } from '@/ai/genkit';
 
 export const proposeChangesTool = ai.defineTool(
   {
