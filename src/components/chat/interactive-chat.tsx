@@ -57,7 +57,7 @@ export function InteractiveChat() {
           if (isFocused) e.stopPropagation();
         }}
       >
-        <div className="px-3 py-2 border-b bg-background/60 backdrop-blur flex items-center justify-between">
+        <div className="px-3 py-2 border-b backdrop-blur flex items-center justify-between">
           <div
             className="text-xs font-medium text-muted-foreground cursor-pointer select-none"
             onClick={() => setIsFocused((v) => !v)}

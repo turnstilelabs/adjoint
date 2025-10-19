@@ -23,8 +23,8 @@ function ChatMessages() {
   }, [messages]);
 
   return (
-    <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
-      <div className="space-y-4 pt-4">
+    <ScrollArea className="flex-1 px-6" ref={scrollAreaRef}>
+      <div className="flex flex-col gap-4 py-6">
         {messages.map((message, index) => (
           <ChatMessage message={message} key={index} />
         ))}
