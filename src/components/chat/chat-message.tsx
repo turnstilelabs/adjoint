@@ -1,4 +1,4 @@
-import { Message } from '@/components/interactive-chat';
+import { Message } from '@/components/chat/interactive-chat';
 import { KatexRenderer } from '@/components/katex-renderer';
 import ChatTypingIndicator from '@/components/chat/chat-typing-indicator';
 import MessageSuggestionSection from '@/components/chat/message/message-suggestion-section';

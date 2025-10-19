@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
-import { type Message } from '@/components/interactive-chat';
+import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
 import { decomposeProblemAction } from '@/app/actions';
 

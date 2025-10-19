@@ -1,6 +1,6 @@
 import { streamFlow } from '@genkit-ai/next/client';
 import { interactiveAssistantFlow } from '@/ai/interactive-assistant/interactive-assistant.flow';
-import { Message } from '@/components/interactive-chat';
+import { Message } from '@/components/chat/interactive-chat';
 import { useAppStore } from '@/state/app-store';
 
 export const useSendMessage = () => {

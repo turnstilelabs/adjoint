@@ -1,5 +1,5 @@
 'use client';
-import { InteractiveChat } from '../../interactive-chat';
+import { InteractiveChat } from '../../chat/interactive-chat';
 import { ProofSidebar } from '../../proof-sidebar';
 import { ProofGraphView } from '../../proof-graph-view';
 import { useAppStore } from '@/state/app-store';

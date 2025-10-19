@@ -1,4 +1,4 @@
-import { Message } from '@/components/interactive-chat';
+import { Message } from '@/components/chat/interactive-chat';
 import { mergeRevised } from '@/components/chat/message/mergeRevised';
 import { useAppStore } from '@/state/app-store';
 import { computeProofDiff } from '@/components/chat/message/computeProofDiff';
