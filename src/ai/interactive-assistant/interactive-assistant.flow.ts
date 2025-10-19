@@ -25,6 +25,7 @@ export const interactiveAssistantFlow = ai.defineFlow(
           type: 'proposal',
           revisedSublemmas: (evt.content[0].toolResponse?.output as any)?.revisedSublemmas,
         });
+        return { done: true };
       }
       if (evt.role === 'model' && evt.text) {
         sendChunk({ type: 'text', content: evt.text });
