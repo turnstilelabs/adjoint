@@ -1,0 +1,53 @@
+import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
+
+export function mergeRevised(currentSteps: Sublemma[], revised: Sublemma[]): Sublemma[] {
+  if (revised.length === currentSteps.length) {
+    return revised;
+  }
+  if (revised.length === 1) {
+    const idx = inferTargetIndex(currentSteps, revised);
+    if (idx !== null && idx >= 0 && idx < currentSteps.length) {
+      const next = [...currentSteps];
+      next[idx] = revised[0];
+      return next;
+    }
+  }
+  // Fallback: overlay by normalized titles
+  const norm = (s: string) =>
+    (s || '')
+      .toLowerCase()
+      .replace(/^\s*(?:step\s*)?\d+[\.\)]?\s*/, '')
+      .trim();
+  const curMap = new Map(
+    currentSteps.map((s, i) => [norm(s.title || `step-${i + 1}`), { step: s, index: i }]),
+  );
+  const next = [...currentSteps];
+  let changed = false;
+  for (const r of revised) {
+    const key = norm(r.title || '');
+    const found = curMap.get(key);
+    if (found) {
+      next[found.index] = r;
+      changed = true;
+    }
+  }
+  return changed ? next : currentSteps;
+}
+
+/**
+ * Heuristics to interpret proposal payloads that may not include the full step list.
+ * - If the proposal length equals current length, treat as full replacement.
+ * - If it contains a single step, replace the inferred target step (by numeric prefix in title or default to last step).
+ * - Otherwise, attempt a title-based overlay (keep unmatched steps unchanged).
+ */
+function inferTargetIndex(currentSteps: Sublemma[], revised: Sublemma[]): number | null {
+  if (revised.length !== 1) return null;
+  const t = (revised[0].title || '').trim();
+  const m = t.match(/^\s*(?:Step\s*)?(\d+)[\.\)]?/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (!Number.isNaN(n) && n >= 1 && n <= currentSteps.length) return n - 1;
+  }
+  // Default heuristic: last step
+  return currentSteps.length > 0 ? currentSteps.length - 1 : null;
+}

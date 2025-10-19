@@ -1,8 +1,5 @@
 'use client';
-import { Accordion } from '@/components/ui/accordion';
-import { SublemmaItem } from '../../sublemma-item';
-import { InteractiveChat } from '../../interactive-chat';
-import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { InteractiveChat } from '../../chat/interactive-chat';
 import { ProofSidebar } from '../../proof-sidebar';
 import { ProofGraphView } from '../../proof-graph-view';
 import { useAppStore } from '@/state/app-store';
@@ -18,10 +15,10 @@ export default function ProofDisplay() {
     <div className="inset-0 absolute overflow-hidden flex">
       <ProofSidebar />
 
-      <main className="flex flex-col grow mx-auto max-w-5xl  p-10 gap-10 overflow-hidden h-full">
+      <main className="flex flex-col grow mx-auto max-w-5xl  p-10 pb-0 gap-10 overflow-hidden h-full">
         <EditableProblemCard />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto -mx-5 px-5">
           <div className="sticky top-0 z-20 flex items-center gap-2 mb-1 bg-background border-b">
             <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
           </div>
