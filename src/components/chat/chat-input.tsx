@@ -35,7 +35,7 @@ function ChatInput() {
           variant="ghost"
           size="icon"
           onClick={handleSend}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-primary"
+          className="absolute right-3 top-1/2 -translate-y-1/2"
           disabled={isSendingMessage}
           aria-label="Send message"
         >
