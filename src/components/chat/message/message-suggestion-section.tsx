@@ -68,7 +68,7 @@ function MessageSuggestionSection({ message }: { message: Message }) {
               <MessageSuggestionDiff diff={diff} />
             </div>
           </div>
-          {diff.length && (
+          {diff.length > 0 && (
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" onClick={onAccept}>
                 <ThumbsUp className="mr-2" /> Accept Proposed Changes
