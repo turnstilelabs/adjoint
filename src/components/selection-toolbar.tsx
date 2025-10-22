@@ -1,5 +1,5 @@
 'use client';
-import { Check, Edit } from 'lucide-react';
+import { HelpCircle, Edit } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
@@ -90,7 +90,7 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
             disabled={isPending}
             title="Check again"
           >
-            <Check className="h-4 w-4" />
+            <HelpCircle className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={onRevise} title="Revise statement">
             <Edit className="h-4 w-4" />
