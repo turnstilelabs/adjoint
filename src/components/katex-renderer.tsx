@@ -186,16 +186,20 @@ export function KatexRenderer({ content, className, autoWrap = true }: KatexRend
   const parts = useMemo(() => {
     // Optionally auto-wrap missing inline math when no delimiters are present (useful for statements/proofs).
     const hinted = autoWrap ? autoWrapInlineMathIfNeeded(content) : content;
+
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
     const normalized = normalizeMathDelimiters(hinted);
 
-    // Sanitize: remove $...$ around plain words (e.g., $Substitution$ -> Substitution)
-    const sanitized = normalized.replace(/\$([A-Za-z][A-Za-z\s\-']{0,30})\$/g, '$1');
-
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
-    const splitByDelimiters = sanitized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
+    const splitByDelimiters = normalized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
 
     return splitByDelimiters.map((part, index) => {
+      // Check if the part is a text-only math expression (e.g. $word$ or $some text$)
+      const textOnlyMatch = part.match(/^\$([A-Za-z][A-Za-z\s\-']{0,30})\$$/);
+      if (textOnlyMatch) {
+        return renderTextWithLineBreaks(textOnlyMatch[1], index);
+      }
+
       if (part.startsWith('$$') && part.endsWith('$$')) {
         const latex = part.substring(2, part.length - 2);
         try {
