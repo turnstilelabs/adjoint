@@ -2,7 +2,7 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, Share2, History, MessageCircle } from 'lucide-react';
+import { FileDown, History, MessageCircle, Share2 } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -96,7 +96,7 @@ export function ProofSidebar() {
         <div className="flex-1" />
       </aside>
       {isHistoryOpen && (
-        <aside className="w-80 border-r flex flex-col h-screen bg-card">
+        <aside className="absolute inset-0 left-14 z-30 md:static bg-card h-screen overflow-y-auto flex flex-col md:w-80 md:border-r ">
           <ProofHistory />
         </aside>
       )}
