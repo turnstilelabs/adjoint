@@ -37,7 +37,7 @@ export function ProofHistory() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="p-3 md:p-4 border-b flex items-center justify-between">
         <h3 className="text-lg font-semibold font-headline">Proof History</h3>
         <Button variant="ghost" size="icon" onClick={handleClose}>
           <PanelLeftClose />
@@ -45,7 +45,7 @@ export function ProofHistory() {
         </Button>
       </div>
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-2">
+        <div className="p-3 md:p-4 space-y-2">
           {proofHistory.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center p-4">No history yet.</p>
           ) : (

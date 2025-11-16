@@ -16,7 +16,7 @@ export default function ProofDisplay() {
     <div className="inset-0 absolute overflow-hidden flex">
       <ProofSidebar />
 
-      <main className="flex flex-col grow mx-auto max-w-5xl  p-10 pb-0 gap-10 overflow-hidden h-full">
+      <main className="flex flex-col grow mx-auto max-w-5xl p-3 md:p-10 pb-0 gap-10 overflow-hidden h-full">
         <EditableProblemCard />
 
         <ScrollArea className="flex-1 -mx-5 px-5">
