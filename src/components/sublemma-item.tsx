@@ -1,26 +1,26 @@
 'use client';
 
 import {
-  CheckCircle2,
-  Rocket,
-  Puzzle,
-  Lightbulb,
-  Sigma,
-  Save,
-  X,
-  Copy,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Copy,
+  Lightbulb,
+  Puzzle,
+  Rocket,
+  Save,
+  Sigma,
+  X,
 } from 'lucide-react';
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { SelectionToolbar } from './selection-toolbar';
-import type React from 'react';
 
 interface SublemmaItemProps {
   step: number;
@@ -603,11 +603,11 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
         className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border"
       >
         <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 grow">
             <span className={`p-2 rounded-full ${bg}`}>
               <Icon className={`h-5 w-5 ${text}`} />
             </span>
-            <div onClick={(e) => e.stopPropagation()}>
+            <div className="grow pr-5 flex">
               {isTitleEditing ? (
                 <Input
                   value={editedTitle}
@@ -615,12 +615,14 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                   onKeyDown={handleTitleKeyDown}
                   onBlur={commitTitle}
                   autoFocus
-                  className="h-8 text-base font-medium font-headline"
+                  className="h-8 text-base font-medium font-headline w-full"
+                  onClick={(e) => e.stopPropagation()}
                 />
               ) : (
                 <div
-                  className="text-base font-medium text-gray-900 font-headline"
+                  className="text-base font-medium text-gray-900 font-headline text-left w-auto"
                   onDoubleClick={handleTitleDoubleClick}
+                  onClickCapture={(e) => e.stopPropagation()}
                   title="Double-click to rename"
                 >
                   <KatexRenderer content={title} className="inline" autoWrap={false} />
