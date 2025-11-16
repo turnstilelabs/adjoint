@@ -70,15 +70,33 @@ export function ProofSidebar() {
           <LogoSmall />
         </div>
         <div className="flex flex-col items-center space-y-2">
-          <Button variant="ghost" size="icon" title="History" onClick={onToggleHistory}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="History"
+            onClick={onToggleHistory}
+            className={isHistoryOpen ? 'bg-gray-200' : ''}
+          >
             <History />
             <span className="sr-only">History</span>
           </Button>
-          <Button variant="ghost" size="icon" title="Graph" onClick={onToggleGraph}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Graph"
+            onClick={onToggleGraph}
+            className={viewMode === 'graph' ? 'bg-gray-200' : ''}
+          >
             <Share2 />
             <span className="sr-only">Graph</span>
           </Button>
-          <Button variant="ghost" size="icon" title="Chat" onClick={onToggleChat}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Chat"
+            onClick={onToggleChat}
+            className={isChatOpen ? 'bg-gray-200' : ''}
+          >
             {isChatOpen ? <MessageCircle /> : <MessageCircle />}
             <span className="sr-only">Chat</span>
           </Button>
