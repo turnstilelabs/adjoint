@@ -3,30 +3,18 @@
 import ProofDisplay from '@/components/features/proof/proof-display';
 import { useAppStore } from '@/state/app-store';
 import { ProofLoading } from '@/components/features/proof/proof-loading';
-import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function ProofView() {
-  const decompositionRan = useRef(false);
-  const [initialError, setInitialError] = useState<string | null>(null);
-
   const { loading, proof, startProof, problem } = useAppStore((s) => ({
     loading: s.loading,
     proof: s.proof,
     startProof: s.startProof,
     problem: s.problem,
   }));
+  const error = useAppStore((s) => s.error);
 
-  useEffect(() => {
-    if (problem && !decompositionRan.current) {
-      decompositionRan.current = true;
-      startProof(problem);
-    } else if (!problem && !decompositionRan.current) {
-      setInitialError('No problem statement found. Please start from the homepage.');
-    }
-  }, [problem, startProof]);
-
-  if (initialError) {
+  if (!loading && error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Card className="w-1/2">
@@ -34,7 +22,7 @@ export default function ProofView() {
             <CardTitle>Error</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>{initialError}</p>
+            <p>{error}</p>
           </CardContent>
         </Card>
       </div>
