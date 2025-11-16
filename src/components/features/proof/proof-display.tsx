@@ -28,8 +28,9 @@ export default function ProofDisplay() {
           <ProofValidationFooter />
         </ScrollArea>
       </main>
+
       {isChatOpen && (
-        <aside className="w-[30rem] border-l flex flex-col h-screen">
+        <aside className="absolute inset-0 left-14 z-30 md:static md:w-[30rem] md:border-l bg-background h-screen overflow-y-auto flex flex-col">
           <InteractiveChat />
         </aside>
       )}

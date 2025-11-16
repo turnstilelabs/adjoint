@@ -80,7 +80,7 @@ export function InteractiveChat() {
               aria-label="Expand chat"
               onClick={() => setIsFocused(true)}
             >
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="invisible md:visible h-4 w-4" />
             </Button>
           )}
         </div>
