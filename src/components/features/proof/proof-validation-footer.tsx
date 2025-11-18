@@ -92,7 +92,7 @@ function ProofValidationFooter() {
           </Alert>
         )}
       </div>
-      <div className="sticky bottom-0 left-0 right-0 border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="sticky bottom-0 left-0 right-0 border-t bg-background z-30">
         <div className="max-w-4xl mx-auto p-3 flex items-center justify-between gap-3">
           <div className="flex items-center text-sm text-muted-foreground">
             {!proof.validationResult && (
