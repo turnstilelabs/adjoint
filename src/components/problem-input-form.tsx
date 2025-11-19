@@ -28,9 +28,12 @@ export default function ProblemInputForm() {
       return;
     }
     setError(null);
+    console.debug('[UI][ProblemInput] submit start textLen=', trimmedProblem.length);
     const validationResult = await validateStatementAction(trimmedProblem);
+    console.debug('[UI][ProblemInput] validation done validity=', (validationResult as any).validity);
 
     if ('validity' in validationResult && validationResult.validity === 'VALID') {
+      console.debug('[UI][ProblemInput] calling startProof');
       await startProof(trimmedProblem);
     } else if ('validity' in validationResult) {
       // The statement was validated but not as a valid math problem
@@ -54,6 +57,7 @@ export default function ProblemInputForm() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    console.debug('[UI][ProblemInput] onSubmit fired');
     startTransition(async () => {
       await submitProblem(problem);
     });
@@ -79,6 +83,7 @@ export default function ProblemInputForm() {
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
+                  console.debug('[UI][ProblemInput] Enter detected, submitting');
                   startTransition(async () => {
                     await submitProblem(problem);
                   });

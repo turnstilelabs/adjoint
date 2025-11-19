@@ -29,8 +29,11 @@ function EditableProblemCard() {
         setEditError('Please enter a problem to solve.');
         return;
       }
+      console.debug('[UI][EditableProblemCard] validate edited problem len=', trimmed.length);
       const result = await validateStatementAction(trimmed);
+      console.debug('[UI][EditableProblemCard] validation done validity=', (result as any)?.validity);
       if ('validity' in result && result.validity === 'VALID') {
+        console.debug('[UI][EditableProblemCard] calling startProof');
         setIsEditing(false);
         await startProof(trimmed);
       } else if ('validity' in result) {

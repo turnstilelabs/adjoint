@@ -6,16 +6,14 @@ import MessageSuggestionSection from '@/components/chat/message/message-suggesti
 function ChatMessage({ message }: { message: Message }) {
   return (
     <div
-      className={`flex gap-3 text-sm items-end ${
-        message.role === 'user' ? 'justify-end' : 'justify-start'
-      }`}
+      className={`flex gap-3 text-sm items-end ${message.role === 'user' ? 'justify-end' : 'justify-start'
+        }`}
     >
       <div
-        className={`p-4 rounded-2xl break-words ${
-          message.role === 'user'
+        className={`p-4 rounded-2xl break-words ${message.role === 'user'
             ? 'bg-primary text-primary-foreground shadow-md'
-            : 'bg-white border border-muted-foreground/10 shadow-sm'
-        }`}
+            : 'bg-card border border-border shadow-sm'
+          }`}
       >
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>

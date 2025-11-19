@@ -7,6 +7,7 @@ import { generateProofGraphAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { showModelError } from '@/lib/model-errors';
 import { ProofGraph } from './proof-graph';
+import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
 
 /**
  * ProofGraphView
@@ -26,27 +27,34 @@ export function ProofGraphView() {
 
   // Trigger graph generation when entering graph view and data is missing.
   useEffect(() => {
+    console.debug('[UI][Graph] effect fired', { viewMode, hasGraph: !!proof.graphData, isGeneratingGraph, steps: proof.sublemmas?.length ?? 0 });
     if (viewMode !== 'graph') return;
     if (proof.graphData || isGeneratingGraph) return;
     if (!proof.sublemmas || proof.sublemmas.length === 0) return;
 
     startGeneratingGraph(async () => {
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][Graph] calling generateProofGraphAction steps=', proof.sublemmas.length);
       const result = await generateProofGraphAction(proof.sublemmas);
-      if ('nodes' in result && 'edges' in result) {
+      const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][Graph] graph call done ms=', t1 - t0, 'ok=', (result as any)?.success === true);
+      if ((result as any)?.success === true) {
+        const { nodes, edges } = result as { success: true } & GenerateProofGraphOutput;
         updateCurrentProofVersion({
           graphData: {
-            nodes: result.nodes.map((n) => {
+            nodes: nodes.map((n: GenerateProofGraphOutput['nodes'][number]) => {
               const m = n.id.match(/step-(\d+)/);
               const idx = m ? parseInt(m[1], 10) - 1 : -1;
               const content =
                 idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].statement : '';
               return { ...n, content };
             }),
-            edges: result.edges,
+            edges,
           },
         });
       } else {
         updateCurrentProofVersion({ graphData: undefined });
+        console.debug('[UI][Graph] graph call failed error=', (result as any)?.error);
         const fallback =
           'Adjoint’s connection to the model was interrupted, please go back and retry.';
         const code = showModelError(toast, (result as any)?.error, goBack, 'Graph error');

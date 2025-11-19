@@ -75,7 +75,7 @@ export function ProofSidebar() {
             size="icon"
             title="History"
             onClick={onToggleHistory}
-            className={isHistoryOpen ? 'bg-gray-200' : ''}
+            className={isHistoryOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
           >
             <History />
             <span className="sr-only">History</span>
@@ -85,7 +85,7 @@ export function ProofSidebar() {
             size="icon"
             title="Graph"
             onClick={onToggleGraph}
-            className={viewMode === 'graph' ? 'bg-gray-200' : ''}
+            className={viewMode === 'graph' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
           >
             <Share2 />
             <span className="sr-only">Graph</span>
@@ -95,7 +95,7 @@ export function ProofSidebar() {
             size="icon"
             title="Chat"
             onClick={onToggleChat}
-            className={isChatOpen ? 'bg-gray-200' : ''}
+            className={isChatOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
           >
             {isChatOpen ? <MessageCircle /> : <MessageCircle />}
             <span className="sr-only">Chat</span>
@@ -114,7 +114,7 @@ export function ProofSidebar() {
         <div className="flex-1" />
       </aside>
       {isHistoryOpen && (
-        <aside className="absolute inset-0 left-14 z-30 md:static bg-card h-screen overflow-y-auto flex flex-col md:w-80 md:border-r ">
+        <aside className="fixed inset-y-0 left-14 right-0 z-30 md:static bg-card h-screen flex flex-col md:w-80 md:border-r">
           <ProofHistory />
         </aside>
       )}
