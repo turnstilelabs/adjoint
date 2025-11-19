@@ -45,38 +45,65 @@
   }
 
   .dark {
-    --background: 240 5.9% 10%;
-    --foreground: 0 0% 98%;
-    --card: 240 5.9% 10%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 5.9% 10%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 256 100% 70%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 16 100% 66%;
-    --accent-foreground: 0 0% 100%;
+    /* Adjoint dark theme mapped from provided palette */
+    --background: 0 0% 7%;
+    /* #121212 */
+    --foreground: 0 0% 88%;
+    /* #e0e0e0 */
+
+    --card: 0 0% 10%;
+    /* surface1 #1a1a1a */
+    --card-foreground: 0 0% 88%;
+
+    --popover: 0 0% 10%;
+    /* surface1 */
+    --popover-foreground: 0 0% 88%;
+
+    --primary: 48 100% 67%;
+    /* accent #ffdd57 */
+    --primary-foreground: 0 0% 7%;
+    /* dark text on yellow */
+
+    --secondary: 0 0% 14%;
+    /* surface2 #242424 */
+    --secondary-foreground: 0 0% 88%;
+
+    --muted: 0 0% 14%;
+    /* surface2 */
+    --muted-foreground: 0 0% 67%;
+    /* secondary-text #aaaaaa */
+
+    --accent: 48 100% 67%;
+    /* align accent token to brand */
+    --accent-foreground: 0 0% 7%;
+
     --destructive: 0 62.8% 30.6%;
+    /* keep sensible default red */
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 256 100% 70%;
+
+    --border: 0 0% 20%;
+    /* #333333 */
+    --input: 0 0% 20%;
+    /* inputs match border */
+    --ring: 48 100% 60%;
+    /* brand yellow focus ring */
+
+    /* charts left as-is; adjust later if needed */
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 256 100% 70%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 256 100% 70%;
+
+    /* sidebar tokens */
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-primary: 48 100% 67%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 88%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 48 100% 60%;
   }
 }
 

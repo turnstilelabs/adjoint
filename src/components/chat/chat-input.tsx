@@ -28,7 +28,7 @@ function ChatInput() {
           }}
           placeholder="Revise the proof or ask a question..."
           rows={1}
-          className="bg-white w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
+          className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
         />
         <Button
           type="button"

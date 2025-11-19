@@ -600,7 +600,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
       )}
       <AccordionItem
         value={`item-${step}`}
-        className="bg-card border-gray-200 rounded-xl shadow-sm overflow-hidden border"
+        className="bg-card border-border rounded-xl shadow-sm overflow-hidden border"
       >
         <AccordionTrigger className="flex items-center justify-between w-full p-5 cursor-pointer hover:bg-muted/50 hover:no-underline">
           <div className="flex items-center gap-4 grow">
@@ -620,7 +620,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                 />
               ) : (
                 <div
-                  className="text-base font-medium text-gray-900 font-headline text-left w-auto"
+                  className="text-base font-medium text-primary font-headline text-left w-auto"
                   onDoubleClick={handleTitleDoubleClick}
                   onClickCapture={(e) => e.stopPropagation()}
                   title="Double-click to rename"
@@ -685,7 +685,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       <span className="sr-only">Copy Statement</span>
                     </button>
                   </div>
-                  <div ref={statementViewRef}>
+                  <div ref={statementViewRef} className="text-primary">
                     <KatexRenderer content={statement} />
                   </div>
                 </div>

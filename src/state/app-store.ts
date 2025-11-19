@@ -90,8 +90,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       // small delay to allow UI to render
       await new Promise((r) => setTimeout(r, 50));
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][AppStore] decompose start len=', trimmed.length);
       const result = await decomposeProblemAction(trimmed);
-      if (result.success && result.sublemmas) {
+      const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][AppStore] decompose done ms=', t1 - t0, 'success=', (result as any)?.success);
+      if (result.success) {
         // Normalize sublemmas to ensure consistent structure matching Sublemma schema
         const normalizedSublemmas: Sublemma[] = result.sublemmas.map((s: any) => {
           const content = s?.content as string | undefined;
@@ -121,9 +125,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeVersionIdx: 0,
         });
       } else {
+        console.debug('[UI][AppStore] decompose failed error=', (result as any)?.error);
+        const err = 'error' in result ? result.error : 'Failed to decompose the problem.';
         set({
           loading: false,
-          error: result.error || 'Failed to decompose the problem.',
+          error: err,
         });
       }
     } catch (e) {

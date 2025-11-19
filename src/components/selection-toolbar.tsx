@@ -21,7 +21,9 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
 
   const handleCheckAgain = () => {
     startTransition(async () => {
+      console.debug('[UI][SelectionToolbar] validate again len=', selectedText.length);
       const result = await validateStatementAction(selectedText);
+      console.debug('[UI][SelectionToolbar] validation result success=', (result as any)?.success, 'validity=', (result as any)?.validity);
       if (result.success) {
         const r = result as {
           success: true;
