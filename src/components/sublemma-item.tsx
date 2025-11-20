@@ -60,11 +60,18 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     selectedNorm: string;
     yRatio?: number;
   }>(null);
+  const lastSelectionSnapRef = useRef<null | {
+    target: 'statement' | 'proof';
+    visibleAllNorm: string;
+    prefixNorm: string;
+    selectedNorm: string;
+    yRatio?: number;
+  }>(null);
 
   const [selection, setSelection] = useState<{
     text: string;
-    target: HTMLElement | null;
-  }>({ text: '', target: null });
+    anchor: { top: number; left: number } | null;
+  }>({ text: '', anchor: null });
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
@@ -78,22 +85,53 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     ) {
       const range = currentSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      const tempEl = document.createElement('span');
-      // Position the anchor at the start of selection
-      tempEl.style.position = 'absolute';
-      tempEl.style.left = `${rect.left + window.scrollX}px`;
-      tempEl.style.top = `${rect.top + window.scrollY}px`;
-      document.body.appendChild(tempEl);
-      setSelection({ text: selectedText, target: tempEl });
+      setSelection({
+        text: selectedText,
+        anchor: { top: rect.top, left: rect.left + rect.width / 2 },
+      });
 
-      // Cleanup the temporary element
-      setTimeout(() => {
-        if (document.body.contains(tempEl)) {
-          document.body.removeChild(tempEl);
+      // Build and store a robust selection snapshot for later (toolbar click)
+      const targetNode = currentSelection.anchorNode;
+      const inStatement =
+        !!statementViewRef.current && !!targetNode && statementViewRef.current.contains(targetNode);
+      const inProof =
+        !!proofViewRef.current && !!targetNode && proofViewRef.current.contains(targetNode);
+      const containerEl = inStatement
+        ? statementViewRef.current
+        : inProof
+          ? proofViewRef.current
+          : null;
+      if (containerEl) {
+        try {
+          const visibleAllRaw = (containerEl.textContent || '').toString();
+          const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
+
+          let prefixNorm = '';
+          const r = document.createRange();
+          r.setStart(containerEl, 0);
+          r.setEnd(range.startContainer, range.startOffset);
+          prefixNorm = normalizeVisibleToLatex(r.toString());
+
+          const selectedNorm = normalizeVisibleToLatex(selectedText || '');
+          const rectCont = containerEl.getBoundingClientRect();
+          const yRatio = rectCont.height > 0 ? (rect.top - rectCont.top) / rectCont.height : undefined;
+
+          lastSelectionSnapRef.current = {
+            target: inStatement ? 'statement' : 'proof',
+            visibleAllNorm,
+            prefixNorm,
+            selectedNorm,
+            yRatio,
+          };
+        } catch {
+          lastSelectionSnapRef.current = null;
         }
-      }, 0);
+      } else {
+        lastSelectionSnapRef.current = null;
+      }
     } else {
-      setSelection({ text: '', target: null });
+      setSelection({ text: '', anchor: null });
+      lastSelectionSnapRef.current = null;
     }
   }, [isEditing]);
 
@@ -489,10 +527,88 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   };
 
   const handleReviseFromToolbar = () => {
+    // Prefer the robust snapshot captured on mouseup, since clicking the toolbar often clears selection
+    if (lastSelectionSnapRef.current) {
+      pendingFocusRef.current = { ...lastSelectionSnapRef.current };
+    } else {
+      // Fallback: try to build a snapshot from current selection (may be empty)
+      const sel = window.getSelection();
+      const selectedTextRaw = sel?.toString() || '';
+      const selectedNorm = normalizeVisibleToLatex(selectedTextRaw);
+      const targetNode = sel?.anchorNode || null;
+
+      const inStatement =
+        !!statementViewRef.current && !!targetNode && statementViewRef.current.contains(targetNode);
+      const inProof =
+        !!proofViewRef.current && !!targetNode && proofViewRef.current.contains(targetNode);
+
+      const containerEl = inStatement
+        ? statementViewRef.current
+        : inProof
+          ? proofViewRef.current
+          : null;
+
+      if (containerEl) {
+        try {
+          const visibleAllRaw = (containerEl.textContent || '').toString();
+          const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
+
+          // Prefix up to the current selection anchor
+          let prefixNorm = '';
+          if (sel?.anchorNode) {
+            const r = document.createRange();
+            r.setStart(containerEl, 0);
+            r.setEnd(sel.anchorNode, sel.anchorOffset);
+            prefixNorm = normalizeVisibleToLatex(r.toString());
+          }
+
+          // Vertical position heuristic from the selection range rect
+          let yRatio: number | undefined = undefined;
+          if (sel && sel.rangeCount > 0) {
+            const rectSel = sel.getRangeAt(0).getBoundingClientRect();
+            const rectCont = containerEl.getBoundingClientRect();
+            if (rectCont.height > 0) {
+              yRatio = (rectSel.top - rectCont.top) / rectCont.height;
+            }
+          }
+
+          pendingFocusRef.current = {
+            target: inStatement ? 'statement' : 'proof',
+            visibleAllNorm,
+            prefixNorm,
+            selectedNorm,
+            yRatio,
+          };
+        } catch {
+          pendingFocusRef.current = null;
+        }
+      } else {
+        pendingFocusRef.current = null;
+      }
+    }
+
+    // Enter edit mode without overwriting content
     setIsEditing(true);
-    // Default to editing the statement with the selected text; user can adjust.
-    setEditedStatement(selection.text);
-    setSelection({ text: '', target: null });
+    setEditedStatement(statement);
+    setEditedProof(proof);
+
+    requestAnimationFrame(() => {
+      const snap = pendingFocusRef.current;
+      pendingFocusRef.current = null;
+
+      if (snap?.target === 'statement' && statementTextareaRef.current) {
+        const idx = computeCaretIndexFromSnapshot(statement, snap);
+        placeCaret(statementTextareaRef.current, idx);
+      } else if (snap?.target === 'proof' && proofTextareaRef.current) {
+        const idx = computeCaretIndexFromSnapshot(proof, snap);
+        placeCaret(proofTextareaRef.current, idx);
+      } else if (statementTextareaRef.current) {
+        placeCaret(statementTextareaRef.current, 0);
+      }
+    });
+
+    // Hide the selection toolbar
+    setSelection({ text: '', anchor: null });
   };
 
   const handleTitleDoubleClick = (e: React.MouseEvent) => {
@@ -564,7 +680,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   useEffect(() => {
     // When editing starts/stops, or content changes, clear selection
-    setSelection({ text: '', target: null });
+    setSelection({ text: '', anchor: null });
   }, [isEditing, statement, proof]);
 
   // Click outside to cancel edit only if there are no changes
@@ -591,9 +707,9 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   return (
     <>
-      {selection.target && (
+      {selection.anchor && (
         <SelectionToolbar
-          target={selection.target}
+          anchor={selection.anchor}
           onRevise={handleReviseFromToolbar}
           selectedText={selection.text}
         />

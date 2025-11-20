@@ -9,12 +9,12 @@ import { useAppStore } from '@/state/app-store';
 import { showModelError } from '@/lib/model-errors';
 
 interface SelectionToolbarProps {
-  target: HTMLElement | null;
+  anchor: { top: number; left: number } | null;
   onRevise: () => void;
   selectedText: string;
 }
 
-export function SelectionToolbar({ target, onRevise, selectedText }: SelectionToolbarProps) {
+export function SelectionToolbar({ anchor, onRevise, selectedText }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const goBack = useAppStore((s) => s.goBack);
@@ -23,8 +23,13 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
     startTransition(async () => {
       console.debug('[UI][SelectionToolbar] validate again len=', selectedText.length);
       const result = await validateStatementAction(selectedText);
-      console.debug('[UI][SelectionToolbar] validation result success=', (result as any)?.success, 'validity=', (result as any)?.validity);
-      if (result.success) {
+      console.debug(
+        '[UI][SelectionToolbar] validation result success=',
+        (result as any)?.success,
+        'validity=',
+        (result as any)?.validity,
+      );
+      if ((result as any).success) {
         const r = result as {
           success: true;
           validity: 'VALID' | 'INVALID' | 'INCOMPLETE';
@@ -63,26 +68,24 @@ export function SelectionToolbar({ target, onRevise, selectedText }: SelectionTo
   };
 
   return (
-    <Popover open={!!target}>
+    <Popover open={!!anchor}>
       <PopoverAnchor asChild>
         <div
           style={{
-            position: 'absolute',
-            top: target?.getBoundingClientRect().top
-              ? target?.getBoundingClientRect().top + window.scrollY
-              : 0,
-            left: target?.getBoundingClientRect().left
-              ? target?.getBoundingClientRect().left + window.scrollX
-              : 0,
+            position: 'fixed',
+            top: anchor?.top ?? 0,
+            left: anchor?.left ?? 0,
+            width: 0,
+            height: 0,
           }}
         />
       </PopoverAnchor>
       <PopoverContent
         className="w-auto p-1"
         onOpenAutoFocus={(e) => e.preventDefault()}
-        style={{
-          top: '-12px',
-        }}
+        side="top"
+        sideOffset={8}
+        align="center"
       >
         <div className="flex items-center gap-1">
           <Button
