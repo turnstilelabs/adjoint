@@ -14,7 +14,8 @@ import { useAppStore } from '@/state/app-store';
 import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
 
 export default function ProblemInputForm() {
-  const [problem, setProblem] = useState('');
+  const lastProblem = useAppStore((s) => s.lastProblem);
+  const [problem, setProblem] = useState(lastProblem ?? '');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();

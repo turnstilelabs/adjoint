@@ -24,6 +24,7 @@ export type ProofValidationResult = {
 type StoreData = {
   view: View;
   problem: string | null;
+  lastProblem: string | null;
   messages: Message[];
   loading: boolean;
   error: string | null;
@@ -38,6 +39,8 @@ interface AppState extends StoreData {
   reset: () => void;
 
   startProof: (problem: string) => Promise<void>;
+  retry: () => Promise<void>;
+  editProblem: () => void;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
 
   // UI actions
@@ -59,6 +62,7 @@ interface AppState extends StoreData {
 const initialState: StoreData = {
   view: 'home',
   problem: null,
+  lastProblem: null,
   messages: [],
   loading: false,
   error: null,
@@ -82,6 +86,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       view: 'proof',
       problem: trimmed,
+      lastProblem: trimmed,
       messages: [],
       loading: true,
       error: null,
@@ -152,7 +157,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   reset: () => {
-    set(initialState);
+    set((state) => ({ ...initialState, lastProblem: state.lastProblem }));
+  },
+
+  // Additional actions
+  retry: async () => {
+    const p = get().lastProblem;
+    if (p) {
+      await get().startProof(p);
+    }
+  },
+  editProblem: () => {
+    set((state) => ({
+      ...state,
+      view: 'home',
+      loading: false,
+      error: null,
+    }));
   },
 
   // UI actions
