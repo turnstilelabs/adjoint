@@ -141,9 +141,13 @@ function autoWrapInlineMathIfNeeded(input: string): string {
     for (let i = 0; i < parts.length; i++) {
       const tok = parts[i];
       if (isWhitespace(tok)) {
-        // End math run at whitespace boundary
-        flushRun();
-        out.push(tok);
+        // Preserve whitespace inside an ongoing math run so expressions like
+        // "\{X(t)\}_{t\ge 0}" are not split into two invalid fragments.
+        if (run.length > 0) {
+          run.push(tok);
+        } else {
+          out.push(tok);
+        }
         continue;
       }
       if (isMathToken(tok)) {
@@ -170,14 +174,8 @@ function autoWrapInlineMathIfNeeded(input: string): string {
     })
     .join('');
 
-  // If there were no $ at all and the entire string looks like a single math expression,
-  // wrap the whole line once to avoid fragmenting.
-  if (!text.includes('$')) {
-    const s = normalizePlain(text);
-    if (/(\\sum|\\frac|[A-Za-z]_[A-Za-z0-9]|\\ge|\\le|\\neq|\^|=)/.test(s)) {
-      result = `$${s}$`;
-    }
-  }
+  // Note: Removed global whole-line auto-wrap to avoid wrapping long prose into math.
+  // We rely on token-level wrapping above so prose + math can coexist safely.
 
   return result;
 }
