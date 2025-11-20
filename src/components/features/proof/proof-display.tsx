@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 export default function ProofDisplay() {
   const isChatOpen = useAppStore((s) => s.isChatOpen);
   const viewMode = useAppStore((s) => s.viewMode);
+  const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
 
   return (
     <div className="inset-0 absolute overflow-hidden flex">
@@ -31,9 +32,17 @@ export default function ProofDisplay() {
       </main>
 
       {isChatOpen && (
-        <aside className="absolute inset-0 left-14 z-30 md:static md:w-[30rem] md:border-l bg-background h-screen overflow-y-auto flex flex-col">
-          <InteractiveChat />
-        </aside>
+        <>
+          {/* Click-outside overlay to close chat panel */}
+          <div
+            className="fixed inset-0 z-20 bg-transparent"
+            onClick={() => setIsChatOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="absolute inset-0 left-14 z-30 md:static md:w-[30rem] md:border-l bg-background h-screen overflow-y-auto flex flex-col">
+            <InteractiveChat />
+          </aside>
+        </>
       )}
     </div>
   );
