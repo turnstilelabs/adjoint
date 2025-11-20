@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="The Adjoint icon">
+  <!-- Outer ring -->
+  <circle cx="12" cy="12" r="10" fill="#121212" stroke="#ffdd57" stroke-width="2"/>
+  <!-- Horizontal stroke to the left from center -->
+  <path d="M4 12h8" stroke="#ffdd57" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Vertical center stroke -->
+  <path d="M12 2v20" stroke="#ffdd57" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

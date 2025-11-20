@@ -26,6 +26,9 @@ const sourceCodePro = Source_Code_Pro({
 export const metadata: Metadata = {
   title: 'The Adjoint',
   description: 'Your canonical companion in reasoning.',
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export default function RootLayout({
