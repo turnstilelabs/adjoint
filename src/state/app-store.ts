@@ -45,6 +45,10 @@ type StoreData = {
   activeVersionIdx: number;
   pendingSuggestion: PendingSuggestion | null;
   pendingRejection: { explanation: string } | null;
+  // Streaming progress
+  progressLog: string[];
+  // Cancel the current in-flight streaming request (if any)
+  cancelCurrent?: (() => void) | null;
 };
 
 interface AppState extends StoreData {
@@ -92,6 +96,8 @@ const initialState: StoreData = {
   activeVersionIdx: 0,
   pendingSuggestion: null,
   pendingRejection: null,
+  progressLog: [],
+  cancelCurrent: null,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -113,12 +119,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       pendingRejection: null,
       proofHistory: [],
       activeVersionIdx: 0,
+      progressLog: ['Starting proof attempt...'],
+      cancelCurrent: null,
     });
 
-    try {
+    const appendLog = (line: string) => set((s) => ({ progressLog: [...s.progressLog, line] }));
+
+    // Fallback non-streaming implementation (existing behavior)
+    const runNonStreaming = async () => {
       await new Promise((r) => setTimeout(r, 50));
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] attemptProof start len=', trimmed.length);
+      console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
       const attempt = opts?.force
         ? await attemptProofActionForce(trimmed)
         : await attemptProofAction(trimmed);
@@ -141,19 +152,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      // We have some proof text; decompose it
       const d0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const decomp = await decomposeRawProofAction(attempt.rawProof || '');
       const d1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
-      if (decomp && (decomp as any).success) {
-        console.debug('[UI][AppStore] decomposeRawProof lengths', {
-          provedLen: (decomp as any).provedStatement?.length ?? 0,
-          steps: (decomp as any).sublemmas?.length ?? 0,
-          normLen: (decomp as any).normalizedProof?.length ?? 0,
-          rawLen: attempt.rawProof?.length ?? 0,
-        });
-      }
 
       if (!decomp.success) {
         set({
@@ -194,20 +196,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      // PROVED_VARIANT: hold suggestion, do not show proof until accept
       set({
         loading: false,
         error: null,
         pendingSuggestion: {
-          suggested: attempt.finalStatement || decomp.provedStatement,
+          suggested: attempt.finalStatement || (decomp as any).provedStatement,
           variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
-          provedStatement: decomp.provedStatement,
-          sublemmas: decomp.sublemmas as Sublemma[],
+          provedStatement: (decomp as any).provedStatement,
+          sublemmas: (decomp as any).sublemmas as Sublemma[],
           explanation: attempt.explanation,
           normalizedProof: (decomp as any).normalizedProof,
           rawProof: attempt.rawProof || undefined,
         },
-        // Keep an empty proof version to avoid crashes; review button will be disabled
         proofHistory: [
           {
             sublemmas: [],
@@ -216,19 +216,153 @@ export const useAppStore = create<AppState>((set, get) => ({
         ],
         activeVersionIdx: 0,
       });
+    };
+
+    // Try streaming via SSE first when available
+    if (typeof window !== 'undefined' && 'EventSource' in window) {
       try {
-        console.debug('[UI][AppStore] pendingSuggestion set', {
-          variantType: attempt.variantType,
-          steps: (decomp as any).sublemmas?.length ?? 0,
-          provedLen: (decomp as any).provedStatement?.length ?? 0,
+        const url = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
+        const es = new EventSource(url);
+        let finished = false;
+
+        set({ cancelCurrent: () => { try { es.close(); } catch { } } });
+
+        es.addEventListener('progress', (ev: MessageEvent) => {
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
+            if (data?.phase === 'decompose.start') appendLog('Analyzing proof structure...');
+          } catch {
+            // ignore
+          }
         });
-      } catch { }
-    } catch (e) {
-      set({
-        loading: false,
-        error: e instanceof Error ? e.message : 'Unexpected error.',
-        proofHistory: [],
-      });
+
+        es.addEventListener('attempt', (ev: MessageEvent) => {
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            if (data?.status === 'FAILED') {
+              appendLog('Model could not prove the statement.');
+            } else {
+              appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0}).`);
+            }
+          } catch { }
+        });
+
+        es.addEventListener('decompose', (ev: MessageEvent) => {
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s).`);
+          } catch { }
+        });
+
+        es.addEventListener('server-error', (ev: MessageEvent) => {
+          if (finished) return;
+          finished = true;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            set({ loading: false, error: data?.error || 'Unexpected server error.' });
+          } catch {
+            set({ loading: false, error: 'Unexpected server error.' });
+          }
+          try { es.close(); } catch { }
+          set({ cancelCurrent: null });
+        });
+
+        es.addEventListener('done', (ev: MessageEvent) => {
+          if (finished) return;
+          finished = true;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            const attempt = data?.attempt;
+            const decomp = data?.decompose;
+
+            if (!attempt) {
+              set({ loading: false, error: 'Malformed SSE response.' });
+              return;
+            }
+
+            if (attempt.status === 'FAILED') {
+              set({
+                loading: false,
+                error: null,
+                pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
+                proofHistory: [],
+                activeVersionIdx: 0,
+              });
+            } else if (!decomp) {
+              set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
+            } else if (attempt.status === 'PROVED_AS_IS') {
+              const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0)
+                ? (decomp.sublemmas as Sublemma[])
+                : ([{
+                  title: 'Proof',
+                  statement: decomp.provedStatement,
+                  proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
+                }] as Sublemma[]);
+              const assistantMessage: Message = {
+                role: 'assistant',
+                content:
+                  `I've broken down the proof into the following steps:\n\n` +
+                  steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+              };
+              set({
+                messages: [assistantMessage],
+                loading: false,
+                error: null,
+                proofHistory: [
+                  {
+                    sublemmas: steps,
+                    timestamp: new Date(),
+                  },
+                ],
+                activeVersionIdx: 0,
+              });
+            } else {
+              // PROVED_VARIANT
+              set({
+                loading: false,
+                error: null,
+                pendingSuggestion: {
+                  suggested: attempt.finalStatement || decomp.provedStatement,
+                  variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                  provedStatement: decomp.provedStatement,
+                  sublemmas: decomp.sublemmas as Sublemma[],
+                  explanation: attempt.explanation,
+                  normalizedProof: (decomp as any).normalizedProof,
+                  rawProof: attempt.rawProof || undefined,
+                },
+                proofHistory: [
+                  {
+                    sublemmas: [],
+                    timestamp: new Date(),
+                  },
+                ],
+                activeVersionIdx: 0,
+              });
+            }
+          } catch (e) {
+            set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
+          } finally {
+            try { es.close(); } catch { }
+            set({ cancelCurrent: null });
+          }
+        });
+
+        es.onerror = () => {
+          if (finished) return;
+          finished = true;
+          try { es.close(); } catch { }
+          set({ cancelCurrent: null });
+          appendLog('Streaming connection lost. Falling back...');
+          // Fallback to non-streaming path
+          runNonStreaming();
+        };
+      } catch (e) {
+        appendLog('Streaming not available. Falling back...');
+        await runNonStreaming();
+      }
+    } else {
+      await runNonStreaming();
     }
   },
 
@@ -243,6 +377,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   reset: () => {
+    const cancel = get().cancelCurrent || null;
+    if (cancel) {
+      try { cancel(); } catch { }
+    }
     set((state) => ({ ...initialState, lastProblem: state.lastProblem }));
   },
 
