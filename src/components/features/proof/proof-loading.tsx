@@ -35,8 +35,8 @@ export function ProofLoading() {
       </Card>
       <div className="mt-12 flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-lg font-medium">Generating proof steps...</p>
-        <p className="text-sm">The AI is thinking. This may take a moment.</p>
+        <p className="text-lg font-medium">Attempting proof...</p>
+        <p className="text-sm">This may take a moment.</p>
         <p className="text-xs font-mono text-foreground/70">Elapsed: {minutes}:{seconds}</p>
       </div>
       <div className="mt-8 flex items-center gap-2">
