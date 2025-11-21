@@ -44,13 +44,18 @@ const prompt = ai.definePrompt({
 Original statement:
 "{{{problem}}}"
 
-Rules:
+Outcome classification
 - If you can prove the original as-is, set status = PROVED_AS_IS, finalStatement = the original, variantType = null.
 - If you can instead prove a different but closely related statement, set status = PROVED_VARIANT, finalStatement = the exact proved statement, and variantType = one of:
   • WEAKENING (a weaker claim than the original)
   • OPPOSITE (close to the negation/opposite of the original)
-- If you cannot provide a correct proof, set status = FAILED and explain succinctly why (explanation). In this case rawProof must be null and finalStatement null.
-- When you provide a proof (status ≠ FAILED), place the full proof in rawProof as one continuous text (LaTeX allowed).
+- If you cannot provide a correct proof, set status = FAILED and explain succinctly why (explanation). In this case rawProof and finalStatement must be null.
+
+Requirements for rawProof when status ≠ FAILED
+- Provide a complete, self-contained, multi-sentence proof (no outlines or mere sketches). Use clear narrative text; LaTeX is allowed for math ($...$ or $$...$$) but avoid bullet lists.
+- Be explicit: no large logical leaps; include key justifications (algebraic/analytic steps, quantifier reasoning, set/number theoretic details) that establish correctness.
+- If providing a counterexample, construct it explicitly and verify all required properties step by step.
+- Structure guidance: when the argument is non-trivial, naturally organize into 2–6 logical segments (paragraphs). For trivial statements, a concise direct proof is fine.
 
 Strict output shape:
 {"status":"PROVED_AS_IS|PROVED_VARIANT|FAILED","finalStatement":string|null,"variantType":"WEAKENING|OPPOSITE"|null,"rawProof":string|null,"explanation":string}`,
