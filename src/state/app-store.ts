@@ -49,6 +49,9 @@ type StoreData = {
   progressLog: string[];
   // Cancel the current in-flight streaming request (if any)
   cancelCurrent?: (() => void) | null;
+  // Live draft streaming (token-level)
+  liveDraft: string;
+  isDraftStreaming: boolean;
 };
 
 interface AppState extends StoreData {
@@ -98,6 +101,8 @@ const initialState: StoreData = {
   pendingRejection: null,
   progressLog: [],
   cancelCurrent: null,
+  liveDraft: '',
+  isDraftStreaming: false,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -121,6 +126,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeVersionIdx: 0,
       progressLog: ['Starting proof attempt...'],
       cancelCurrent: null,
+      liveDraft: '',
+      isDraftStreaming: false,
     });
 
     const appendLog = (line: string) => set((s) => ({ progressLog: [...s.progressLog, line] }));
@@ -218,148 +225,135 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     };
 
-    // Try streaming via SSE first when available
+    // Try token streaming first; fallback to metadata-only SSE, then non-streaming
     if (typeof window !== 'undefined' && 'EventSource' in window) {
+      const runMetadataSSE = async () => {
+        try {
+          const url2 = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
+          const es2 = new EventSource(url2);
+          let finished2 = false;
+          set({ cancelCurrent: () => { try { es2.close(); } catch { } } });
+
+          es2.addEventListener('progress', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
+              if (data?.phase === 'decompose.start') appendLog('Decomposing proof....');
+            } catch { }
+          });
+          es2.addEventListener('attempt', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.status === 'FAILED') appendLog('Unable to provide a proof....');
+              else if (data?.status === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
+              else appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
+            } catch { }
+          });
+          es2.addEventListener('decompose', (ev: MessageEvent) => {
+            try { const data = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`); } catch { }
+          });
+          es2.addEventListener('server-error', (ev: MessageEvent) => {
+            if (finished2) return; finished2 = true;
+            try { const data = JSON.parse(ev.data || '{}'); set({ loading: false, error: data?.error || 'Unexpected server error.' }); } catch { set({ loading: false, error: 'Unexpected server error.' }); }
+            try { es2.close(); } catch { }
+            set({ cancelCurrent: null });
+          });
+          es2.addEventListener('done', (ev: MessageEvent) => {
+            if (finished2) return; finished2 = true;
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              const attempt = data?.attempt; const decomp = data?.decompose;
+              if (!attempt) { set({ loading: false, error: 'Malformed SSE response.' }); return; }
+              if (attempt.status === 'FAILED') {
+                set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
+              } else if (!decomp) {
+                set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
+              } else if (attempt.status === 'PROVED_AS_IS') {
+                const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
+                const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'), };
+                set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [{ sublemmas: steps, timestamp: new Date() }], activeVersionIdx: 0 });
+              } else {
+                set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [{ sublemmas: [], timestamp: new Date() }], activeVersionIdx: 0 });
+              }
+            } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
+            finally { try { es2.close(); } catch { } set({ cancelCurrent: null }); }
+          });
+          es2.onerror = () => { try { es2.close(); } catch { } set({ cancelCurrent: null }); appendLog('Metadata stream lost. Falling back to non-streaming...'); runNonStreaming(); };
+        } catch { await runNonStreaming(); }
+      };
+
       try {
-        const url = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
+        const url = `/api/proof/attempt-stream?problem=${encodeURIComponent(trimmed)}`;
         const es = new EventSource(url);
         let finished = false;
-
+        let gotDelta = false;
         set({ cancelCurrent: () => { try { es.close(); } catch { } } });
+        set({ isDraftStreaming: true, liveDraft: '' });
 
-        es.addEventListener('progress', (ev: MessageEvent) => {
-          try {
-            const data = JSON.parse(ev.data || '{}');
-            if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
-            if (data?.phase === 'decompose.start') appendLog('Analyzing proof structure...');
-          } catch {
-            // ignore
-          }
+        es.addEventListener('model.start', (ev: MessageEvent) => {
+          try { const data = JSON.parse(ev.data || '{}'); appendLog(`Using ${data?.provider}/${data?.model}...`); } catch { }
         });
-
-        es.addEventListener('attempt', (ev: MessageEvent) => {
+        es.addEventListener('model.switch', (ev: MessageEvent) => {
+          try { const d = JSON.parse(ev.data || '{}'); if (d?.to) appendLog(`Switched model to ${d.to}...`); } catch { }
+        });
+        es.addEventListener('model.delta', (ev: MessageEvent) => {
+          try { const data = JSON.parse(ev.data || '{}'); const t = data?.text || ''; if (t) { if (!gotDelta) { appendLog('Receiving model output...'); gotDelta = true; } set((s) => ({ liveDraft: s.liveDraft + t })); } } catch { }
+        });
+        es.addEventListener('model.end', () => { set({ isDraftStreaming: false }); appendLog('Proof draft completed....'); });
+        es.addEventListener('classify.result', (ev: MessageEvent) => {
           try {
-            const data = JSON.parse(ev.data || '{}');
-            if (data?.status === 'FAILED') {
-              appendLog('Model could not prove the statement.');
-            } else {
-              appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0}).`);
-            }
+            const d = JSON.parse(ev.data || '{}');
+            const st = d?.status;
+            if (st === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
+            else if (st === 'FAILED') appendLog('Unable to provide a proof....');
           } catch { }
         });
 
-        es.addEventListener('decompose', (ev: MessageEvent) => {
-          try {
-            const data = JSON.parse(ev.data || '{}');
-            appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s).`);
-          } catch { }
-        });
+
+
+        es.addEventListener('decompose.start', () => appendLog('Decomposing proof....'));
+        es.addEventListener('decompose.result', (ev: MessageEvent) => { try { const d = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${d?.sublemmasCount ?? 0} step(s)....`); } catch { } });
 
         es.addEventListener('server-error', (ev: MessageEvent) => {
-          if (finished) return;
-          finished = true;
-          try {
-            const data = JSON.parse(ev.data || '{}');
-            set({ loading: false, error: data?.error || 'Unexpected server error.' });
-          } catch {
-            set({ loading: false, error: 'Unexpected server error.' });
-          }
+          if (finished) return; finished = true;
+          let msg = 'Token stream failed.';
+          try { const data = JSON.parse(ev.data || '{}'); if (data?.error) msg = `Token stream error: ${data.error}`; } catch { }
           try { es.close(); } catch { }
-          set({ cancelCurrent: null });
+          set({ cancelCurrent: null, isDraftStreaming: false });
+          appendLog(msg + ' Falling back to metadata stream...');
+          runMetadataSSE();
         });
 
         es.addEventListener('done', (ev: MessageEvent) => {
-          if (finished) return;
-          finished = true;
+          if (finished) return; finished = true;
           try {
             const data = JSON.parse(ev.data || '{}');
-            const attempt = data?.attempt;
-            const decomp = data?.decompose;
-
-            if (!attempt) {
-              set({ loading: false, error: 'Malformed SSE response.' });
-              return;
-            }
-
+            const attempt = data?.attempt; const decomp = data?.decompose;
+            if (!attempt) { set({ loading: false, error: 'Malformed stream response.' }); return; }
             if (attempt.status === 'FAILED') {
-              set({
-                loading: false,
-                error: null,
-                pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
-                proofHistory: [],
-                activeVersionIdx: 0,
-              });
+              set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
             } else if (!decomp) {
               set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
             } else if (attempt.status === 'PROVED_AS_IS') {
-              const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0)
-                ? (decomp.sublemmas as Sublemma[])
-                : ([{
-                  title: 'Proof',
-                  statement: decomp.provedStatement,
-                  proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
-                }] as Sublemma[]);
-              const assistantMessage: Message = {
-                role: 'assistant',
-                content:
-                  `I've broken down the proof into the following steps:\n\n` +
-                  steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
-              };
-              set({
-                messages: [assistantMessage],
-                loading: false,
-                error: null,
-                proofHistory: [
-                  {
-                    sublemmas: steps,
-                    timestamp: new Date(),
-                  },
-                ],
-                activeVersionIdx: 0,
-              });
+              const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
+              const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n') };
+              set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [{ sublemmas: steps, timestamp: new Date() }], activeVersionIdx: 0 });
             } else {
-              // PROVED_VARIANT
-              set({
-                loading: false,
-                error: null,
-                pendingSuggestion: {
-                  suggested: attempt.finalStatement || decomp.provedStatement,
-                  variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
-                  provedStatement: decomp.provedStatement,
-                  sublemmas: decomp.sublemmas as Sublemma[],
-                  explanation: attempt.explanation,
-                  normalizedProof: (decomp as any).normalizedProof,
-                  rawProof: attempt.rawProof || undefined,
-                },
-                proofHistory: [
-                  {
-                    sublemmas: [],
-                    timestamp: new Date(),
-                  },
-                ],
-                activeVersionIdx: 0,
-              });
+              set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined }, proofHistory: [{ sublemmas: [], timestamp: new Date() }], activeVersionIdx: 0 });
             }
-          } catch (e) {
-            set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
-          } finally {
-            try { es.close(); } catch { }
-            set({ cancelCurrent: null });
-          }
+          } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
+          finally { try { es.close(); } catch { } set({ cancelCurrent: null, isDraftStreaming: false }); }
         });
 
         es.onerror = () => {
-          if (finished) return;
-          finished = true;
-          try { es.close(); } catch { }
-          set({ cancelCurrent: null });
-          appendLog('Streaming connection lost. Falling back...');
-          // Fallback to non-streaming path
-          runNonStreaming();
+          if (finished) return; finished = true; try { es.close(); } catch { }
+          set({ cancelCurrent: null, isDraftStreaming: false });
+          appendLog('Token stream connection lost. Falling back to metadata stream...');
+          runMetadataSSE();
         };
       } catch (e) {
-        appendLog('Streaming not available. Falling back...');
-        await runNonStreaming();
+        appendLog('Token streaming not available. Falling back to metadata stream...');
+        await runMetadataSSE();
       }
     } else {
       await runNonStreaming();
