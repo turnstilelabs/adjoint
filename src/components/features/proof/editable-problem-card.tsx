@@ -13,6 +13,8 @@ function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
   const startProof = useAppStore((s) => s.startProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
+  const pendingRejection = useAppStore((s) => s.pendingRejection);
+  const clearRejection = useAppStore((s) => s.clearRejection);
   const acceptSuggestedChange = useAppStore((s) => s.acceptSuggestedChange);
   const clearSuggestion = useAppStore((s) => s.clearSuggestion);
 
@@ -76,6 +78,7 @@ function EditableProblemCard() {
   }, [isEditing]);
 
   const hasSuggestion = !!pendingSuggestion;
+  const hasRejection = !!pendingRejection;
 
   return (
     <Card className={`mb-1 ${hasSuggestion ? 'border-yellow-500' : ''}`}>
@@ -127,6 +130,32 @@ function EditableProblemCard() {
               >
                 <KatexRenderer content={problem} />
               </div>
+              {hasRejection && pendingRejection && (
+                <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
+                  <div className="text-sm mb-2 font-medium">
+                    The AI was unable to prove this statement and found evidence it may be incorrect:
+                  </div>
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted whitespace-pre-wrap">
+                    {pendingRejection.explanation}
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <Button size="sm" onClick={() => setIsEditing(true)}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        clearRejection();
+                        await startProof(problem, { force: true });
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {hasSuggestion && pendingSuggestion && (
                 <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
                   <div className="text-sm mb-2 font-medium">
@@ -138,7 +167,7 @@ function EditableProblemCard() {
                   </div>
                   <div className="flex items-center gap-2 mt-3">
                     <Button size="sm" onClick={acceptSuggestedChange}>
-                      Accept Change
+                      Accept
                     </Button>
                     <Button
                       size="sm"

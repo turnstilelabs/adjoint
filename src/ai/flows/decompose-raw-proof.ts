@@ -38,17 +38,38 @@ const prompt = ai.definePrompt({
     output: { schema: DecomposeRawProofOutputSchema },
     system:
         'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.',
-    prompt: `Given a raw mathematical proof, extract:
-- provedStatement: the exact claim that the proof establishes (LaTeX allowed)
-- sublemmas: a list where each element has { title, statement, proof } using LaTeX where appropriate
-- normalizedProof: the same proof, cleaned/normalized into a single coherent text block (LaTeX allowed)
+    prompt: `Instructions
+Input: A mathematical proof text (possibly short, counterexample-style, or a full argument)
+Output: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$.
+
+Decomposition Guidelines
+1. Identify Decomposition Candidates
+- Intermediate results used multiple times
+- Sub-arguments (>3–4 logical steps)
+- Conceptually distinct ideas or techniques
+- Standalone facts that simplify the main flow
+
+2. Atomic Statement Principle
+Each sublemma must:
+- Be self-contained with precise hypotheses/conclusions
+- Focus on a single mathematical idea
+- Be useful (reused or simplifies reasoning)
+- Clearly specify inputs/outputs
+
+Additional constraints (critical)
+- You must return at least one sublemma. Never return an empty array.
+- If the proof is short or a counterexample, return exactly one sublemma:
+  • title: 'Counterexample' (or 'Direct proof' if appropriate)
+  • statement: the exact proved claim (same as provedStatement)
+  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)
+- Prefer 2–6 sublemmas for longer arguments.
 
 Raw proof:
 """
 {{{rawProof}}}
 """
 
-Strict output shape:
+Return strictly:
 {"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`,
 });
 

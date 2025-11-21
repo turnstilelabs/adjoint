@@ -21,6 +21,8 @@ export type PendingSuggestion = {
   provedStatement: string; // extracted from raw proof decomposition
   sublemmas: Sublemma[]; // pre-decomposed steps for instant accept
   explanation: string;
+  normalizedProof?: string; // full normalized proof text for fallback rendering
+  rawProof?: string; // original raw proof text for fallback rendering
 };
 export type ProofValidationResult = {
   isError?: boolean;
@@ -42,6 +44,7 @@ type StoreData = {
   proofHistory: ProofVersion[];
   activeVersionIdx: number;
   pendingSuggestion: PendingSuggestion | null;
+  pendingRejection: { explanation: string } | null;
 };
 
 interface AppState extends StoreData {
@@ -55,6 +58,7 @@ interface AppState extends StoreData {
   // Variant handling
   acceptSuggestedChange: () => void;
   clearSuggestion: () => void;
+  clearRejection: () => void;
 
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
@@ -87,6 +91,7 @@ const initialState: StoreData = {
   proofHistory: [],
   activeVersionIdx: 0,
   pendingSuggestion: null,
+  pendingRejection: null,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -105,6 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       loading: true,
       error: null,
       pendingSuggestion: null,
+      pendingRejection: null,
       proofHistory: [],
       activeVersionIdx: 0,
     });
@@ -128,14 +134,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           loading: false,
           error: null,
-          proofHistory: [
-            {
-              sublemmas: [
-                { title: '', statement: '', proof: attempt.explanation || 'No proof available.' },
-              ],
-              timestamp: new Date(),
-            },
-          ],
+          pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
+          proofHistory: [],
           activeVersionIdx: 0,
         });
         return;
@@ -146,6 +146,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const decomp = await decomposeRawProofAction(attempt.rawProof || '');
       const d1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
+      if (decomp && (decomp as any).success) {
+        console.debug('[UI][AppStore] decomposeRawProof lengths', {
+          provedLen: (decomp as any).provedStatement?.length ?? 0,
+          steps: (decomp as any).sublemmas?.length ?? 0,
+          normLen: (decomp as any).normalizedProof?.length ?? 0,
+          rawLen: attempt.rawProof?.length ?? 0,
+        });
+      }
 
       if (!decomp.success) {
         set({
@@ -157,7 +165,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (attempt.status === 'PROVED_AS_IS') {
-        const steps: Sublemma[] = decomp.sublemmas;
+        const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0)
+          ? (decomp.sublemmas as Sublemma[])
+          : ([{
+            title: 'Proof',
+            statement: decomp.provedStatement,
+            proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
+          }] as Sublemma[]);
+        console.debug('[UI][AppStore] provedAsIs steps', steps.length);
         const assistantMessage: Message = {
           role: 'assistant',
           content:
@@ -189,6 +204,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           provedStatement: decomp.provedStatement,
           sublemmas: decomp.sublemmas as Sublemma[],
           explanation: attempt.explanation,
+          normalizedProof: (decomp as any).normalizedProof,
+          rawProof: attempt.rawProof || undefined,
         },
         // Keep an empty proof version to avoid crashes; review button will be disabled
         proofHistory: [
@@ -199,6 +216,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         ],
         activeVersionIdx: 0,
       });
+      try {
+        console.debug('[UI][AppStore] pendingSuggestion set', {
+          variantType: attempt.variantType,
+          steps: (decomp as any).sublemmas?.length ?? 0,
+          provedLen: (decomp as any).provedStatement?.length ?? 0,
+        });
+      } catch { }
     } catch (e) {
       set({
         loading: false,
@@ -226,7 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   retry: async () => {
     const p = get().lastProblem;
     if (p) {
-      await get().startProof(p);
+      await get().startProof(p, { force: true });
     }
   },
   editProblem: () => {
@@ -263,7 +287,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   acceptSuggestedChange: () => {
     const s = get().pendingSuggestion;
     if (!s) return;
-    const steps = s.sublemmas;
+    const steps: Sublemma[] = (s.sublemmas && s.sublemmas.length > 0)
+      ? s.sublemmas
+      : ([{
+        title: 'Proof',
+        statement: s.provedStatement,
+        proof: s.normalizedProof || s.rawProof || s.explanation || 'Proof unavailable.',
+      }] as Sublemma[]);
+    try {
+      console.debug('[UI][AppStore] acceptSuggestedChange', {
+        stepsBefore: s.sublemmas?.length ?? 0,
+        usedFallback: !(s.sublemmas && s.sublemmas.length > 0),
+      });
+    } catch { }
     set({
       problem: s.provedStatement,
       pendingSuggestion: null,
@@ -286,6 +322,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearSuggestion: () => set({ pendingSuggestion: null }),
+  clearRejection: () => set({ pendingRejection: null }),
 
   // Go back to previous proof version (if any) and ensure steps view
   goBack: () =>
