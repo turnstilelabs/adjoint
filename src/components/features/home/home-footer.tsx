@@ -24,6 +24,7 @@ export function HomeFooter() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader className="!text-center sm:!text-center">
+              <DialogTitle className="sr-only">Learn more</DialogTitle>
               <DialogDescription>
                 We’re crafting the ideal workflow for mathematicians to develop, inspect, and refine proofs with LLM assistance.
               </DialogDescription>
