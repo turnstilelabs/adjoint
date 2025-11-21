@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { Loader2, X, Pencil } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 
@@ -9,7 +9,7 @@ export function ProofLoading() {
   const problem = useAppStore((s) => s.problem);
   const loading = useAppStore((s) => s.loading);
   const reset = useAppStore((s) => s.reset);
-  const editProblem = useAppStore((s) => s.editProblem);
+  // const editProblem = useAppStore((s) => s.editProblem);
 
   const [elapsedMs, setElapsedMs] = useState(0);
 
@@ -40,10 +40,6 @@ export function ProofLoading() {
         <p className="text-xs font-mono text-foreground/70">Elapsed: {minutes}:{seconds}</p>
       </div>
       <div className="mt-8 flex items-center gap-2">
-        <Button variant="secondary" onClick={editProblem}>
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit
-        </Button>
         <Button variant="outline" onClick={reset}>
           <X className="mr-2 h-4 w-4" />
           Cancel

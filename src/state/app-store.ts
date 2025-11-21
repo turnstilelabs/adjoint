@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
-import { decomposeProblemAction } from '@/app/actions';
+import { attemptProofAction, attemptProofActionForce, decomposeRawProofAction } from '@/app/actions';
 
 export type View = 'home' | 'proof';
 
@@ -13,6 +13,14 @@ export type ProofVersion = {
   timestamp: Date;
   validationResult?: ProofValidationResult;
   graphData?: GraphData;
+};
+
+export type PendingSuggestion = {
+  suggested: string; // model-proposed final statement
+  variantType: 'WEAKENING' | 'OPPOSITE';
+  provedStatement: string; // extracted from raw proof decomposition
+  sublemmas: Sublemma[]; // pre-decomposed steps for instant accept
+  explanation: string;
 };
 export type ProofValidationResult = {
   isError?: boolean;
@@ -33,15 +41,20 @@ type StoreData = {
   viewMode: 'steps' | 'graph';
   proofHistory: ProofVersion[];
   activeVersionIdx: number;
+  pendingSuggestion: PendingSuggestion | null;
 };
 
 interface AppState extends StoreData {
   reset: () => void;
 
-  startProof: (problem: string) => Promise<void>;
+  startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
   retry: () => Promise<void>;
   editProblem: () => void;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
+
+  // Variant handling
+  acceptSuggestedChange: () => void;
+  clearSuggestion: () => void;
 
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
@@ -73,12 +86,13 @@ const initialState: StoreData = {
   // proof review/history defaults
   proofHistory: [],
   activeVersionIdx: 0,
+  pendingSuggestion: null,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
 
-  startProof: async (problem: string) => {
+  startProof: async (problem: string, opts?: { force?: boolean }) => {
     const trimmed = problem.trim();
     if (!trimmed) return;
 
@@ -90,32 +104,65 @@ export const useAppStore = create<AppState>((set, get) => ({
       messages: [],
       loading: true,
       error: null,
+      pendingSuggestion: null,
+      proofHistory: [],
+      activeVersionIdx: 0,
     });
 
     try {
-      // small delay to allow UI to render
       await new Promise((r) => setTimeout(r, 50));
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] decompose start len=', trimmed.length);
-      const result = await decomposeProblemAction(trimmed);
+      console.debug('[UI][AppStore] attemptProof start len=', trimmed.length);
+      const attempt = opts?.force
+        ? await attemptProofActionForce(trimmed)
+        : await attemptProofAction(trimmed);
       const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] decompose done ms=', t1 - t0, 'success=', (result as any)?.success);
-      if (result.success) {
-        // Normalize sublemmas to ensure consistent structure matching Sublemma schema
-        const normalizedSublemmas: Sublemma[] = result.sublemmas.map((s: any) => {
-          const content = s?.content as string | undefined;
-          return {
-            title: s?.title ?? '',
-            statement: s?.statement ?? content ?? '',
-            proof: s?.proof ?? '',
-          };
-        });
+      console.debug('[UI][AppStore] attemptProof done ms=', t1 - t0, 'success=', (attempt as any)?.success);
 
+      if (!attempt.success) {
+        set({ loading: false, error: attempt.error || 'Failed to attempt proof.' });
+        return;
+      }
+
+      if (attempt.status === 'FAILED') {
+        set({
+          loading: false,
+          error: null,
+          proofHistory: [
+            {
+              sublemmas: [
+                { title: '', statement: '', proof: attempt.explanation || 'No proof available.' },
+              ],
+              timestamp: new Date(),
+            },
+          ],
+          activeVersionIdx: 0,
+        });
+        return;
+      }
+
+      // We have some proof text; decompose it
+      const d0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const decomp = await decomposeRawProofAction(attempt.rawProof || '');
+      const d1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
+
+      if (!decomp.success) {
+        set({
+          loading: false,
+          error: 'Failed to parse the proof produced by AI.',
+          proofHistory: [],
+        });
+        return;
+      }
+
+      if (attempt.status === 'PROVED_AS_IS') {
+        const steps: Sublemma[] = decomp.sublemmas;
         const assistantMessage: Message = {
           role: 'assistant',
           content:
-            `I've broken down the problem into the following steps:\n\n` +
-            normalizedSublemmas.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+            `I've broken down the proof into the following steps:\n\n` +
+            steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
         };
         set({
           messages: [assistantMessage],
@@ -123,20 +170,35 @@ export const useAppStore = create<AppState>((set, get) => ({
           error: null,
           proofHistory: [
             {
-              sublemmas: normalizedSublemmas,
+              sublemmas: steps,
               timestamp: new Date(),
             },
           ],
           activeVersionIdx: 0,
         });
-      } else {
-        console.debug('[UI][AppStore] decompose failed error=', (result as any)?.error);
-        const err = 'error' in result ? result.error : 'Failed to decompose the problem.';
-        set({
-          loading: false,
-          error: err,
-        });
+        return;
       }
+
+      // PROVED_VARIANT: hold suggestion, do not show proof until accept
+      set({
+        loading: false,
+        error: null,
+        pendingSuggestion: {
+          suggested: attempt.finalStatement || decomp.provedStatement,
+          variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+          provedStatement: decomp.provedStatement,
+          sublemmas: decomp.sublemmas as Sublemma[],
+          explanation: attempt.explanation,
+        },
+        // Keep an empty proof version to avoid crashes; review button will be disabled
+        proofHistory: [
+          {
+            sublemmas: [],
+            timestamp: new Date(),
+          },
+        ],
+        activeVersionIdx: 0,
+      });
     } catch (e) {
       set({
         loading: false,
@@ -173,6 +235,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       view: 'home',
       loading: false,
       error: null,
+      pendingSuggestion: null,
     }));
   },
 
@@ -196,6 +259,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  acceptSuggestedChange: () => {
+    const s = get().pendingSuggestion;
+    if (!s) return;
+    const steps = s.sublemmas;
+    set({
+      problem: s.provedStatement,
+      pendingSuggestion: null,
+      proofHistory: [
+        {
+          sublemmas: steps,
+          timestamp: new Date(),
+        },
+      ],
+      activeVersionIdx: 0,
+      messages: [
+        {
+          role: 'assistant',
+          content:
+            `I've broken down the proof into the following steps:\n\n` +
+            steps.map((x) => `**${x.title}:** ${x.statement}`).join('\n\n'),
+        } as Message,
+      ],
+    });
+  },
+
+  clearSuggestion: () => set({ pendingSuggestion: null }),
 
   // Go back to previous proof version (if any) and ensure steps view
   goBack: () =>

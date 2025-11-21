@@ -5,6 +5,8 @@ import { validateStatement } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
 import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
+import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
+import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/decompose-raw-proof';
 import { createHash, randomUUID } from 'node:crypto';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -20,16 +22,129 @@ export type GraphActionResult =
   | ({ success: true } & GenerateProofGraphOutput)
   | { success: false; error: string };
 
+export type AttemptProofActionResult =
+  | ({ success: true } & AttemptProofOutput)
+  | { success: false; error: string };
+
+export type DecomposeRawProofActionResult =
+  | ({ success: true } & DecomposeRawProofOutput)
+  | { success: false; error: string };
+
 // Decompose and Graph caches (dev-only)
 const decomposeCache: Map<string, CacheEntry<DecomposeResult>> = new Map();
 
 const graphCache: Map<string, CacheEntry<GraphActionResult>> = new Map();
+
+// Attempt/decompose caches (dev-only, short-lived to avoid duplicate calls)
+const attemptCache: Map<string, CacheEntry<AttemptProofActionResult>> = new Map();
+const decomposeRawCache: Map<string, CacheEntry<DecomposeRawProofActionResult>> = new Map();
 
 function hashPayload(payload: unknown): string {
   try {
     return createHash('sha1').update(JSON.stringify(payload)).digest('hex').slice(0, 8);
   } catch {
     return 'na';
+  }
+}
+
+export async function attemptProofAction(problem: string): Promise<AttemptProofActionResult> {
+  const { reqId, hash } = logStart('attemptProof', { problem });
+  const key = problem.trim();
+
+  if (isDev) {
+    const now = Date.now();
+    const existing = attemptCache.get(key);
+    if (existing?.pending) {
+      console.info(`[SA][attemptProof] dedupe pending reqId=${reqId} hash=${hash}`);
+      return existing.pending;
+    }
+    if (existing?.value && now - existing.ts < IDEMPOTENCY_TTL_MS) {
+      console.info(`[SA][attemptProof] cache hit reqId=${reqId} hash=${hash}`);
+      return existing.value;
+    }
+
+    const pending = (async () => {
+      try {
+        const out = await attemptProof({ problem });
+        const result = { success: true as const, ...out };
+        logSuccess('attemptProof', reqId, hash);
+        attemptCache.set(key, { value: result, ts: Date.now() });
+        return result;
+      } catch (error) {
+        logError('attemptProof', reqId, hash, error);
+        attemptCache.delete(key);
+        return { success: false as const, error: 'Failed to attempt proof with AI.' };
+      }
+    })();
+
+    attemptCache.set(key, { pending, ts: now });
+    return pending;
+  }
+
+  try {
+    const out = await attemptProof({ problem });
+    logSuccess('attemptProof', reqId, hash);
+    return { success: true as const, ...out };
+  } catch (error) {
+    logError('attemptProof', reqId, hash, error);
+    return { success: false as const, error: 'Failed to attempt proof with AI.' };
+  }
+}
+
+// Force path: bypass dev cache to re-run attempt immediately
+export async function attemptProofActionForce(problem: string): Promise<AttemptProofActionResult> {
+  const { reqId, hash } = logStart('attemptProof(force)', { problem });
+  try {
+    const out = await attemptProof({ problem });
+    logSuccess('attemptProof(force)', reqId, hash);
+    return { success: true as const, ...out };
+  } catch (error) {
+    logError('attemptProof(force)', reqId, hash, error);
+    return { success: false as const, error: 'Failed to attempt proof with AI.' };
+  }
+}
+
+export async function decomposeRawProofAction(rawProof: string): Promise<DecomposeRawProofActionResult> {
+  const { reqId, hash } = logStart('decomposeRawProof', { len: rawProof?.length ?? 0 });
+  const key = hashPayload(rawProof);
+
+  if (isDev) {
+    const now = Date.now();
+    const existing = decomposeRawCache.get(key);
+    if (existing?.pending) {
+      console.info(`[SA][decomposeRawProof] dedupe pending reqId=${reqId} hash=${hash}`);
+      return existing.pending;
+    }
+    if (existing?.value && now - existing.ts < IDEMPOTENCY_TTL_MS) {
+      console.info(`[SA][decomposeRawProof] cache hit reqId=${reqId} hash=${hash}`);
+      return existing.value;
+    }
+
+    const pending = (async () => {
+      try {
+        const out = await decomposeRawProof({ rawProof });
+        const result = { success: true as const, ...out };
+        logSuccess('decomposeRawProof', reqId, hash);
+        decomposeRawCache.set(key, { value: result, ts: Date.now() });
+        return result;
+      } catch (error) {
+        logError('decomposeRawProof', reqId, hash, error);
+        decomposeRawCache.delete(key);
+        return { success: false as const, error: 'Failed to decompose raw proof with AI.' };
+      }
+    })();
+
+    decomposeRawCache.set(key, { pending, ts: now });
+    return pending;
+  }
+
+  try {
+    const out = await decomposeRawProof({ rawProof });
+    logSuccess('decomposeRawProof', reqId, hash);
+    return { success: true as const, ...out };
+  } catch (error) {
+    logError('decomposeRawProof', reqId, hash, error);
+    return { success: false as const, error: 'Failed to decompose raw proof with AI.' };
   }
 }
 
