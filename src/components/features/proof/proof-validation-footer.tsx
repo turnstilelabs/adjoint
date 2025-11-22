@@ -141,7 +141,7 @@ function ProofValidationFooter() {
           <div ref={alertRef}>
             <Alert
               variant={proof.validationResult.isValid ? 'default' : 'destructive'}
-              className="bg-card"
+              className="bg-muted/20"
             >
               {proof.validationResult.isValid ? (
                 <CheckCircle className="h-4 w-4" />
@@ -150,7 +150,9 @@ function ProofValidationFooter() {
               )}
 
               <AlertDescription>
-                <KatexRenderer content={proof.validationResult.feedback} />
+                <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/30 text-sm font-mono text-foreground/90">
+                  <KatexRenderer content={proof.validationResult.feedback} />
+                </div>
                 {proof.validationResult.isValid && (
                   <div className="mt-2 text-xs text-muted-foreground">
                     {`Assessed by ${proof.validationResult.model ?? 'AI'}`}
