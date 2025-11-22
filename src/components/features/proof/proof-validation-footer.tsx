@@ -7,7 +7,7 @@ import { useAppStore } from '@/state/app-store';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { validateProofAction } from '@/app/actions';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, RefreshCw } from 'lucide-react';
 
 function ProofValidationFooter() {
   const { toast } = useToast();
@@ -28,6 +28,7 @@ function ProofValidationFooter() {
   const runIdRef = useRef(0);
   const [isOpen, setIsOpen] = useState(true);
   const lastResultTsRef = useRef<number | null>(null);
+  const isAnalyzed = !!proof.validationResult && !isRunning;
 
   useEffect(() => {
     if (proof.validationResult && alertRef.current) {
@@ -163,7 +164,7 @@ function ProofValidationFooter() {
           }}
           disabled={!isRunning && proof.sublemmas.length === 0}
           variant={isRunning ? 'secondary' : 'default'}
-          className="group min-w-[17rem]"
+          className="group px-3"
           aria-busy={isRunning}
         >
           {isRunning ? (
@@ -183,24 +184,43 @@ function ProofValidationFooter() {
               </span>
             </span>
           ) : (
-            <span className="inline-flex items-center">
-              <span>Analyze Proof Structure</span>
-              <span
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsOpen((v) => !v);
-                }}
-                className="ml-2 -mr-1 inline-flex items-center rounded p-1 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={isOpen ? 'Hide review' : 'Show review'}
-                title={isOpen ? 'Hide review' : 'Show review'}
-                role="button"
-              >
-                <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-0' : 'rotate-180'}`} />
+            isAnalyzed ? (
+              <span className="inline-flex items-center">
+                <span>Proof Structure Analyzed</span>
+
+                <span
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsOpen((v) => !v);
+                  }}
+                  className="ml-1 inline-flex items-center rounded p-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={isOpen ? 'Hide review' : 'Show review'}
+                  title={isOpen ? 'Hide review' : 'Show review'}
+                  role="button"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-0' : 'rotate-180'}`} />
+                </span>
               </span>
-            </span>
+            ) : (
+              <span className="inline-flex items-center">
+                <span>Analyze Proof Structure</span>
+              </span>
+            )
           )}
         </Button>
+        {isAnalyzed && !isRunning && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-2"
+            onClick={handleValidateProof}
+            aria-label="Run again"
+            title="Run again"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {proof.validationResult && (
