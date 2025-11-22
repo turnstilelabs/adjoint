@@ -23,6 +23,7 @@ function ProofValidationFooter() {
   const [isRunning, setIsRunning] = useState(false);
   const [canShowCancelCue, setCanShowCancelCue] = useState(false);
   const cancelCueTimerRef = useRef<number | null>(null);
+  const runIdRef = useRef(0);
 
   useEffect(() => {
     if (proof.validationResult && alertRef.current) {
@@ -61,11 +62,16 @@ function ProofValidationFooter() {
       cancelCueTimerRef.current = null;
     }
     cancelCueTimerRef.current = window.setTimeout(() => setCanShowCancelCue(true), 900);
+    const myRun = runIdRef.current + 1;
+    runIdRef.current = myRun;
     setIsRunning(true);
     startValidateProof(async () => {
       updateCurrentProofVersion({ validationResult: undefined });
 
       const result = await validateProofAction(problem, proof.sublemmas);
+      if (runIdRef.current !== myRun) {
+        return;
+      }
 
       if (cancelledRef.current) {
         return;
@@ -119,6 +125,7 @@ function ProofValidationFooter() {
   const cancel = () => {
     setCancelled(true);
     cancelledRef.current = true;
+    runIdRef.current += 1; // Invalidate any in-flight run
     setIsRunning(false);
     setCanShowCancelCue(false);
     if (cancelCueTimerRef.current) {
