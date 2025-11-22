@@ -7,6 +7,7 @@ import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
 import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
 import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/decompose-raw-proof';
+import { llmModel } from '@/ai/genkit';
 import { createHash, randomUUID } from 'node:crypto';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -257,7 +258,7 @@ export async function validateProofAction(problem: string, proofSteps: Sublemma[
   try {
     const result = await validateProof({ problem, proofSteps });
     logSuccess('validateProof', reqId, hash);
-    return { success: true as const, ...result };
+    return { success: true as const, ...result, model: llmModel };
   } catch (error) {
     logError('validateProof', reqId, hash, error);
     return { success: false as const, error: 'Failed to validate the proof with AI.' };

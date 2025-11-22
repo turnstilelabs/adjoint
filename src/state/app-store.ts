@@ -29,6 +29,7 @@ export type ProofValidationResult = {
   isValid?: boolean;
   feedback: string;
   timestamp: Date;
+  model?: string;
 };
 
 type StoreData = {
