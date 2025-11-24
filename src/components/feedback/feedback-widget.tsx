@@ -66,7 +66,7 @@ export function FeedbackWidget() {
         setSubmitting(true);
         try {
             const payload: any = {
-                rating,
+                rating: rating ?? undefined,
                 comment: comment.trim() || undefined,
                 email: email.trim() || undefined,
                 timestamp: new Date().toISOString(),
@@ -83,7 +83,15 @@ export function FeedbackWidget() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) {
+                let msg = `HTTP ${res.status}`;
+                try {
+                    const data = await res.json();
+                    if (data?.error) msg = String(data.error);
+                } catch { }
+                toast({ title: "Couldn't send feedback", description: msg });
+                return;
+            }
             toast({ title: "Thanks!", description: "Your feedback was sent." });
             setOpen(false);
             reset();
