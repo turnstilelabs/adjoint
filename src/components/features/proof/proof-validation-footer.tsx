@@ -1,13 +1,13 @@
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Separator } from '@/components/ui/separator';
+
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { validateProofAction } from '@/app/actions';
-import { ChevronDown, RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
 
 function ProofValidationFooter() {
   const { toast } = useToast();
@@ -122,9 +122,9 @@ function ProofValidationFooter() {
           },
         });
         toast({
-          title: 'Validation error',
+          title: 'System issue — validation couldn’t complete',
           description: friendly,
-          variant: 'destructive',
+          variant: 'default',
         });
         if (!cancelledRef.current) {
           setIsRunning(false);
@@ -235,19 +235,26 @@ function ProofValidationFooter() {
               <AccordionTrigger className="sr-only">Proof structure review</AccordionTrigger>
               <AccordionContent>
                 <div ref={alertRef}>
-                  <Alert
-                    variant={proof.validationResult.isValid ? 'default' : 'destructive'}
-                    className="bg-muted/20"
-                  >
+                  <Alert variant="default">
+                    {!proof.validationResult.isError && proof.validationResult.isValid === false && (
+                      <>
+                        <AlertTriangle className="h-4 w-4 text-primary" />
+                        <AlertTitle className="text-xs text-foreground/90">Issues found</AlertTitle>
+                      </>
+                    )}
+                    {proof.validationResult.isError && (
+                      <>
+                        <AlertCircle className="h-4 w-4 text-foreground" />
+                        <AlertTitle className="text-xs text-foreground/90">System issue — validation couldn’t complete</AlertTitle>
+                      </>
+                    )}
                     <AlertDescription>
-                      <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/30 text-sm font-mono text-foreground/90">
+                      <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/50 text-sm font-mono text-foreground/90">
                         <KatexRenderer content={proof.validationResult.feedback} />
                       </div>
-                      {proof.validationResult.isValid && (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          {`Assessed by ${proof.validationResult.model ?? 'AI'}`}
-                        </div>
-                      )}
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {`Assessed by ${proof.validationResult.model ?? 'AI'}`}
+                      </div>
                     </AlertDescription>
                   </Alert>
                 </div>
