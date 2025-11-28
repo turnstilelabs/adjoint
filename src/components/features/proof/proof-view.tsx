@@ -5,7 +5,7 @@ import { useAppStore } from '@/state/app-store';
 import { ProofLoading } from '@/components/features/proof/proof-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Pencil } from 'lucide-react';
+import { Pencil, RefreshCw } from 'lucide-react';
 
 export default function ProofView() {
   const { loading, proof, startProof, problem } = useAppStore((s) => ({
@@ -15,11 +15,10 @@ export default function ProofView() {
     problem: s.problem,
   }));
   const error = useAppStore((s) => s.error);
+  const retry = useAppStore((s) => s.retry);
+  const editProblem = useAppStore((s) => s.editProblem);
 
   if (!loading && error) {
-    const retry = useAppStore((s) => s.retry);
-    const editProblem = useAppStore((s) => s.editProblem);
-
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-xl">
