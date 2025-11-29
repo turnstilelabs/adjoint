@@ -5,18 +5,19 @@ import { useAppStore } from '@/state/app-store';
 import { ProofLoading } from '@/components/features/proof/proof-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Pencil, RefreshCw } from 'lucide-react';
+import { RefreshCw, Pencil } from 'lucide-react';
 
 export default function ProofView() {
-  const { loading, proof, startProof, problem } = useAppStore((s) => ({
-    loading: s.loading,
-    proof: s.proof,
-    startProof: s.startProof,
-    problem: s.problem,
-  }));
-  const error = useAppStore((s) => s.error);
-  const retry = useAppStore((s) => s.retry);
-  const editProblem = useAppStore((s) => s.editProblem);
+  const { loading, proof, startProof, problem, error, retry, editProblem } =
+    useAppStore((s) => ({
+      loading: s.loading,
+      proof: s.proof,
+      startProof: s.startProof,
+      problem: s.problem,
+      error: s.error,
+      retry: s.retry,
+      editProblem: s.editProblem,
+    }));
 
   if (!loading && error) {
     return (
