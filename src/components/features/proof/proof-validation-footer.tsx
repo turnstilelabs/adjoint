@@ -58,7 +58,7 @@ function ProofValidationFooter() {
     };
   }, []);
 
-  // Auto-expand review when a fresh result arrives
+  // Auto-expand review when a fresh validation result arrives
   useEffect(() => {
     const ts = proof.validationResult?.timestamp
       ? new Date(proof.validationResult.timestamp).getTime()
@@ -100,7 +100,8 @@ function ProofValidationFooter() {
             isError: false,
             feedback: result.feedback || 'No feedback provided.',
             timestamp: new Date(),
-            model: (result as any).model,
+            // Never display model name in UI — keep for internal logs if needed.
+            model: undefined as any,
           },
         });
         if (!cancelledRef.current) {
@@ -152,7 +153,7 @@ function ProofValidationFooter() {
 
   return (
     <>
-
+      {/* Analyze proof structure button */}
       <div className="mt-4 flex items-center justify-end" aria-busy={isRunning}>
         <Button
           onClick={() => {
@@ -170,43 +171,58 @@ function ProofValidationFooter() {
           {isRunning ? (
             <span className="relative inline-flex items-center justify-center">
               {/* Running label with animated dots (visible by default) */}
-              <span className={`flex items-center gap-2 transition-opacity duration-150 opacity-100 ${canShowCancelCue ? 'group-hover:opacity-0 group-focus-visible:opacity-0' : ''}`}>
+              <span
+                className={`flex items-center gap-2 transition-opacity duration-150 opacity-100 ${canShowCancelCue ? 'group-hover:opacity-0 group-focus-visible:opacity-0' : ''
+                  }`}
+              >
                 <span aria-live="polite">Generating analysis</span>
                 <span className="flex items-center gap-1" aria-hidden="true">
-                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce" style={{ animationDelay: '160ms' }} />
-                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce" style={{ animationDelay: '320ms' }} />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce"
+                    style={{ animationDelay: '0ms' }}
+                  />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce"
+                    style={{ animationDelay: '160ms' }}
+                  />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-current opacity-50 animate-bounce"
+                    style={{ animationDelay: '320ms' }}
+                  />
                 </span>
               </span>
               {/* Hover/focus label (Cancel) cross-fades in, same footprint */}
-              <span className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150 opacity-0 ${canShowCancelCue ? 'group-hover:opacity-100 group-focus-visible:opacity-100' : ''}`}>
+              <span
+                className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150 opacity-0 ${canShowCancelCue ? 'group-hover:opacity-100 group-focus-visible:opacity-100' : ''
+                  }`}
+              >
                 Cancel
               </span>
             </span>
-          ) : (
-            isAnalyzed ? (
-              <span className="inline-flex items-center">
-                <span>Proof Structure Analyzed</span>
+          ) : isAnalyzed ? (
+            <span className="inline-flex items-center">
+              <span>Proof Structure Analyzed</span>
 
-                <span
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsOpen((v) => !v);
-                  }}
-                  className="ml-1 inline-flex items-center rounded p-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={isOpen ? 'Hide review' : 'Show review'}
-                  title={isOpen ? 'Hide review' : 'Show review'}
-                  role="button"
-                >
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-0' : 'rotate-180'}`} />
-                </span>
+              <span
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen((v) => !v);
+                }}
+                className="ml-1 inline-flex items-center rounded p-0.5 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={isOpen ? 'Hide review' : 'Show review'}
+                title={isOpen ? 'Hide review' : 'Show review'}
+                role="button"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-0' : 'rotate-180'}`}
+                />
               </span>
-            ) : (
-              <span className="inline-flex items-center">
-                <span>Analyze Proof Structure</span>
-              </span>
-            )
+            </span>
+          ) : (
+            <span className="inline-flex items-center">
+              <span>Analyze Proof Structure</span>
+            </span>
           )}
         </Button>
         {isAnalyzed && !isRunning && (
@@ -223,6 +239,7 @@ function ProofValidationFooter() {
         )}
       </div>
 
+      {/* Proof structure review card */}
       {proof.validationResult && (
         <div className="mt-3">
           <Accordion
@@ -245,7 +262,9 @@ function ProofValidationFooter() {
                     {proof.validationResult.isError && (
                       <>
                         <AlertCircle className="h-4 w-4 text-foreground" />
-                        <AlertTitle className="text-xs text-foreground/90">System issue — validation couldn’t complete</AlertTitle>
+                        <AlertTitle className="text-xs text-foreground/90">
+                          System issue — validation couldn’t complete
+                        </AlertTitle>
                       </>
                     )}
                     <AlertDescription>
@@ -253,7 +272,7 @@ function ProofValidationFooter() {
                         <KatexRenderer content={proof.validationResult.feedback} />
                       </div>
                       <div className="mt-2 text-xs text-muted-foreground">
-                        {`Assessed by ${proof.validationResult.model ?? 'AI'}`}
+                        Automated analysis generated
                       </div>
                     </AlertDescription>
                   </Alert>
