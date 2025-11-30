@@ -71,7 +71,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   const [selection, setSelection] = useState<{
     text: string;
     anchor: { top: number; left: number } | null;
-  }>({ text: '', anchor: null });
+    target: 'statement' | 'proof' | null;
+  }>({ text: '', anchor: null, target: null });
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
@@ -85,17 +86,19 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     ) {
       const range = currentSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      setSelection({
-        text: selectedText,
-        anchor: { top: rect.top, left: rect.left + rect.width / 2 },
-      });
-
       // Build and store a robust selection snapshot for later (toolbar click)
       const targetNode = currentSelection.anchorNode;
       const inStatement =
         !!statementViewRef.current && !!targetNode && statementViewRef.current.contains(targetNode);
       const inProof =
         !!proofViewRef.current && !!targetNode && proofViewRef.current.contains(targetNode);
+
+      setSelection({
+        text: selectedText,
+        anchor: { top: rect.top, left: rect.left + rect.width / 2 },
+        target: inProof ? 'proof' : inStatement ? 'statement' : null,
+      });
+
       const containerEl = inStatement
         ? statementViewRef.current
         : inProof
@@ -130,7 +133,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
         lastSelectionSnapRef.current = null;
       }
     } else {
-      setSelection({ text: '', anchor: null });
+      setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
     }
   }, [isEditing]);
@@ -608,7 +611,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     });
 
     // Hide the selection toolbar
-    setSelection({ text: '', anchor: null });
+    setSelection({ text: '', anchor: null, target: null });
   };
 
   const handleTitleDoubleClick = (e: React.MouseEvent) => {
@@ -680,7 +683,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   useEffect(() => {
     // When editing starts/stops, or content changes, clear selection
-    setSelection({ text: '', anchor: null });
+    setSelection({ text: '', anchor: null, target: null });
   }, [isEditing, statement, proof]);
 
   // Click outside to cancel edit only if there are no changes
@@ -712,6 +715,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
           anchor={selection.anchor}
           onRevise={handleReviseFromToolbar}
           selectedText={selection.text}
+          canCheckAgain={selection.target === 'proof'}
+          lemmaStatement={statement}
         />
       )}
       <AccordionItem

@@ -8,7 +8,10 @@ const model = env.LLM_MODEL ?? (provider === 'openai' ? 'gpt-5-mini' : 'gemini-2
 
 const plugin = provider === 'openai' ? openAI() : googleAI();
 
+export const llmId = `${provider}/${model}`;
+export const llmModel = model;
+
 export const ai = genkit({
   plugins: [plugin],
-  model: `${provider}/${model}`,
+  model: llmId,
 });

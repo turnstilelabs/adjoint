@@ -5,16 +5,23 @@ import { useAppStore } from '@/state/app-store';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
   const startProof = useAppStore((s) => s.startProof);
+  const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
+  const pendingRejection = useAppStore((s) => s.pendingRejection);
+  const clearRejection = useAppStore((s) => s.clearRejection);
+  const acceptSuggestedChange = useAppStore((s) => s.acceptSuggestedChange);
+  const clearSuggestion = useAppStore((s) => s.clearSuggestion);
 
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(problem || '');
   const [isValidatingProblem, startValidateProblem] = useTransition();
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -57,54 +64,130 @@ function EditableProblemCard() {
     setEditError(null);
   };
 
+  // Close edit mode when clicking outside the problem box
+  useEffect(() => {
+    if (!isEditing) return;
+    const onDown = (e: MouseEvent) => {
+      const el = containerRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        cancel();
+      }
+    };
+    document.addEventListener('mousedown', onDown, { capture: true });
+    return () => document.removeEventListener('mousedown', onDown, { capture: true } as any);
+  }, [isEditing]);
+
+  const hasSuggestion = !!pendingSuggestion;
+  const hasRejection = !!pendingRejection;
+
   return (
-    <Card className="mb-1">
+    <Card className={`mb-1 ${hasSuggestion ? 'border-yellow-500' : ''}`}>
       <CardContent className="pt-6">
-        {isEditing ? (
-          <div>
-            <Textarea
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                } else if (e.key === 'Escape') {
-                  cancel();
-                }
-              }}
-              autoFocus
-              rows={3}
-              className="w-full"
-              disabled={isValidatingProblem}
-            />
-            {isValidatingProblem ? (
-              <div className="flex items-center text-sm text-muted-foreground mt-2">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                Validating...
+        <div ref={containerRef}>
+          {isEditing ? (
+            <div>
+              <Textarea
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  } else if (e.key === 'Escape') {
+                    cancel();
+                  }
+                }}
+                autoFocus
+                rows={3}
+                className="w-full"
+                disabled={isValidatingProblem}
+              />
+              {isValidatingProblem ? (
+                <div className="flex items-center text-sm text-muted-foreground mt-2">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
+                  Parsing input statement...
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground mt-2">
+                  Press Enter to submit, Shift+Enter for newline, Esc to cancel.
+                </div>
+              )}
+              {editError && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertDescription>{editError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          ) : (
+            <>
+              <div
+                onDoubleClick={() => {
+                  setValue(problem);
+                  setIsEditing(true);
+                }}
+                style={{ cursor: 'pointer' }}
+                className={hasSuggestion ? 'rounded-md p-2' : undefined}
+              >
+                <KatexRenderer content={problem} />
               </div>
-            ) : (
-              <div className="text-sm text-muted-foreground mt-2">
-                Press Enter to submit, Shift+Enter for newline, Esc to cancel.
-              </div>
-            )}
-            {editError && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertDescription>{editError}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-        ) : (
-          <div
-            onDoubleClick={() => {
-              setValue(problem);
-              setIsEditing(true);
-            }}
-            style={{ cursor: 'pointer' }}
-          >
-            <KatexRenderer content={problem} />
-          </div>
-        )}
+              {hasRejection && pendingRejection && (
+                <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
+                  <div className="text-sm mb-2 font-medium">
+                    The AI was unable to prove this statement and found evidence it may be incorrect:
+                  </div>
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted whitespace-pre-wrap">
+                    {pendingRejection.explanation}
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <Button size="sm" onClick={() => setIsEditing(true)}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        clearRejection();
+                        await startProof(problem, { force: true });
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {hasSuggestion && pendingSuggestion && (
+                <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
+                  <div className="text-sm mb-2 font-medium">
+                    The AI was unable to prove this statement and proposed an alternative formulation:
+                  </div>
+
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted">
+                    <KatexRenderer content={pendingSuggestion.provedStatement} />
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <Button size="sm" onClick={acceptSuggestedChange}>
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        clearSuggestion();
+                        await startProof(problem, { force: true });
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    {pendingSuggestion.explanation}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -10,7 +10,7 @@ function HomeExamples() {
 
   return (
     <div className="mt-16 text-center">
-      <h2 className="text-2xl font-bold font-headline text-primary">Or, start with an example</h2>
+      <h2 className="text-2xl font-bold font-headline text-primary">Explore Examples</h2>
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         {exampleProblems.map((example, index) => (
           <Card key={index} className="text-left flex flex-col">

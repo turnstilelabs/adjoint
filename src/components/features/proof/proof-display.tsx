@@ -12,6 +12,8 @@ export default function ProofDisplay() {
   const isChatOpen = useAppStore((s) => s.isChatOpen);
   const viewMode = useAppStore((s) => s.viewMode);
   const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
+  const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
+  const pendingRejection = useAppStore((s) => s.pendingRejection);
 
   return (
     <div className="inset-0 absolute overflow-hidden flex">
@@ -20,15 +22,17 @@ export default function ProofDisplay() {
       <main className="flex flex-col grow mx-auto max-w-5xl p-3 md:p-10 pb-0 gap-10 overflow-hidden h-full">
         <EditableProblemCard />
 
-        <ScrollArea className="flex-1 -mx-5 px-5">
-          <div className="sticky top-0 z-20 flex items-center gap-2 mb-3 bg-background border-b">
-            <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
-          </div>
+        {!pendingSuggestion && !pendingRejection && (
+          <ScrollArea className="flex-1 -mx-5 px-5">
+            <div className="sticky top-0 z-20 flex items-center gap-2 mb-3 bg-background border-b">
+              <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
+            </div>
 
-          {viewMode === 'steps' ? <ProofSteps /> : <ProofGraphView />}
+            {viewMode === 'steps' ? <ProofSteps /> : <ProofGraphView />}
 
-          <ProofValidationFooter />
-        </ScrollArea>
+            <ProofValidationFooter />
+          </ScrollArea>
+        )}
       </main>
 
       {isChatOpen && (
