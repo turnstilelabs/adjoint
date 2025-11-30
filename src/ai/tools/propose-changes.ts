@@ -1,6 +1,7 @@
 import { SublemmaSchema } from '@/ai/flows/schemas';
 import { z } from 'zod';
-import { ai } from '@/ai/interactive-assistant/ai';
+import { ai } from '@/ai/genkit';
+import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
 
 export const proposeChanges = ai.defineTool(
   {
@@ -15,7 +16,7 @@ export const proposeChanges = ai.defineTool(
       revisedSublemmas: z.array(SublemmaSchema),
     }),
   },
-  async ({ revisedSublemmas }) => {
+  async ({ revisedSublemmas }: { revisedSublemmas: Sublemma[] }) => {
     return { revisedSublemmas };
   },
 );
