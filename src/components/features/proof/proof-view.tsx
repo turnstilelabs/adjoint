@@ -8,18 +8,18 @@ import { Button } from '@/components/ui/button';
 import { RefreshCw, Pencil } from 'lucide-react';
 
 export default function ProofView() {
-  const { loading, proof, startProof, problem } = useAppStore((s) => ({
-    loading: s.loading,
-    proof: s.proof,
-    startProof: s.startProof,
-    problem: s.problem,
-  }));
-  const error = useAppStore((s) => s.error);
+  const { loading, proof, startProof, problem, error, retry, editProblem } =
+    useAppStore((s) => ({
+      loading: s.loading,
+      proof: s.proof,
+      startProof: s.startProof,
+      problem: s.problem,
+      error: s.error,
+      retry: s.retry,
+      editProblem: s.editProblem,
+    }));
 
   if (!loading && error) {
-    const retry = useAppStore((s) => s.retry);
-    const editProblem = useAppStore((s) => s.editProblem);
-
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Card className="w-full max-w-xl">
