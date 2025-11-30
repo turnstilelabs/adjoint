@@ -29,7 +29,7 @@ export function SelectionToolbar({
 
   const handleCheckAgain = () => {
     const loadingToast = toast({
-      title: 'Generating analysis…',
+      title: 'Sending for analysis…',
       description: 'Evaluating the selected proof excerpt',
       variant: 'default',
       duration: 2147483647,
@@ -52,21 +52,20 @@ export function SelectionToolbar({
           validity: 'VALID' | 'INVALID' | 'INCOMPLETE';
           reasoning: string;
         };
-        const modelName = (result as any)?.model || 'model';
         const reasoning = r.reasoning || 'No reason provided.';
         let title: string;
         if (r.validity === 'VALID') {
-          title = `Proof excerpt appears sound (${modelName})`;
+          title = 'Excerpt appears valid';
         } else if (r.validity === 'INVALID') {
-          title = `Proof excerpt likely incorrect (${modelName})`;
+          title = 'Excerpt likely invalid';
         } else {
-          title = `Proof excerpt may need additional context (${modelName})`;
+          title = 'Excerpt may need additional context';
         }
         const description = reasoning;
         loadingToast.update({
           title: title,
           description: description,
-          variant: r.validity === 'VALID' ? 'default' : 'destructive',
+          variant: 'default',
           duration: 2147483647,
           open: true,
         });
@@ -78,7 +77,7 @@ export function SelectionToolbar({
           loadingToast.update({
             title: 'Error',
             description: fallback,
-            variant: 'destructive',
+            variant: 'default',
             duration: 2147483647,
             open: true,
           });

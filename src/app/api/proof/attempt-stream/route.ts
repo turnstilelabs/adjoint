@@ -14,16 +14,6 @@ function sseComment(comment: string) {
     return `:${comment}\n\n`;
 }
 
-
-
-
-
-
-
-
-
-
-
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const problem = searchParams.get('problem')?.toString() ?? '';
