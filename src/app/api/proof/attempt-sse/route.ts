@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
-import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
-import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/decompose-raw-proof';
+import { appRoute } from '@genkit-ai/next';
+import {
+    attemptProofCompositeOrchestrator,
+    attemptProofCompositeFlow,
+} from '@/ai/flows/attempt-proof-composite';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,76 +35,74 @@ export async function GET(req: NextRequest) {
             const error = (e: unknown) => controller.error(e);
 
             try {
-                // Initial headers are already set by returning Response below
-                // Heartbeat every 15s to keep connection alive
                 keepalive = setInterval(() => {
                     try {
                         write(sseComment('keepalive'));
-                    } catch (_) {
+                    } catch {
                         // no-op
                     }
                 }, 15000);
 
-                // STREAM: attempt start
-                write(sseEvent('progress', { phase: 'attempt.start', ts: Date.now() }));
-
-                // Perform attempt
-                const attempt: AttemptProofOutput = await attemptProof({ problem });
-
-                write(
-                    sseEvent('attempt', {
-                        success: true,
-                        status: attempt.status,
-                        finalStatement: attempt.finalStatement,
-                        variantType: attempt.variantType,
-                        rawProofLen: attempt.rawProof?.length ?? 0,
-                        explanation: attempt.explanation,
-                    })
+                // STREAM: attempt start (progress)
+                // Orchestrate using Genkit-based composite flow, mapping typed chunks back to SSE events.
+                const { attempt, decompose } = await attemptProofCompositeOrchestrator(
+                    { problem },
+                    {
+                        onChunk: (chunk) => {
+                            switch (chunk.type) {
+                                case 'progress': {
+                                    write(
+                                        sseEvent('progress', {
+                                            phase: chunk.phase,
+                                            ts: chunk.ts,
+                                        }),
+                                    );
+                                    break;
+                                }
+                                case 'attempt': {
+                                    write(
+                                        sseEvent('attempt', {
+                                            success: chunk.payload.success,
+                                            status: chunk.payload.status,
+                                            finalStatement: chunk.payload.finalStatement,
+                                            variantType: chunk.payload.variantType,
+                                            rawProofLen: chunk.payload.rawProofLen,
+                                            explanation: chunk.payload.explanation,
+                                        }),
+                                    );
+                                    break;
+                                }
+                                case 'decompose': {
+                                    write(
+                                        sseEvent('decompose', {
+                                            success: chunk.payload.success,
+                                            sublemmasCount: chunk.payload.sublemmasCount,
+                                            provedLen: chunk.payload.provedLen,
+                                            normLen: chunk.payload.normLen,
+                                        }),
+                                    );
+                                    break;
+                                }
+                                case 'server-error': {
+                                    write(
+                                        sseEvent('server-error', {
+                                            success: false,
+                                            error: chunk.error,
+                                        }),
+                                    );
+                                    break;
+                                }
+                            }
+                        },
+                    },
                 );
-
-                if (attempt.status === 'FAILED') {
-                    // Finish early, no decomposition
-                    write(
-                        sseEvent('done', {
-                            success: true,
-                            attempt,
-                            decompose: null,
-                        })
-                    );
-                    close();
-                    return;
-                }
-
-                // STREAM: decompose start
-                write(sseEvent('progress', { phase: 'decompose.start', ts: Date.now() }));
-
-                let decomp: DecomposeRawProofOutput | null = null;
-                try {
-                    decomp = await decomposeRawProof({ rawProof: attempt.rawProof || '' });
-                    write(
-                        sseEvent('decompose', {
-                            success: true,
-                            sublemmasCount: decomp.sublemmas?.length ?? 0,
-                            provedLen: decomp.provedStatement?.length ?? 0,
-                            normLen: decomp.normalizedProof?.length ?? 0,
-                        })
-                    );
-                } catch (e) {
-                    // Decomposition failed, emit error event but still include attempt in done
-                    write(
-                        sseEvent('server-error', {
-                            success: false,
-                            error: 'Failed to decompose raw proof.',
-                        })
-                    );
-                }
 
                 write(
                     sseEvent('done', {
                         success: true,
                         attempt,
-                        decompose: decomp,
-                    })
+                        decompose,
+                    }),
                 );
                 close();
             } catch (e: any) {
@@ -110,9 +111,9 @@ export async function GET(req: NextRequest) {
                         sseEvent('server-error', {
                             success: false,
                             error: e?.message || 'Unexpected error in proof attempt.',
-                        })
+                        }),
                     );
-                } catch (_) {
+                } catch {
                     // ignore
                 }
                 error(e);
@@ -123,19 +124,18 @@ export async function GET(req: NextRequest) {
         },
     });
 
-    // If client cancels, abort stream
-    const abort = (reason?: any) => {
+    req.signal.addEventListener('abort', () => {
         if (keepalive) clearInterval(keepalive);
-    };
-    req.signal.addEventListener('abort', abort);
+    });
 
     return new Response(stream, {
         headers: {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             Connection: 'keep-alive',
-            // Make sure proxies don’t buffer
             'X-Accel-Buffering': 'no',
         },
     });
 }
+
+export const POST = appRoute(attemptProofCompositeFlow);
