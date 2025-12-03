@@ -8,7 +8,8 @@ export type ModelErrorCode =
     | 'MODEL_RATE_LIMIT'
     | 'MODEL_STREAM_INTERRUPTED'
     | 'MODEL_OUTPUT_UNPARSABLE'
-    | 'CONTEXT_WINDOW_EXCEEDED';
+    | 'CONTEXT_WINDOW_EXCEEDED'
+    | 'MODEL_AUTH_INVALID';
 
 const MODEL_ERROR_MESSAGES: Record<ModelErrorCode, string> = {
     MODEL_TIMEOUT: 'Adjoint timed out contacting the model, please go back and try again.',
@@ -16,6 +17,7 @@ const MODEL_ERROR_MESSAGES: Record<ModelErrorCode, string> = {
     MODEL_STREAM_INTERRUPTED: 'Adjoint’s connection to the model was interrupted, please go back and retry.',
     MODEL_OUTPUT_UNPARSABLE: 'The model’s reply could not be parsed reliably on Adjoint’s side, please go back or retry.',
     CONTEXT_WINDOW_EXCEEDED: 'This step exceeds the model’s context window, please go back and split the argument.',
+    MODEL_AUTH_INVALID: 'Model credentials are invalid or missing. Please check your API key and try again.',
 };
 
 export function getModelErrorMessage(code: ModelErrorCode): string {
@@ -45,6 +47,15 @@ export function classifyModelCommError(errLike: unknown): ModelErrorCode | null 
         }
 
         const text = (msg || '').toLowerCase();
+
+        // Auth / invalid or missing API key
+        if (
+            status === 401 ||
+            status === 403 ||
+            /api key not valid|invalid api key|incorrect api key|no api key provided|api_key_invalid|unauthorized|forbidden/.test(text)
+        ) {
+            return 'MODEL_AUTH_INVALID';
+        }
 
         // Context window exceeded
         if (

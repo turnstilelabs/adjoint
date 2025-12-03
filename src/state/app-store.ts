@@ -39,6 +39,8 @@ type StoreData = {
   messages: Message[];
   loading: boolean;
   error: string | null;
+  errorDetails: string | null;
+  errorCode: string | null;
   isChatOpen: boolean;
   isHistoryOpen: boolean;
   viewMode: 'steps' | 'graph';
@@ -91,6 +93,8 @@ const initialState: StoreData = {
   messages: [],
   loading: false,
   error: null,
+  errorDetails: null,
+  errorCode: null,
   // proof display UI defaults
   isChatOpen: false,
   isHistoryOpen: false,
@@ -121,6 +125,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       messages: [],
       loading: true,
       error: null,
+      errorDetails: null,
+      errorCode: null,
       pendingSuggestion: null,
       pendingRejection: null,
       proofHistory: [],
@@ -255,7 +261,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           });
           es2.addEventListener('server-error', (ev: MessageEvent) => {
             if (finished2) return; finished2 = true;
-            try { const data = JSON.parse(ev.data || '{}'); set({ loading: false, error: data?.error || 'Unexpected server error.' }); } catch { set({ loading: false, error: 'Unexpected server error.' }); }
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              set({
+                loading: false,
+                error: data?.error || 'Unexpected server error.',
+                errorDetails: data?.detail ?? null,
+                errorCode: data?.code ?? null,
+              });
+            } catch {
+              set({ loading: false, error: 'Unexpected server error.', errorDetails: null, errorCode: null });
+            }
             try { es2.close(); } catch { }
             set({ cancelCurrent: null });
           });
@@ -317,11 +333,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         es.addEventListener('server-error', (ev: MessageEvent) => {
           if (finished) return; finished = true;
-          let msg = 'Token stream failed.';
-          try { const data = JSON.parse(ev.data || '{}'); if (data?.error) msg = `Token stream error: ${data.error}`; } catch { }
+          let friendly = 'Token stream failed.';
+          let detail: string | null = null;
+          let code: string | null = null;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            if (data?.error) friendly = data.error; // already friendly from server
+            if (data?.detail) detail = data.detail;
+            if (data?.code) code = data.code;
+          } catch { }
           try { es.close(); } catch { }
-          set({ cancelCurrent: null, isDraftStreaming: false });
-          appendLog(msg + ' Falling back to metadata stream...');
+          set({ cancelCurrent: null, isDraftStreaming: false, errorDetails: detail, errorCode: code });
+          appendLog(friendly + ' Falling back to metadata stream...');
           runMetadataSSE();
         });
 
@@ -392,6 +415,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       view: 'home',
       loading: false,
       error: null,
+      errorDetails: null,
+      errorCode: null,
       pendingSuggestion: null,
     }));
   },

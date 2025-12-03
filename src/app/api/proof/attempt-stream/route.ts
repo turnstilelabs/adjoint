@@ -87,6 +87,8 @@ export async function GET(req: NextRequest) {
                             write(sseEvent('server-error', {
                                 success: false,
                                 error: chunk.error,
+                                detail: (chunk as any).detail,
+                                code: (chunk as any).code,
                             }));
                             break;
                     }

@@ -8,6 +8,7 @@ import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
 import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
 import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/decompose-raw-proof';
 import { llmModel } from '@/ai/genkit';
+import { normalizeModelError } from '@/lib/model-error-core';
 import { createHash, randomUUID } from 'node:crypto';
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -201,11 +202,8 @@ export async function decomposeProblemAction(problem: string): Promise<Decompose
             } catch (error) {
                 logError('decomposeProblem', reqId, hash, error);
                 // On error, do not cache failures
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const result = {
-                    success: false as const,
-                    error: `Failed to decompose the problem with AI: ${errorMessage}`,
-                };
+                const norm = normalizeModelError(error);
+                const result = { success: false as const, error: norm.message };
                 // Clear pending entry so subsequent attempts can retry
                 decomposeCache.delete(key);
                 return result;
@@ -224,10 +222,10 @@ export async function decomposeProblemAction(problem: string): Promise<Decompose
         return { success: true, sublemmas };
     } catch (error) {
         logError('decomposeProblem', reqId, hash, error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const norm = normalizeModelError(error);
         return {
             success: false as const,
-            error: `Failed to decompose the problem with AI: ${errorMessage}`,
+            error: norm.message,
         };
     }
 }
@@ -326,10 +324,10 @@ export async function generateProofGraphAction(proofSteps: Sublemma[]): Promise<
                 return out;
             } catch (error) {
                 logError('generateProofGraph', reqId, hash, error);
-                const errorMessage = error instanceof Error ? error.message : String(error);
+                const norm = normalizeModelError(error);
                 const out = {
                     success: false as const,
-                    error: `Failed to generate proof graph with AI: ${errorMessage}`,
+                    error: norm.message,
                 };
                 graphCache.delete(key);
                 return out;
@@ -347,10 +345,10 @@ export async function generateProofGraphAction(proofSteps: Sublemma[]): Promise<
         return { success: true as const, ...result };
     } catch (error) {
         logError('generateProofGraph', reqId, hash, error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const norm = normalizeModelError(error);
         return {
             success: false as const,
-            error: `Failed to generate proof graph with AI: ${errorMessage}`,
+            error: norm.message,
         };
     }
 }

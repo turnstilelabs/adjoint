@@ -3,6 +3,7 @@ import { z } from 'genkit';
 import { classifyProofDraft, ClassifyProofDraftOutputSchema } from './classify-proof-draft';
 import { decomposeRawProof } from './decompose-raw-proof';
 import { SublemmaSchema } from './schemas';
+import { normalizeModelError } from '@/lib/model-error-core';
 
 /**
  * Streaming flow that replicates the behavior of the existing attempt-stream API route,
@@ -78,6 +79,8 @@ export const AttemptProofStreamChunkSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('server-error'),
         error: z.string(),
+        detail: z.string().optional(),
+        code: z.string().optional(),
     }),
 ]);
 export type AttemptProofStreamChunk = z.infer<typeof AttemptProofStreamChunkSchema>;
@@ -136,9 +139,12 @@ export async function attemptProofStreamOrchestrator(
             fullDraft = finalResp.text;
         }
     } catch (e: any) {
+        const norm = normalizeModelError(e);
         onChunk({
             type: 'server-error',
-            error: e?.message || 'Streaming failed.',
+            error: norm.message || 'Token stream failed. Please try again.',
+            detail: norm.detail,
+            code: norm.code || undefined,
         });
         // Return minimal failure outcome; caller can decide how to surface.
         return {
@@ -164,9 +170,12 @@ export async function attemptProofStreamOrchestrator(
         onChunk({ type: 'classify.result', result });
         attempt = { ...result, rawProof: fullDraft || null };
     } catch (e: any) {
+        const norm = normalizeModelError(e);
         onChunk({
             type: 'server-error',
             error: 'Failed to classify draft.',
+            detail: norm.detail,
+            code: norm.code || undefined,
         });
         return {
             attempt: {
@@ -196,9 +205,12 @@ export async function attemptProofStreamOrchestrator(
             normLen: decomp.normalizedProof?.length ?? 0,
         });
     } catch (e: any) {
+        const norm = normalizeModelError(e);
         onChunk({
             type: 'server-error',
             error: 'Failed to decompose drafted proof.',
+            detail: norm.detail,
+            code: norm.code || undefined,
         });
     }
 

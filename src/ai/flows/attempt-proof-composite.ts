@@ -3,6 +3,7 @@ import { z } from 'genkit';
 import { attemptProof, type AttemptProofOutput } from './attempt-proof';
 import { decomposeRawProof, type DecomposeRawProofOutput } from './decompose-raw-proof';
 import { SublemmaSchema } from './schemas';
+import { normalizeModelError } from '@/lib/model-error-core';
 
 /**
  * Composite flow for the "attempt-sse" endpoint behavior:
@@ -67,6 +68,8 @@ export const AttemptCompositeChunkSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('server-error'),
         error: z.string(),
+        detail: z.string().optional(),
+        code: z.string().optional(),
     }),
 ]);
 export type AttemptCompositeChunk = z.infer<typeof AttemptCompositeChunkSchema>;
@@ -93,7 +96,8 @@ export async function attemptProofCompositeOrchestrator(
     try {
         attempt = await attemptProof({ problem });
     } catch (e: any) {
-        onChunk({ type: 'server-error', error: e?.message || 'Unexpected error during attempt.' });
+        const norm = normalizeModelError(e);
+        onChunk({ type: 'server-error', error: norm.message || 'Unexpected error during attempt.', detail: norm.detail, code: norm.code || undefined });
         // Mirror the route's behavior: FAILED result when classification/attempt fails
         return {
             attempt: {
@@ -139,9 +143,12 @@ export async function attemptProofCompositeOrchestrator(
             },
         });
     } catch (e: any) {
+        const norm = normalizeModelError(e);
         onChunk({
             type: 'server-error',
             error: 'Failed to decompose raw proof.',
+            detail: norm.detail,
+            code: norm.code || undefined,
         });
     }
 
