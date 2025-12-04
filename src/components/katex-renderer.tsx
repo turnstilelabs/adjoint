@@ -182,14 +182,14 @@ function autoWrapInlineMathIfNeeded(input: string): string {
 
 export function KatexRenderer({ content, className, autoWrap = true }: KatexRendererProps) {
   const parts = useMemo(() => {
-    // Optionally auto-wrap missing inline math when no delimiters are present (useful for statements/proofs).
-    const hinted = autoWrap ? autoWrapInlineMathIfNeeded(content) : content;
-
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
-    const normalized = normalizeMathDelimiters(hinted);
+    const normalized = normalizeMathDelimiters(content);
+
+    // After normalizing, auto-wrap only outside existing $...$/$$...$$ segments (autoWrap helper preserves them).
+    const hinted = autoWrap ? autoWrapInlineMathIfNeeded(normalized) : normalized;
 
     // This regex splits the string by single or double dollar sign delimiters, keeping the delimiters.
-    const splitByDelimiters = normalized.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
+    const splitByDelimiters = hinted.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/);
 
     return splitByDelimiters.map((part, index) => {
       // Check if the part is a text-only math expression (e.g. $word$ or $some text$)
