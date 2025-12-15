@@ -19,31 +19,33 @@ export default function ProofDisplay() {
     <div className="inset-0 absolute overflow-hidden flex">
       <ProofSidebar />
 
-      <main className="flex flex-col grow mx-auto max-w-5xl p-3 md:p-10 pb-0 gap-10 overflow-hidden h-full">
-        <EditableProblemCard />
+      <main className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
+        <div className="mx-auto w-full max-w-5xl p-3 md:p-10 pb-0 gap-10 flex-1 flex flex-col">
+          <EditableProblemCard />
 
-        {!pendingSuggestion && !pendingRejection && (
-          <ScrollArea className="flex-1 -mx-5 px-5">
-            <div className="sticky top-0 z-20 flex items-center gap-2 mb-3 bg-background border-b">
-              <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
-            </div>
+          {!pendingSuggestion && !pendingRejection && (
+            <ScrollArea className="flex-1 -mx-5 px-5">
+              <div className="sticky top-0 z-20 flex items-center gap-2 mb-3 bg-background border-b">
+                <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
+              </div>
 
-            {viewMode === 'steps' ? <ProofSteps /> : <ProofGraphView />}
+              {viewMode === 'steps' ? <ProofSteps /> : <ProofGraphView />}
 
-            <ProofValidationFooter />
-          </ScrollArea>
-        )}
+              <ProofValidationFooter />
+            </ScrollArea>
+          )}
+        </div>
       </main>
 
       {isChatOpen && (
         <>
           {/* Click-outside overlay to close chat panel */}
           <div
-            className="fixed inset-0 z-20 bg-transparent"
+            className="fixed inset-0 z-20 bg-transparent xl:hidden"
             onClick={() => setIsChatOpen(false)}
             aria-hidden="true"
           />
-          <aside className="absolute inset-0 left-14 z-30 md:static md:w-[30rem] md:border-l bg-background h-screen overflow-y-auto flex flex-col">
+          <aside className="absolute inset-0 left-14 z-30 xl:static xl:w-[28rem] xl:border-l bg-background h-full overflow-y-auto flex flex-col">
             <InteractiveChat />
           </aside>
         </>
