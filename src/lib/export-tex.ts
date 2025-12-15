@@ -51,15 +51,17 @@ export const buildLatexDocument = (problem: string, steps: Sublemma[]) => {
   lines.push(problem);
   lines.push('\\end{quote}');
   lines.push('');
-  lines.push('\\section*{Proof Outline}');
-  lines.push('\\begin{enumerate}[leftmargin=*, label=Step~\\arabic*:]');
+  lines.push('\\section*{Detailed Proof}');
   steps.forEach((s, i) => {
-    const t = escapeLatexText(s.title || `Step ${i + 1}`);
-    const titleWithPunct = /[.?!:]$/.test(t) ? t : `${t}.`;
-    lines.push(`\\item \\textbf{${titleWithPunct}} ${s.statement}`);
+    const title = escapeLatexText(s.title || `Lemma ${i + 1}`);
+    lines.push(`\\begin{lemma}[${title}]`);
+    lines.push(s.statement || '');
+    lines.push('\\end{lemma}');
+    lines.push('\\begin{proof}');
+    lines.push(s.proof || 'Proof omitted.');
+    lines.push('\\end{proof}');
+    lines.push('');
   });
-  lines.push('\\end{enumerate}');
-  lines.push('');
   lines.push('\\end{document}');
   return lines.join('\n');
 };

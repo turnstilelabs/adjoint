@@ -19,12 +19,12 @@ export default function ProofDisplay() {
     <div className="inset-0 absolute overflow-hidden flex">
       <ProofSidebar />
 
-      <main className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
-        <div className="mx-auto w-full max-w-5xl p-3 md:p-10 pb-0 gap-10 flex-1 flex flex-col">
+      <main className="flex-1 min-w-0 min-h-0 h-full overflow-hidden flex flex-col">
+        <div className="mx-auto w-full max-w-5xl p-3 md:p-10 pb-0 gap-10 flex-1 min-h-0 flex flex-col">
           <EditableProblemCard />
 
           {!pendingSuggestion && !pendingRejection && (
-            <ScrollArea className="flex-1 -mx-5 px-5">
+            <ScrollArea className="flex-1 min-h-0 -mx-5 px-5">
               <div className="sticky top-0 z-20 flex items-center gap-2 mb-3 bg-background border-b">
                 <h2 className="text-2xl font-bold font-headline">Tentative Proof</h2>
               </div>
