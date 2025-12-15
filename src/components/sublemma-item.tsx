@@ -71,7 +71,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   const [selection, setSelection] = useState<{
     text: string;
     anchor: { top: number; left: number } | null;
-  }>({ text: '', anchor: null });
+    target: 'statement' | 'proof' | null;
+  }>({ text: '', anchor: null, target: null });
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
@@ -85,17 +86,19 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     ) {
       const range = currentSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      setSelection({
-        text: selectedText,
-        anchor: { top: rect.top, left: rect.left + rect.width / 2 },
-      });
-
       // Build and store a robust selection snapshot for later (toolbar click)
       const targetNode = currentSelection.anchorNode;
       const inStatement =
         !!statementViewRef.current && !!targetNode && statementViewRef.current.contains(targetNode);
       const inProof =
         !!proofViewRef.current && !!targetNode && proofViewRef.current.contains(targetNode);
+
+      setSelection({
+        text: selectedText,
+        anchor: { top: rect.top, left: rect.left + rect.width / 2 },
+        target: inProof ? 'proof' : inStatement ? 'statement' : null,
+      });
+
       const containerEl = inStatement
         ? statementViewRef.current
         : inProof
@@ -123,6 +126,79 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
             selectedNorm,
             yRatio,
           };
+
+          // Derive TeX substring from the original source instead of using KaTeX textContent
+          try {
+            const source = inStatement ? statement : inProof ? proof : '';
+            const startIdx = computeCaretIndexFromSelection(containerEl, source, selectedText || '');
+
+            // Try to extract the nearest TeX math segment surrounding the click
+            const extractTeXAt = (src: string, idx: number): string | null => {
+              if (!src) return null;
+
+              // 1) $...$ or $$...$$
+              const l = src.lastIndexOf('$', idx);
+              if (l >= 0) {
+                // Detect $$ on the left
+                let lStart = l;
+                if (lStart > 0 && src[lStart - 1] === '$') lStart = lStart - 1;
+
+                // Find matching right $
+                let r = src.indexOf('$', Math.max(idx, l + 1));
+                if (r > l) {
+                  // If $$ on the right, extend
+                  let rEnd = r;
+                  if (rEnd + 1 < src.length && src[rEnd + 1] === '$') rEnd = rEnd + 1;
+
+                  const isDisplay =
+                    lStart + 1 < src.length && src[lStart] === '$' && src[lStart + 1] === '$';
+                  const contentStart = isDisplay ? lStart + 2 : lStart + 1;
+                  const contentEnd = isDisplay && rEnd > lStart + 1 ? rEnd - 1 : rEnd;
+
+                  if (contentEnd > contentStart) {
+                    const candidate = src.slice(contentStart, contentEnd).trim();
+                    if (candidate.length > 0) return candidate;
+                  }
+                }
+              }
+
+              // 2) \( ... \)
+              const l2 = src.lastIndexOf('\\(', idx);
+              const r2 = src.indexOf('\\)', Math.max(idx, l2 + 2));
+              if (l2 >= 0 && r2 > l2) {
+                return src.slice(l2 + 2, r2).trim();
+              }
+
+              // 3) \[ ... \]
+              const l3 = src.lastIndexOf('\\[', idx);
+              const r3 = src.indexOf('\\]', Math.max(idx, l3 + 2));
+              if (l3 >= 0 && r3 > l3) {
+                return src.slice(l3 + 2, r3).trim();
+              }
+
+              return null;
+            };
+
+            const seg = extractTeXAt(source, Math.max(0, Math.min(startIdx, source.length - 1)));
+            let selectedTeX: string;
+            if (seg && seg.length > 0) {
+              selectedTeX = seg;
+            } else {
+              // Fallback: slice around startIdx using normalized selection length (best effort)
+              const endIdx = Math.min(
+                source.length,
+                Math.max(0, startIdx) + (selectedNorm ? selectedNorm.length : 0),
+              );
+              selectedTeX = (source.slice(Math.max(0, startIdx), endIdx) || selectedNorm).trim();
+            }
+
+            setSelection((prev) => ({
+              ...prev,
+              text: selectedTeX,
+            }));
+          } catch {
+            // keep previous selection text
+          }
         } catch {
           lastSelectionSnapRef.current = null;
         }
@@ -130,7 +206,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
         lastSelectionSnapRef.current = null;
       }
     } else {
-      setSelection({ text: '', anchor: null });
+      setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
     }
   }, [isEditing]);
@@ -142,6 +218,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
       .replace(/∑/g, '\\sum ')
       .replace(/[–−]/g, '-')
       .replace(/\u00A0/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '') // strip zero-width artifacts
+      .replace(/[·×]/g, '\\cdot ')
       // common smart quotes to plain
       .replace(/[“”]/g, '"')
       .replace(/[’]/g, "'")
@@ -608,7 +686,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     });
 
     // Hide the selection toolbar
-    setSelection({ text: '', anchor: null });
+    setSelection({ text: '', anchor: null, target: null });
   };
 
   const handleTitleDoubleClick = (e: React.MouseEvent) => {
@@ -680,7 +758,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   useEffect(() => {
     // When editing starts/stops, or content changes, clear selection
-    setSelection({ text: '', anchor: null });
+    setSelection({ text: '', anchor: null, target: null });
   }, [isEditing, statement, proof]);
 
   // Click outside to cancel edit only if there are no changes
@@ -712,6 +790,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
           anchor={selection.anchor}
           onRevise={handleReviseFromToolbar}
           selectedText={selection.text}
+          canCheckAgain={selection.target === 'proof'}
+          lemmaStatement={statement}
         />
       )}
       <AccordionItem

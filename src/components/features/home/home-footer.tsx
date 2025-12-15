@@ -24,25 +24,22 @@ export function HomeFooter() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader className="!text-center sm:!text-center">
-              <DialogTitle>About</DialogTitle>
+              <DialogTitle className="sr-only">Learn more</DialogTitle>
               <DialogDescription>
                 We’re crafting the ideal workflow for mathematicians to develop, inspect, and refine proofs with LLM assistance.
               </DialogDescription>
             </DialogHeader>
             <div className="text-sm space-y-3">
               <div>
-                <p className="font-medium">Main features</p>
                 <ul className="mt-1 list-disc list-inside space-y-1 text-left">
-                  <li>Decompose problems into sub‑lemmas with clear dependencies</li>
-                  <li>Editable steps for fast iteration (with math rendering — at least we try :)</li>
-                  <li>Validation pass to flag gaps and inconsistencies</li>
-                  <li>Interactive chat to propose changes and improve arguments</li>
-                  <li>Export to LaTeX</li>
+                  <li>Decompose proofs into lemmas with clear dependencies</li>
+                  <li>Directly edit steps for fast iteration</li>
+                  <li>Validate logic to flag gaps and inconsistencies</li>
                 </ul>
               </div>
               <div className="text-xs text-muted-foreground">
                 <p>
-                  This will only become excellent with community effort — your feedback and ideas are essential.
+                  This will only become excellent with community effort, your feedback and ideas are essential!
                 </p>
               </div>
             </div>
@@ -51,7 +48,7 @@ export function HomeFooter() {
                 href="mailto:adjoint@turnstilelabs.com"
                 className="text-sm text-primary hover:underline"
               >
-                Email: adjoint@turnstilelabs.com
+                adjoint@turnstilelabs.com
               </a>
             </DialogFooterArea>
           </DialogContent>

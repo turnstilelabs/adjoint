@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
-import { decomposeProblemAction } from '@/app/actions';
+import { attemptProofAction, attemptProofActionForce, decomposeRawProofAction } from '@/app/actions';
 
 export type View = 'home' | 'proof';
 
@@ -14,11 +14,22 @@ export type ProofVersion = {
   validationResult?: ProofValidationResult;
   graphData?: GraphData;
 };
+
+export type PendingSuggestion = {
+  suggested: string; // model-proposed final statement
+  variantType: 'WEAKENING' | 'OPPOSITE';
+  provedStatement: string; // extracted from raw proof decomposition
+  sublemmas: Sublemma[]; // pre-decomposed steps for instant accept
+  explanation: string;
+  normalizedProof?: string; // full normalized proof text for fallback rendering
+  rawProof?: string; // original raw proof text for fallback rendering
+};
 export type ProofValidationResult = {
   isError?: boolean;
   isValid?: boolean;
   feedback: string;
   timestamp: Date;
+  model?: string;
 };
 
 type StoreData = {
@@ -28,20 +39,36 @@ type StoreData = {
   messages: Message[];
   loading: boolean;
   error: string | null;
+  errorDetails: string | null;
+  errorCode: string | null;
   isChatOpen: boolean;
   isHistoryOpen: boolean;
   viewMode: 'steps' | 'graph';
   proofHistory: ProofVersion[];
   activeVersionIdx: number;
+  pendingSuggestion: PendingSuggestion | null;
+  pendingRejection: { explanation: string } | null;
+  // Streaming progress
+  progressLog: string[];
+  // Cancel the current in-flight streaming request (if any)
+  cancelCurrent?: (() => void) | null;
+  // Live draft streaming (token-level)
+  liveDraft: string;
+  isDraftStreaming: boolean;
 };
 
 interface AppState extends StoreData {
   reset: () => void;
 
-  startProof: (problem: string) => Promise<void>;
+  startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
   retry: () => Promise<void>;
   editProblem: () => void;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
+
+  // Variant handling
+  acceptSuggestedChange: () => void;
+  clearSuggestion: () => void;
+  clearRejection: () => void;
 
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
@@ -66,6 +93,8 @@ const initialState: StoreData = {
   messages: [],
   loading: false,
   error: null,
+  errorDetails: null,
+  errorCode: null,
   // proof display UI defaults
   isChatOpen: false,
   isHistoryOpen: false,
@@ -73,12 +102,18 @@ const initialState: StoreData = {
   // proof review/history defaults
   proofHistory: [],
   activeVersionIdx: 0,
+  pendingSuggestion: null,
+  pendingRejection: null,
+  progressLog: [],
+  cancelCurrent: null,
+  liveDraft: '',
+  isDraftStreaming: false,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
 
-  startProof: async (problem: string) => {
+  startProof: async (problem: string, opts?: { force?: boolean }) => {
     const trimmed = problem.trim();
     if (!trimmed) return;
 
@@ -90,32 +125,75 @@ export const useAppStore = create<AppState>((set, get) => ({
       messages: [],
       loading: true,
       error: null,
+      errorDetails: null,
+      errorCode: null,
+      pendingSuggestion: null,
+      pendingRejection: null,
+      proofHistory: [],
+      activeVersionIdx: 0,
+      progressLog: ['Starting proof attempt...'],
+      cancelCurrent: null,
+      liveDraft: '',
+      isDraftStreaming: false,
     });
 
-    try {
-      // small delay to allow UI to render
+    const appendLog = (line: string) => set((s) => ({ progressLog: [...s.progressLog, line] }));
+
+    // Fallback non-streaming implementation (existing behavior)
+    const runNonStreaming = async () => {
       await new Promise((r) => setTimeout(r, 50));
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] decompose start len=', trimmed.length);
-      const result = await decomposeProblemAction(trimmed);
+      console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
+      const attempt = opts?.force
+        ? await attemptProofActionForce(trimmed)
+        : await attemptProofAction(trimmed);
       const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] decompose done ms=', t1 - t0, 'success=', (result as any)?.success);
-      if (result.success) {
-        // Normalize sublemmas to ensure consistent structure matching Sublemma schema
-        const normalizedSublemmas: Sublemma[] = result.sublemmas.map((s: any) => {
-          const content = s?.content as string | undefined;
-          return {
-            title: s?.title ?? '',
-            statement: s?.statement ?? content ?? '',
-            proof: s?.proof ?? '',
-          };
-        });
+      console.debug('[UI][AppStore] attemptProof done ms=', t1 - t0, 'success=', (attempt as any)?.success);
 
+      if (!attempt.success) {
+        set({ loading: false, error: attempt.error || 'Failed to attempt proof.' });
+        return;
+      }
+
+      if (attempt.status === 'FAILED') {
+        set({
+          loading: false,
+          error: null,
+          pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
+          proofHistory: [],
+          activeVersionIdx: 0,
+        });
+        return;
+      }
+
+      const d0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const decomp = await decomposeRawProofAction(attempt.rawProof || '');
+      const d1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
+
+      if (!decomp.success) {
+        set({
+          loading: false,
+          error: 'Failed to parse the proof produced by AI.',
+          proofHistory: [],
+        });
+        return;
+      }
+
+      if (attempt.status === 'PROVED_AS_IS') {
+        const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0)
+          ? (decomp.sublemmas as Sublemma[])
+          : ([{
+            title: 'Proof',
+            statement: decomp.provedStatement,
+            proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
+          }] as Sublemma[]);
+        console.debug('[UI][AppStore] provedAsIs steps', steps.length);
         const assistantMessage: Message = {
           role: 'assistant',
           content:
-            `I've broken down the problem into the following steps:\n\n` +
-            normalizedSublemmas.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+            `I've broken down the proof into the following steps:\n\n` +
+            steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
         };
         set({
           messages: [assistantMessage],
@@ -123,26 +201,186 @@ export const useAppStore = create<AppState>((set, get) => ({
           error: null,
           proofHistory: [
             {
-              sublemmas: normalizedSublemmas,
+              sublemmas: steps,
               timestamp: new Date(),
             },
           ],
           activeVersionIdx: 0,
         });
-      } else {
-        console.debug('[UI][AppStore] decompose failed error=', (result as any)?.error);
-        const err = 'error' in result ? result.error : 'Failed to decompose the problem.';
-        set({
-          loading: false,
-          error: err,
-        });
+        return;
       }
-    } catch (e) {
+
       set({
         loading: false,
-        error: e instanceof Error ? e.message : 'Unexpected error.',
-        proofHistory: [],
+        error: null,
+        pendingSuggestion: {
+          suggested: attempt.finalStatement || (decomp as any).provedStatement,
+          variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+          provedStatement: (decomp as any).provedStatement,
+          sublemmas: (decomp as any).sublemmas as Sublemma[],
+          explanation: attempt.explanation,
+          normalizedProof: (decomp as any).normalizedProof,
+          rawProof: attempt.rawProof || undefined,
+        },
+        proofHistory: [
+          {
+            sublemmas: [],
+            timestamp: new Date(),
+          },
+        ],
+        activeVersionIdx: 0,
       });
+    };
+
+    // Try token streaming first; fallback to metadata-only SSE, then non-streaming
+    if (typeof window !== 'undefined' && 'EventSource' in window) {
+      const runMetadataSSE = async () => {
+        try {
+          const url2 = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
+          const es2 = new EventSource(url2);
+          let finished2 = false;
+          set({ cancelCurrent: () => { try { es2.close(); } catch { } } });
+
+          es2.addEventListener('progress', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
+              if (data?.phase === 'decompose.start') appendLog('Decomposing proof....');
+            } catch { }
+          });
+          es2.addEventListener('attempt', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.status === 'FAILED') appendLog('Unable to provide a proof....');
+              else if (data?.status === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
+              else appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
+            } catch { }
+          });
+          es2.addEventListener('decompose', (ev: MessageEvent) => {
+            try { const data = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`); } catch { }
+          });
+          es2.addEventListener('server-error', (ev: MessageEvent) => {
+            if (finished2) return; finished2 = true;
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              set({
+                loading: false,
+                error: data?.error || 'Unexpected server error.',
+                errorDetails: data?.detail ?? null,
+                errorCode: data?.code ?? null,
+              });
+            } catch {
+              set({ loading: false, error: 'Unexpected server error.', errorDetails: null, errorCode: null });
+            }
+            try { es2.close(); } catch { }
+            set({ cancelCurrent: null });
+          });
+          es2.addEventListener('done', (ev: MessageEvent) => {
+            if (finished2) return; finished2 = true;
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              const attempt = data?.attempt; const decomp = data?.decompose;
+              if (!attempt) { set({ loading: false, error: 'Malformed SSE response.' }); return; }
+              if (attempt.status === 'FAILED') {
+                set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
+              } else if (!decomp) {
+                set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
+              } else if (attempt.status === 'PROVED_AS_IS') {
+                const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
+                const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'), };
+                set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [{ sublemmas: steps, timestamp: new Date() }], activeVersionIdx: 0 });
+              } else {
+                set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [{ sublemmas: [], timestamp: new Date() }], activeVersionIdx: 0 });
+              }
+            } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
+            finally { try { es2.close(); } catch { } set({ cancelCurrent: null }); }
+          });
+          es2.onerror = () => { try { es2.close(); } catch { } set({ cancelCurrent: null }); appendLog('Metadata stream lost. Falling back to non-streaming...'); runNonStreaming(); };
+        } catch { await runNonStreaming(); }
+      };
+
+      try {
+        const url = `/api/proof/attempt-stream?problem=${encodeURIComponent(trimmed)}`;
+        const es = new EventSource(url);
+        let finished = false;
+        let gotDelta = false;
+        set({ cancelCurrent: () => { try { es.close(); } catch { } } });
+        set({ isDraftStreaming: true, liveDraft: '' });
+
+        es.addEventListener('model.start', (ev: MessageEvent) => {
+          try { const data = JSON.parse(ev.data || '{}'); appendLog(`Using ${data?.provider}/${data?.model}...`); } catch { }
+        });
+        es.addEventListener('model.switch', (ev: MessageEvent) => {
+          try { const d = JSON.parse(ev.data || '{}'); if (d?.to) appendLog(`Switched model to ${d.to}...`); } catch { }
+        });
+        es.addEventListener('model.delta', (ev: MessageEvent) => {
+          try { const data = JSON.parse(ev.data || '{}'); const t = data?.text || ''; if (t) { if (!gotDelta) { appendLog('Receiving model output...'); gotDelta = true; } set((s) => ({ liveDraft: s.liveDraft + t })); } } catch { }
+        });
+        es.addEventListener('model.end', () => { set({ isDraftStreaming: false }); appendLog('Proof draft completed....'); });
+        es.addEventListener('classify.result', (ev: MessageEvent) => {
+          try {
+            const d = JSON.parse(ev.data || '{}');
+            const st = d?.status;
+            if (st === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
+            else if (st === 'FAILED') appendLog('Unable to provide a proof....');
+          } catch { }
+        });
+
+
+
+        es.addEventListener('decompose.start', () => appendLog('Decomposing proof....'));
+        es.addEventListener('decompose.result', (ev: MessageEvent) => { try { const d = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${d?.sublemmasCount ?? 0} step(s)....`); } catch { } });
+
+        es.addEventListener('server-error', (ev: MessageEvent) => {
+          if (finished) return; finished = true;
+          let friendly = 'Token stream failed.';
+          let detail: string | null = null;
+          let code: string | null = null;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            if (data?.error) friendly = data.error; // already friendly from server
+            if (data?.detail) detail = data.detail;
+            if (data?.code) code = data.code;
+          } catch { }
+          try { es.close(); } catch { }
+          set({ cancelCurrent: null, isDraftStreaming: false, errorDetails: detail, errorCode: code });
+          appendLog(friendly + ' Falling back to metadata stream...');
+          runMetadataSSE();
+        });
+
+        es.addEventListener('done', (ev: MessageEvent) => {
+          if (finished) return; finished = true;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            const attempt = data?.attempt; const decomp = data?.decompose;
+            if (!attempt) { set({ loading: false, error: 'Malformed stream response.' }); return; }
+            if (attempt.status === 'FAILED') {
+              set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
+            } else if (!decomp) {
+              set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
+            } else if (attempt.status === 'PROVED_AS_IS') {
+              const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
+              const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n') };
+              set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [{ sublemmas: steps, timestamp: new Date() }], activeVersionIdx: 0 });
+            } else {
+              set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined }, proofHistory: [{ sublemmas: [], timestamp: new Date() }], activeVersionIdx: 0 });
+            }
+          } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
+          finally { try { es.close(); } catch { } set({ cancelCurrent: null, isDraftStreaming: false }); }
+        });
+
+        es.onerror = () => {
+          if (finished) return; finished = true; try { es.close(); } catch { }
+          set({ cancelCurrent: null, isDraftStreaming: false });
+          appendLog('Token stream connection lost. Falling back to metadata stream...');
+          runMetadataSSE();
+        };
+      } catch (e) {
+        appendLog('Token streaming not available. Falling back to metadata stream...');
+        await runMetadataSSE();
+      }
+    } else {
+      await runNonStreaming();
     }
   },
 
@@ -157,6 +395,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   reset: () => {
+    const cancel = get().cancelCurrent || null;
+    if (cancel) {
+      try { cancel(); } catch { }
+    }
     set((state) => ({ ...initialState, lastProblem: state.lastProblem }));
   },
 
@@ -164,7 +406,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   retry: async () => {
     const p = get().lastProblem;
     if (p) {
-      await get().startProof(p);
+      await get().startProof(p, { force: true });
     }
   },
   editProblem: () => {
@@ -173,6 +415,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       view: 'home',
       loading: false,
       error: null,
+      errorDetails: null,
+      errorCode: null,
+      pendingSuggestion: null,
     }));
   },
 
@@ -196,6 +441,46 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  acceptSuggestedChange: () => {
+    const s = get().pendingSuggestion;
+    if (!s) return;
+    const steps: Sublemma[] = (s.sublemmas && s.sublemmas.length > 0)
+      ? s.sublemmas
+      : ([{
+        title: 'Proof',
+        statement: s.provedStatement,
+        proof: s.normalizedProof || s.rawProof || s.explanation || 'Proof unavailable.',
+      }] as Sublemma[]);
+    try {
+      console.debug('[UI][AppStore] acceptSuggestedChange', {
+        stepsBefore: s.sublemmas?.length ?? 0,
+        usedFallback: !(s.sublemmas && s.sublemmas.length > 0),
+      });
+    } catch { }
+    set({
+      problem: s.provedStatement,
+      pendingSuggestion: null,
+      proofHistory: [
+        {
+          sublemmas: steps,
+          timestamp: new Date(),
+        },
+      ],
+      activeVersionIdx: 0,
+      messages: [
+        {
+          role: 'assistant',
+          content:
+            `I've broken down the proof into the following steps:\n\n` +
+            steps.map((x) => `**${x.title}:** ${x.statement}`).join('\n\n'),
+        } as Message,
+      ],
+    });
+  },
+
+  clearSuggestion: () => set({ pendingSuggestion: null }),
+  clearRejection: () => set({ pendingRejection: null }),
 
   // Go back to previous proof version (if any) and ensure steps view
   goBack: () =>

@@ -1,14 +1,14 @@
 [
   {
     "level": "IMO-Level Inequality",
-    "problem": "Let $a, b, c$ be positive real numbers such that $abc = 1$. Prove that \\frac{1}{a^3(b+c)} + \\frac{1}{b^3(c+a)} + \\frac{1}{c^3(a+b)} \\ge \\frac{3}{2}."
+    "problem": "Let $a, b, c$ be positive real numbers such that $abc = 1$. Prove that \\[ \\frac{1}{a^3(b+c)} + \\frac{1}{b^3(c+a)} + \\frac{1}{c^3(a+b)} \\ge \\frac{3}{2}. \\]"
   },
   {
-    "level": "Lagrange's Theorem",
-    "problem": "Prove that if $G$ is a finite group and $H$ is a subgroup of $G$, then the order of $H$ divides the order of $G$."
+    "level": "Brezis-Gallouet Inequality (2D logarithmic interpolation)",
+    "problem": "Let $\\Omega \\subset \\mathbb{R}^2$ be a bounded domain with smooth boundary. There exists a constant $C=C(\\Omega)$ such that for every $u \\in H^2(\\Omega)$, the following estimate holds: \\[ \\|u\\|_{L^\\infty(\\Omega)} \\le C \\big( 1 + \\|u\\|_{H^1(\\Omega)} \\sqrt{ \\log(1 + \\|u\\|_{H^2(\\Omega)}) } \\big). \\]"
   },
   {
-    "level": "Banach-Alaoglu Theorem",
-    "problem": "Prove that the closed unit ball in the dual of a normed vector space is compact in the weak-* topology."
+    "level": "McDiarmid's Inequality (method of bounded differences)",
+    "problem": "Let $\\mathcal{X} = \\prod_{k=1}^n A_k$ and $f: \\mathcal{X} \\to \\mathbb{R}$ satisfy the bounded-difference property with constants $c_1, \\dots, c_n$: for each $k$, \\[ \\sup_{x, x' \\in \\mathcal{X}, x_j = x'_j \\forall j \\ne k} |f(x) - f(x')| \\le c_k. \\] If $X_1, \\dots, X_n$ are independent with $X_k \\in A_k$, then for any $t > 0$, \\[ \\mathbb{P}\\big( f(X) - \\mathbb{E}[f(X)] \\ge t \\big) \\le \\exp\\Big( - \\tfrac{2t^2}{\\sum_{k=1}^n c_k^2} \\Big). \\]"
   }
 ]

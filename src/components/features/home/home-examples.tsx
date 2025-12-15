@@ -10,17 +10,36 @@ function HomeExamples() {
 
   return (
     <div className="mt-16 text-center">
-      <h2 className="text-2xl font-bold font-headline text-primary">Or, start with an example</h2>
+      <h2 className="text-2xl font-bold font-headline text-primary">Explore Examples</h2>
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         {exampleProblems.map((example, index) => (
           <Card key={index} className="text-left flex flex-col">
             <CardHeader>
               <CardTitle className="text-base font-semibold text-primary">
-                {example.level}
+                {example.level.replace(/\s*\([^)]*\)\s*/g, ' ').trim()}
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1">
-              <KatexRenderer content={example.problem} className="text-sm" />
+            <CardContent className="flex-1 h-48 md:h-56 overflow-hidden pr-1">
+              <KatexRenderer
+                content={(() => {
+                  if (example.level.startsWith('Brezis-Gallouet')) {
+                    const marker = 'the following estimate holds:';
+                    const idx = example.problem.indexOf(marker);
+                    return idx >= 0 ? example.problem.slice(0, idx + marker.length) + ' ...' : example.problem;
+                  }
+                  if (example.level.startsWith("McDiarmid")) {
+                    const close = '\\]';
+                    const idx = example.problem.indexOf(close);
+                    let preview = idx >= 0 ? example.problem.slice(0, idx + close.length) : example.problem;
+                    // Remove any trailing ellipsis or whitespace-only/ellipsis-only trailing line
+                    preview = preview.replace(/[\s\n]*(?:…|\.{3})\s*$/g, '');
+                    return preview.trimEnd();
+                  }
+                  return example.problem;
+                })()}
+                className="text-sm"
+                autoWrap={false}
+              />
             </CardContent>
             <div className="p-6 pt-0 mt-auto">
               <Button

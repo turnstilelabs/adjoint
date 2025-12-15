@@ -71,3 +71,61 @@ const validateStatementFlow = ai.defineFlow(
     return output;
   },
 );
+
+//
+// New: Validate a proof excerpt in the context of a lemma statement
+//
+const ValidateProofExcerptInputSchema = z.object({
+  excerpt: z.string().describe('The selected proof excerpt to check.'),
+  lemmaStatement: z.string().describe("The lemma's statement that this proof excerpt is addressing."),
+});
+export type ValidateProofExcerptInput = z.infer<typeof ValidateProofExcerptInputSchema>;
+
+// Reuse ValidateStatementOutputSchema for compatibility with existing UI toasts
+export async function validateProofExcerptInContext(
+  input: ValidateProofExcerptInput,
+): Promise<ValidateStatementOutput> {
+  return validateProofExcerptFlow(input);
+}
+
+const proofExcerptPrompt = ai.definePrompt({
+  name: 'validateProofExcerptInContextPrompt',
+  input: { schema: ValidateProofExcerptInputSchema },
+  output: { schema: ValidateStatementOutputSchema },
+  system:
+    'You are a precise JSON API. Return ONLY a single JSON object with exactly two keys: "validity" and "reasoning". The "validity" value must be one of "VALID", "INVALID", "INCOMPLETE" (uppercase). Do not include markdown fences or any extra text or keys.',
+  prompt: `You are a mathematical expert. A user highlighted an excerpt from a tentative proof of a lemma. 
+You must assess whether the excerpt is an appropriate and useful proof step in the context of the lemma's statement.
+
+Lemma statement:
+"{{{lemmaStatement}}}"
+
+Selected proof excerpt:
+"{{{excerpt}}}"
+
+Classify into one of:
+1) VALID: The excerpt is a coherent, relevant, and correct proof step (or sub-step) toward proving the lemma statement.
+2) INVALID: The excerpt is incorrect, irrelevant, or contradicts the lemma or standard mathematics.
+3) INCOMPLETE: The excerpt is too fragmentary or missing context to determine its correctness or relevance.
+
+Return ONLY this JSON object:
+{"validity":"VALID|INVALID|INCOMPLETE","reasoning":"<brief one-sentence explanation>"}
+Use uppercase for validity; do not include any extra keys or text.`,
+});
+
+const validateProofExcerptFlow = ai.defineFlow(
+  {
+    name: 'validateProofExcerptInContextFlow',
+    inputSchema: ValidateProofExcerptInputSchema,
+    outputSchema: ValidateStatementOutputSchema,
+  },
+  async (input: ValidateProofExcerptInput) => {
+    const { output } = await proofExcerptPrompt(input);
+    if (!output?.validity || !output?.reasoning) {
+      throw new Error(
+        'The AI failed to return a valid proof excerpt assessment. The response was malformed.',
+      );
+    }
+    return output;
+  },
+);
