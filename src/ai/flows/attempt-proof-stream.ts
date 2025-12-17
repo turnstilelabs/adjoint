@@ -4,6 +4,7 @@ import { classifyProofDraft, ClassifyProofDraftOutputSchema } from './classify-p
 import { decomposeRawProof } from './decompose-raw-proof';
 import { SublemmaSchema } from './schemas';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { env } from '@/env';
 
 /**
  * Streaming flow that replicates the behavior of the existing attempt-stream API route,
@@ -110,43 +111,93 @@ export async function attemptProofStreamOrchestrator(
     const provider = (llmId.split('/')?.[0]) || 'unknown';
     const model = llmModel;
 
-    onChunk({ type: 'model.start', provider, model, ts: Date.now() });
+    // Build candidate model chain: current -> same provider pro -> OpenAI (if configured)
+    const candidates: string[] = [];
+    if (provider === 'googleai') {
+        candidates.push(llmId);
+        const proId = 'googleai/gemini-2.5-pro';
+        if (llmId !== proId) candidates.push(proId);
+        if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
+    } else {
+        // Default: try the configured model only
+        candidates.push(llmId);
+    }
 
-    const t0 = Date.now();
+    const system =
+        'You are a rigorous mathematician. Produce a complete, self-contained proof. If the original statement is not provable as posed, write a correct proof for the closest provable variant instead. Write narrative paragraphs; LaTeX allowed.';
+    const user = `Prove the following statement or the closest provable variant, writing a rigorous proof.\n\n"${problem}"`;
+
     let fullDraft = '';
+    let succeeded = false;
+    let lastErr: { code: string | null; message: string; detail?: string } | null = null;
 
-    try {
-        const system =
-            'You are a rigorous mathematician. Produce a complete, self-contained proof. If the original statement is not provable as posed, write a correct proof for the closest provable variant instead. Write narrative paragraphs; LaTeX allowed.';
-        const user = `Prove the following statement or the closest provable variant, writing a rigorous proof.\n\n"${problem}"`;
+    for (const cand of candidates) {
+        const [prov, mod] = (cand || '').split('/');
+        onChunk({ type: 'model.start', provider: prov || 'unknown', model: mod || cand, ts: Date.now() });
+        const tStart = Date.now();
+        try {
+            const { stream, response } = ai.generateStream({
+                model: cand,
+                system,
+                prompt: user,
+            });
 
-        const { stream, response } = ai.generateStream({
-            system,
-            prompt: user,
-        });
-
-        for await (const chunk of (stream as any)) {
-            if (shouldAbort()) break;
-            const t = chunk && typeof chunk.text === 'string' ? chunk.text : '';
-            if (t) {
-                fullDraft += t;
-                onChunk({ type: 'model.delta', text: t });
+            let localDraft = '';
+            for await (const chunk of (stream as any)) {
+                if (shouldAbort()) break;
+                const t = chunk && typeof chunk.text === 'string' ? chunk.text : '';
+                if (t) {
+                    localDraft += t;
+                    onChunk({ type: 'model.delta', text: t });
+                }
             }
-        }
 
-        const finalResp: any = await response;
-        if (!fullDraft && finalResp?.text) {
-            fullDraft = finalResp.text;
+            const finalResp: any = await response;
+            if (!localDraft && finalResp?.text) {
+                localDraft = finalResp.text;
+            }
+
+            fullDraft = localDraft;
+            const durationMs = Date.now() - tStart;
+            onChunk({ type: 'model.end', durationMs, length: fullDraft.length });
+            succeeded = true;
+            break;
+        } catch (e: any) {
+            const norm = normalizeModelError(e);
+            lastErr = { code: norm.code || null, message: norm.message, detail: norm.detail };
+            // Capacity/rate limit: try next candidate if available
+            if (norm.code === 'MODEL_RATE_LIMIT') {
+                continue;
+            }
+            // Any other error: surface immediately
+            onChunk({
+                type: 'server-error',
+                error: norm.message || 'Token stream failed. Please try again.',
+                detail: norm.detail,
+                code: norm.code || undefined,
+            });
+            return {
+                attempt: {
+                    status: 'FAILED',
+                    finalStatement: null,
+                    variantType: null,
+                    rawProof: fullDraft || null,
+                    explanation: 'Streaming failed while generating the draft proof.',
+                },
+                decompose: null,
+            };
         }
-    } catch (e: any) {
-        const norm = normalizeModelError(e);
+    }
+
+    if (!succeeded) {
+        // Exhausted candidates; report last error
+        const norm = lastErr || { code: null, message: 'Token stream failed.', detail: undefined };
         onChunk({
             type: 'server-error',
             error: norm.message || 'Token stream failed. Please try again.',
             detail: norm.detail,
-            code: norm.code || undefined,
+            code: (norm as any).code || undefined,
         });
-        // Return minimal failure outcome; caller can decide how to surface.
         return {
             attempt: {
                 status: 'FAILED',
@@ -158,9 +209,6 @@ export async function attemptProofStreamOrchestrator(
             decompose: null,
         };
     }
-
-    const durationMs = Date.now() - t0;
-    onChunk({ type: 'model.end', durationMs, length: fullDraft.length });
 
     // Classification phase
     onChunk({ type: 'classify.start', ts: Date.now() });

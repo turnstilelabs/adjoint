@@ -7,9 +7,11 @@
  * - ValidateProofOutput - The return type for the validateProof function.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
+import { env } from '@/env';
+import { normalizeModelError } from '@/lib/model-error-core';
 
 const ValidateProofInputSchema = z.object({
   problem: z.string().describe('The original mathematical problem.'),
@@ -60,10 +62,38 @@ const validateProofFlow = ai.defineFlow(
     outputSchema: ValidateProofOutputSchema,
   },
   async (input: ValidateProofInput) => {
-    const { output } = await prompt(input);
-    if (!output) {
-      throw new Error('The AI failed to provide a validation result.');
+    const provider = (llmId.split('/')?.[0]) || 'unknown';
+    const candidates: string[] = [];
+    if (provider === 'googleai') {
+      candidates.push(llmId);
+      const proId = 'googleai/gemini-2.5-pro';
+      if (llmId !== proId) candidates.push(proId);
+      if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
+    } else {
+      candidates.push(llmId);
     }
-    return output;
+
+    const user = `You are a meticulous mathematics professor reviewing a student's proof. Your task is to determine if the provided sequence of sublemmas constitutes a valid proof for the original problem.\n\nOriginal Problem:\n"${input.problem}"\n\nTentative Proof Steps:\n${input.proofSteps.map((s) => `- **${s.title}**\n  - Statement: ${s.statement}\n  - Proof: ${s.proof}`).join('\n')}\n\nAnalyze the entire proof structure. Check for:\n1.  **Logical Soundness**: Does each step logically follow from the previous ones and the initial assumptions?\n2.  **Completeness**: Do the steps, taken together, fully prove the original problem statement?\n3.  **Correctness**: Are there any mathematical errors in the sublemmas or the reasoning?\n\nProvide a final verdict ('isValid') and constructive 'feedback' explaining your reasoning. Your output must be in JSON format.`;
+
+    let lastErr: any = null;
+    for (const cand of candidates) {
+      try {
+        const { output } = await ai.generate({
+          model: cand,
+          prompt: user,
+          output: { schema: ValidateProofOutputSchema },
+        });
+        if (!output) {
+          throw new Error('The AI failed to provide a validation result.');
+        }
+        return output;
+      } catch (e: any) {
+        const norm = normalizeModelError(e);
+        lastErr = norm;
+        if (norm.code === 'MODEL_RATE_LIMIT') continue;
+        throw new Error(norm.message);
+      }
+    }
+    throw new Error((lastErr && lastErr.message) || 'The AI failed to provide a validation result.');
   },
 );
