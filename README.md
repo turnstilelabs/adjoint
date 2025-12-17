@@ -74,6 +74,15 @@ Before running the application, you should ensure that Node.js 18+ is installed.
    OPENAI_API_KEY=your-openai-key
    ```
 
+   Anthropic (Claude):
+
+   ```
+   LLM_PROVIDER=anthropic
+   # optional: override default model (default: claude-sonnet-4-20250514)
+   # LLM_MODEL=claude-opus-4-20250514
+   ANTHROPIC_API_KEY=your-anthropic-key
+   ```
+
 2. Install dependencies by running:
 
    ```
