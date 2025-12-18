@@ -5,6 +5,8 @@ import { useAppStore } from '@/state/app-store';
 import { ExploreChatMessages } from '@/components/explore/explore-chat-messages';
 import { ExploreChatInput } from '@/components/explore/explore-chat-input';
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
+import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
+import { useToast } from '@/hooks/use-toast';
 
 function ResizableExploreLayout({ children }: { children: React.ReactNode }) {
     const [width, setWidth] = useState<number>(420); // px
@@ -72,12 +74,55 @@ function ResizableAside({ children }: { children: React.ReactNode }) {
     );
 }
 
+import { ExploreSidebar } from '@/components/explore-sidebar';
+
 export default function ExploreView() {
     const promoteToProof = useAppStore((s) => s.promoteToProof);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
+    const exploreMessages = useAppStore((s) => s.exploreMessages);
+    const exploreSeed = useAppStore((s) => s.exploreSeed);
+    const sendExploreMessage = useSendExploreMessage();
+    const [isExtracting, setIsExtracting] = useState(false);
+    const { toast } = useToast();
+    const [lastExtractHadNoStatements, setLastExtractHadNoStatements] = useState(false);
+
+    const extractNow = async () => {
+        if (isExtracting) return;
+        setIsExtracting(true);
+        try {
+            // Re-run extraction from the current context.
+            // Prefer the last user message; otherwise fall back to the current seed.
+            const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
+            const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
+
+            setLastExtractHadNoStatements(false);
+
+            await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
+                suppressUser: true,
+                displayAs: '',
+                extractOnly: true,
+            });
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
+    useEffect(() => {
+        // After a manual extraction attempt completes, if we still have no candidate statements,
+        // make it explicit to the user.
+        if (!isExtracting && !lastExtractHadNoStatements && artifacts && artifacts.candidateStatements.length === 0) {
+            setLastExtractHadNoStatements(true);
+            toast({
+                title: 'No statements found',
+                description:
+                    'Adjoint could not extract any candidate statement from the current conversation. Try rephrasing or providing a cleaner statement.',
+            });
+        }
+    }, [artifacts, isExtracting, lastExtractHadNoStatements, toast]);
 
     return (
         <div className="inset-0 absolute overflow-hidden flex">
+            <ExploreSidebar />
             <main className="flex-1 min-w-0 min-h-0 h-full overflow-hidden flex flex-col">
                 <div className="mx-auto w-full max-w-6xl p-2 md:p-4 pb-0 gap-3 flex-1 min-h-0 flex flex-col">
                     {/* Header intentionally minimized to let content start higher */}
@@ -92,7 +137,12 @@ export default function ExploreView() {
                         <ResizableHandle onMouseDown={() => { /* handled by parent */ }} />
 
                         <ResizableAside>
-                            <ArtifactsPanel artifacts={artifacts} onPromote={(statement: string) => promoteToProof(statement)} />
+                            <ArtifactsPanel
+                                artifacts={artifacts}
+                                onPromote={(statement: string) => promoteToProof(statement)}
+                                onExtract={extractNow}
+                                isExtracting={isExtracting}
+                            />
                         </ResizableAside>
                     </ResizableExploreLayout>
                 </div>

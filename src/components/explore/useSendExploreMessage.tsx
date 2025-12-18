@@ -3,6 +3,7 @@ import { explorationAssistantFlow } from '@/ai/exploration-assistant/exploration
 import { useAppStore } from '@/state/app-store';
 import type { Message } from '@/components/chat/interactive-chat';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
+import { useToast } from '@/hooks/use-toast';
 
 export const useSendExploreMessage = () => {
     const exploreMessages = useAppStore((s) => s.exploreMessages);
@@ -14,12 +15,17 @@ export const useSendExploreMessage = () => {
     const bumpExploreTurnId = useAppStore((s) => s.bumpExploreTurnId);
     const getExploreTurnId = useAppStore((s) => s.getExploreTurnId);
     const setExploreCancelCurrent = useAppStore((s) => s.setExploreCancelCurrent);
+    const { toast } = useToast();
 
     return async (
         request: string,
-        opts?: { displayAs?: string; suppressUser?: boolean },
+        opts?: { displayAs?: string; suppressUser?: boolean; extractOnly?: boolean },
     ) => {
         if (!request) return;
+
+        const isExtractOnly = Boolean(opts?.extractOnly);
+        // Extract-only runs should never add user/assistant messages to the chat UI.
+        const suppressUser = isExtractOnly ? true : Boolean(opts?.suppressUser);
 
         // Cancel previous request if still running
         const cancel = useAppStore.getState().cancelExploreCurrent;
@@ -34,15 +40,19 @@ export const useSendExploreMessage = () => {
         const userVisibleText = opts?.displayAs ?? request;
 
         let newMessages: Message[] = exploreMessages;
-        if (!opts?.suppressUser) {
+        if (!suppressUser) {
             const userMessage: Message = { role: 'user', content: userVisibleText };
             newMessages = [...newMessages, userMessage];
         }
-        const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
-        setExploreMessages([...newMessages, typingMessage]);
 
-        // Keep a small history window (reflect what we displayed to the user)
-        const history = [...newMessages]
+        if (!isExtractOnly) {
+            const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
+            setExploreMessages([...newMessages, typingMessage]);
+        }
+
+        // Keep a small history window but EXCLUDE the current user message so the first turn has empty history.
+        // This ensures initial artifact extraction is strictly from the user's first message (and optional seed).
+        const history = [...exploreMessages]
             .slice(-10)
             .map((m) => ({ role: m.role, content: m.content }));
 
@@ -61,12 +71,19 @@ export const useSendExploreMessage = () => {
             url: '/api/explore',
             abortSignal: controller.signal,
             // Important: send the full request to the backend (can differ from displayed content)
-            input: { seed: seed ?? undefined, request, history, artifacts: artifacts ?? undefined, turnId },
+            input: {
+                seed: seed ?? undefined,
+                request,
+                history,
+                artifacts: artifacts ?? undefined,
+                extractOnly: opts?.extractOnly ?? undefined,
+                turnId,
+            },
         });
 
         try {
             for await (const chunk of runner.stream) {
-                if (chunk.type === 'text') {
+                if (chunk.type === 'text' && !isExtractOnly) {
                     setExploreMessages((prev: Message[]) =>
                         prev.map((msg, idx) =>
                             idx === prev.length - 1
@@ -82,6 +99,16 @@ export const useSendExploreMessage = () => {
                         setExploreArtifacts(chunk.artifacts as ExploreArtifacts);
                     }
                 }
+
+                if (chunk.type === 'error') {
+                    // eslint-disable-next-line no-console
+                    console.error('[Explore] server error chunk', chunk);
+                    toast({
+                        title: 'Explore extraction failed',
+                        description: chunk.message || 'Unexpected exploration error.',
+                        variant: 'destructive',
+                    });
+                }
             }
 
             await runner.output;
@@ -90,13 +117,20 @@ export const useSendExploreMessage = () => {
             if (!(e && (e.name === 'AbortError' || e.message === 'The operation was aborted.'))) {
                 // eslint-disable-next-line no-console
                 console.error('[Explore] stream error', e);
+                toast({
+                    title: 'Explore request failed',
+                    description: e?.message || 'Unexpected explore streaming error.',
+                    variant: 'destructive',
+                });
             }
         } finally {
-            setExploreMessages((prev: Message[]) =>
-                prev.map((msg, idx) =>
-                    idx === prev.length - 1 ? ({ ...msg, isTyping: false } as Message) : msg,
-                ),
-            );
+            if (!isExtractOnly) {
+                setExploreMessages((prev: Message[]) =>
+                    prev.map((msg, idx) =>
+                        idx === prev.length - 1 ? ({ ...msg, isTyping: false } as Message) : msg,
+                    ),
+                );
+            }
             // Clear cancellation handle
             setExploreCancelCurrent(null);
         }
