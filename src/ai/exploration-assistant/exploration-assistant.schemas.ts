@@ -23,6 +23,11 @@ export const ExplorationAssistantInputSchema = z.object({
         .optional()
         .describe('Recent conversation history (user/assistant).'),
     artifacts: ExploreArtifactsSchema.optional().describe('Current extracted artifacts (if any).'),
+    /**
+     * When true, the model should skip any natural-language response and ONLY return extracted artifacts.
+     * Used for manual re-extraction and server-side fallback if the tool call is missed.
+     */
+    extractOnly: z.boolean().optional().describe('If true, only extract artifacts (no text response).'),
     turnId: z
         .number()
         .describe('Client-generated monotonic turn id. Used to prevent stale artifact application.'),
