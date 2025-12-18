@@ -4,6 +4,13 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // We run the app from a nested workspace folder. Without this, Next/Turbopack may infer
+  // the wrong root (due to multiple lockfiles) which can cause duplicated module instances
+  // (notably Zustand store) and break client state updates.
+  outputFileTracingRoot: __dirname,
+  turbopack: {
+    root: __dirname,
+  },
   typescript: {
     ignoreBuildErrors: isDev,
   },

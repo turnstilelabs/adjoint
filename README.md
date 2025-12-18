@@ -57,7 +57,7 @@ Before running the application, you should ensure that Node.js 18+ is installed.
    ```
    LLM_PROVIDER=googleai
    # optional: override default model
-   # LLM_MODEL=gemini-2.5-flash
+   # LLM_MODEL=gemini-3-flash-preview
    GEMINI_API_KEY=your-key-here
    # or
    GOOGLE_API_KEY=your-key-here
@@ -288,7 +288,7 @@ Server actions are located in `src/app/actions.ts` and act as the entry points f
 
 All flows run on the server. They call a provider-selected AI client via `src/ai/genkit.ts`:
 
-- Google path: uses Genkit with `@genkit-ai/googleai`, default model `googleai/gemini-2.5-flash`.
+- Google path: uses Genkit with `@genkit-ai/googleai`, default model `googleai/gemini-3-flash-preview`.
 - OpenAI path: uses a lightweight shim around the OpenAI SDK that mimics Genkit’s `definePrompt`/`defineFlow` surface (no changes needed in flow code).
 
 Switch providers by setting `LLM_PROVIDER` (and optionally `LLM_MODEL`) in `.env.local`.
@@ -348,7 +348,7 @@ Because the system uses zod for schemas and TypeScript for types, it is straight
   - Yes. Click “Revert changes”. You can also “Adopt proposal” later if you previously declined or reverted.
 
 - What models are used?
-  - The default model is `googleai/gemini-2.5-flash`. You can modify this in `src/ai/genkit.ts`. The chat stream uses direct streaming; proposals come from typed flows.
+  - The default model is `googleai/gemini-3-flash-preview`. You can modify this in `src/ai/genkit.ts`. The chat stream uses direct streaming; proposals come from typed flows.
   - When `LLM_PROVIDER=openai`, the default model is `gpt-5-mini` (override with `LLM_MODEL` if desired).
 
 - Port already in use?
