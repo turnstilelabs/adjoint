@@ -7,6 +7,8 @@ import { Separator } from '@/components/ui/separator';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useAppStore } from '@/state/app-store';
+import { EditableArtifactItem } from '@/components/explore/editable-artifact-item';
 
 type Props = {
     artifacts: ExploreArtifacts | null;
@@ -44,12 +46,24 @@ function splitStatements(input: string): string[] {
     return Array.from(new Set(out.map((s) => s.trim()).filter(Boolean)));
 }
 
-function SingleStatementCarousel({ items, onPromote }: { items: string[]; onPromote: (s: string) => void }) {
+function SingleStatementCarousel({
+    items,
+    onPromote,
+    edits,
+    setEdit,
+}: {
+    items: string[];
+    onPromote: (s: string) => void;
+    edits: Record<string, string>;
+    setEdit: (opts: { kind: 'candidateStatements'; original: string; edited: string }) => void;
+}) {
     // Normalize & flatten any multi-statement entries
     const flat = items.flatMap(splitStatements);
     const [index, setIndex] = React.useState(0);
     const count = flat.length;
-    const current = (flat[index] ?? '').trim();
+
+    const original = (flat[index] ?? '').trim();
+    const current = (edits[original] ?? original).trim();
 
     if (count === 0) {
         return <div className="text-sm text-muted-foreground">No statement extracted yet.</div>;
@@ -61,7 +75,11 @@ function SingleStatementCarousel({ items, onPromote }: { items: string[]; onProm
         <Card className="border-muted/50 overflow-hidden">
             <CardContent className="p-3 space-y-3 overflow-hidden">
                 <div className="text-sm break-words whitespace-pre-wrap overflow-hidden">
-                    <KatexRenderer content={current} />
+                    <EditableArtifactItem
+                        value={current}
+                        onCommit={(next) => setEdit({ kind: 'candidateStatements', original, edited: next })}
+                        className="px-0"
+                    />
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex gap-2">
@@ -104,6 +122,9 @@ function SingleStatementCarousel({ items, onPromote }: { items: string[]; onProm
 }
 
 export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }: Props) {
+    const edits = useAppStore((s) => s.exploreArtifactEdits);
+    const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
+
     const a: ExploreArtifacts = artifacts ?? {
         candidateStatements: [],
         assumptions: [],
@@ -135,6 +156,8 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                         <SingleStatementCarousel
                             items={a.candidateStatements}
                             onPromote={onPromote}
+                            edits={edits.candidateStatements}
+                            setEdit={(opts) => setEdit(opts)}
                         />
                     )}
                 </Section>
@@ -146,10 +169,17 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                     ) : (
                         <ul className="list-disc pl-5 text-sm space-y-1">
                             {a.assumptions.map((x, idx) => {
-                                const text = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                const value = (edits.assumptions[original] ?? original).trim();
                                 return (
                                     <li key={idx} className="break-words">
-                                        <span className="prose prose-invert max-w-none"><KatexRenderer inline content={text} /></span>
+                                        <EditableArtifactItem
+                                            value={value}
+                                            block={false}
+                                            onCommit={(next) =>
+                                                setEdit({ kind: 'assumptions', original, edited: next })
+                                            }
+                                        />
                                     </li>
                                 );
                             })}
@@ -163,10 +193,17 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                         <Section title="Examples">
                             <ul className="list-disc pl-5 text-sm space-y-1">
                                 {a.examples.map((x, idx) => {
-                                    const text = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const value = (edits.examples[original] ?? original).trim();
                                     return (
                                         <li key={idx} className="break-words">
-                                            <span className="prose prose-invert max-w-none"><KatexRenderer inline content={text} /></span>
+                                            <EditableArtifactItem
+                                                value={value}
+                                                block={false}
+                                                onCommit={(next) =>
+                                                    setEdit({ kind: 'examples', original, edited: next })
+                                                }
+                                            />
                                         </li>
                                     );
                                 })}
@@ -181,10 +218,17 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                         <Section title="Counterexamples">
                             <ul className="list-disc pl-5 text-sm space-y-1">
                                 {a.counterexamples.map((x, idx) => {
-                                    const text = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const value = (edits.counterexamples[original] ?? original).trim();
                                     return (
                                         <li key={idx} className="break-words">
-                                            <span className="prose prose-invert max-w-none"><KatexRenderer inline content={text} /></span>
+                                            <EditableArtifactItem
+                                                value={value}
+                                                block={false}
+                                                onCommit={(next) =>
+                                                    setEdit({ kind: 'counterexamples', original, edited: next })
+                                                }
+                                            />
                                         </li>
                                     );
                                 })}
@@ -199,10 +243,17 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                         <Section title="Open Questions">
                             <ul className="list-disc pl-5 text-sm space-y-1">
                                 {a.openQuestions.map((x, idx) => {
-                                    const text = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
+                                    const value = (edits.openQuestions[original] ?? original).trim();
                                     return (
                                         <li key={idx} className="break-words">
-                                            <span className="prose prose-invert max-w-none"><KatexRenderer inline content={text} /></span>
+                                            <EditableArtifactItem
+                                                value={value}
+                                                block={false}
+                                                onCommit={(next) =>
+                                                    setEdit({ kind: 'openQuestions', original, edited: next })
+                                                }
+                                            />
                                         </li>
                                     );
                                 })}

@@ -43,6 +43,17 @@ type StoreData = {
   exploreSeed: string | null;
   exploreMessages: Message[];
   exploreArtifacts: ExploreArtifacts | null;
+  /**
+   * User edits overlay for extracted artifacts.
+   * Keyed by the original extracted string -> edited string.
+   */
+  exploreArtifactEdits: {
+    candidateStatements: Record<string, string>;
+    assumptions: Record<string, string>;
+    examples: Record<string, string>;
+    counterexamples: Record<string, string>;
+    openQuestions: Record<string, string>;
+  };
   exploreTurnId: number;
   cancelExploreCurrent?: (() => void) | null;
 
@@ -73,6 +84,12 @@ interface AppState extends StoreData {
   startExplore: (seed?: string) => void;
   setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
+  setExploreArtifactEdit: (opts: {
+    kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples' | 'openQuestions';
+    original: string;
+    edited: string;
+  }) => void;
+  clearExploreArtifactEdits: () => void;
   bumpExploreTurnId: () => number;
   getExploreTurnId: () => number;
   setExploreCancelCurrent: (cancel: (() => void) | null) => void;
@@ -113,6 +130,13 @@ const initialState: StoreData = {
   exploreSeed: null,
   exploreMessages: [],
   exploreArtifacts: null,
+  exploreArtifactEdits: {
+    candidateStatements: {},
+    assumptions: {},
+    examples: {},
+    counterexamples: {},
+    openQuestions: {},
+  },
   exploreTurnId: 0,
   cancelExploreCurrent: null,
 
@@ -154,6 +178,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         exploreSeed: trimmed,
         exploreMessages: [],
         exploreArtifacts: null,
+        exploreArtifactEdits: {
+          candidateStatements: {},
+          assumptions: {},
+          examples: {},
+          counterexamples: {},
+          openQuestions: {},
+        },
         exploreTurnId: 0,
       });
       return;
@@ -179,6 +210,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setExploreArtifacts: (artifacts) => set({ exploreArtifacts: artifacts }),
+
+  setExploreArtifactEdit: ({ kind, original, edited }) => {
+    const o = (original ?? '').trim();
+    if (!o) return;
+    const e = (edited ?? '').trim();
+    set((state) => ({
+      exploreArtifactEdits: {
+        ...state.exploreArtifactEdits,
+        [kind]: {
+          ...state.exploreArtifactEdits[kind],
+          [o]: e,
+        },
+      },
+    }));
+  },
+
+  clearExploreArtifactEdits: () =>
+    set({
+      exploreArtifactEdits: {
+        candidateStatements: {},
+        assumptions: {},
+        examples: {},
+        counterexamples: {},
+        openQuestions: {},
+      },
+    }),
 
   bumpExploreTurnId: () => {
     const next = get().exploreTurnId + 1;

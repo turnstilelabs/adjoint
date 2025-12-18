@@ -8,10 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppStore } from '@/state/app-store';
 import { BookOpen, Code2, Sparkles } from 'lucide-react';
-import { KatexRenderer } from '@/components/katex-renderer';
+import { EditableArtifactItem } from '@/components/explore/editable-artifact-item';
 
 export function ExploreSidebar() {
     const artifacts = useAppStore((s) => s.exploreArtifacts);
+    const edits = useAppStore((s) => s.exploreArtifactEdits);
+    const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
     const promoteToProof = useAppStore((s) => s.promoteToProof);
 
     const candidates = artifacts?.candidateStatements ?? [];
@@ -22,48 +24,16 @@ export function ExploreSidebar() {
 
     const [selectedIdx, setSelectedIdx] = React.useState<number>(0);
 
-    const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
-    const [editDraft, setEditDraft] = React.useState<string>('');
-    const [editsByIdx, setEditsByIdx] = React.useState<Record<number, string>>({});
-
     // Reset selection when candidate list changes.
     React.useEffect(() => {
         setSelectedIdx((idx) => Math.min(Math.max(0, idx), Math.max(0, candidates.length - 1)));
-        setEditsByIdx({});
-        if (editingIdx != null && editingIdx >= candidates.length) {
-            setEditingIdx(null);
-            setEditDraft('');
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [candidates.length]);
 
-    const stopEditing = (opts?: { commit?: boolean }) => {
-        const shouldCommit = opts?.commit ?? false;
-        if (editingIdx == null) return;
-
-        if (shouldCommit) {
-            const stmt = editDraft.trim();
-            if (stmt) {
-                setEditsByIdx((prev) => ({ ...prev, [editingIdx]: stmt }));
-                // Keep the edited statement as the active selection for the footer "Attempt Proof" button.
-                setSelectedIdx(editingIdx);
-            }
-        }
-
-        setEditingIdx(null);
-        setEditDraft('');
-    };
-
     const attemptSelected = async () => {
-        const stmt = (
-            editingIdx != null
-                ? editDraft
-                : (editsByIdx[selectedIdx] ?? candidates[selectedIdx] ?? '')
-        ).trim();
+        const original = (candidates[selectedIdx] ?? '').trim();
+        const stmt = ((edits.candidateStatements[original] ?? original) ?? '').trim();
         if (!stmt) return;
         setOpenProve(false);
-        setEditingIdx(null);
-        setEditDraft('');
         await promoteToProof(stmt);
     };
 
@@ -143,46 +113,23 @@ export function ExploreSidebar() {
                                 <div className="max-h-72 overflow-auto border rounded-md">
                                     {candidates.map((c, idx) => {
                                         const active = idx === selectedIdx;
-                                        const isEditing = editingIdx === idx;
-                                        const display = editsByIdx[idx] ?? c;
+                                        const original = (c ?? '').trim();
+                                        const display = (edits.candidateStatements[original] ?? original).trim();
 
                                         return (
                                             <div
                                                 key={idx}
-                                                className={`relative min-h-11 text-sm border-b last:border-b-0 hover:bg-muted/40 ${active ? 'bg-muted/40' : ''}`}
+                                                className={`px-3 py-2 text-sm border-b last:border-b-0 hover:bg-muted/40 ${active ? 'bg-muted/40' : ''}`}
                                                 onClick={() => setSelectedIdx(idx)}
-                                                onDoubleClick={() => {
-                                                    setSelectedIdx(idx);
-                                                    setEditingIdx(idx);
-                                                    setEditDraft(editsByIdx[idx] ?? c);
-                                                }}
                                                 role="button"
                                                 tabIndex={0}
                                             >
-                                                {/* Layout box: always render the statement (invisible while editing) so height stays identical */}
-                                                <div className={`px-3 py-2 break-words whitespace-pre-wrap ${isEditing ? 'opacity-0' : ''}`}>
-                                                    <KatexRenderer content={display} />
-                                                </div>
-
-                                                {isEditing && (
-                                                    <textarea
-                                                        className="absolute inset-0 w-full h-full bg-transparent px-3 py-2 text-sm leading-relaxed outline-none resize-none overflow-hidden"
-                                                        autoFocus
-                                                        value={editDraft}
-                                                        onChange={(e) => setEditDraft(e.target.value)}
-                                                        onBlur={() => stopEditing({ commit: true })}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                                e.preventDefault();
-                                                                stopEditing({ commit: true });
-                                                            }
-                                                            if (e.key === 'Escape') {
-                                                                e.preventDefault();
-                                                                stopEditing({ commit: false });
-                                                            }
-                                                        }}
-                                                    />
-                                                )}
+                                                <EditableArtifactItem
+                                                    value={display}
+                                                    onCommit={(next) =>
+                                                        setEdit({ kind: 'candidateStatements', original, edited: next })
+                                                    }
+                                                />
                                             </div>
                                         );
                                     })}
