@@ -5,6 +5,7 @@ import { Wand2, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { validateStatementAction } from '@/app/actions';
@@ -19,7 +20,9 @@ export default function ProblemInputForm() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
   const startProof = useAppStore((s) => s.startProof);
+  const startExplore = useAppStore((s) => s.startExplore);
   const goBack = useAppStore((s) => s.goBack);
 
   const submitProblem = async (text: string) => {
@@ -29,12 +32,9 @@ export default function ProblemInputForm() {
       return;
     }
     setError(null);
-    console.debug('[UI][ProblemInput] submit start textLen=', trimmedProblem.length);
     const validationResult = await validateStatementAction(trimmedProblem);
-    console.debug('[UI][ProblemInput] validation done validity=', (validationResult as any).validity);
 
     if ('validity' in validationResult && validationResult.validity === 'VALID') {
-      console.debug('[UI][ProblemInput] calling startProof');
       await startProof(trimmedProblem);
     } else if ('validity' in validationResult) {
       // The statement was validated but not as a valid math problem
@@ -58,7 +58,6 @@ export default function ProblemInputForm() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    console.debug('[UI][ProblemInput] onSubmit fired');
     startTransition(async () => {
       await submitProblem(problem);
     });
@@ -84,7 +83,6 @@ export default function ProblemInputForm() {
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  console.debug('[UI][ProblemInput] Enter detected, submitting');
                   startTransition(async () => {
                     await submitProblem(problem);
                   });
@@ -106,6 +104,37 @@ export default function ProblemInputForm() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          <div className="mt-4 flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={(e) => {
+                e.preventDefault();
+                const trimmed = problem.trim();
+                startExplore(trimmed || undefined);
+                const url = trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : '/explore';
+                router.push(url);
+              }}
+              disabled={isPending}
+              title="Explore / brainstorm before proving"
+            >
+              Explore
+            </Button>
+            <Button type="submit" disabled={isPending} className="ml-auto">
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Working...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Prove
+                </>
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

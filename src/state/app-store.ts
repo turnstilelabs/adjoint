@@ -4,9 +4,10 @@ import { create } from 'zustand';
 import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
+import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import { attemptProofAction, attemptProofActionForce, decomposeRawProofAction } from '@/app/actions';
 
-export type View = 'home' | 'proof';
+export type View = 'home' | 'explore' | 'proof';
 
 export type ProofVersion = {
   sublemmas: Sublemma[];
@@ -37,6 +38,14 @@ type StoreData = {
   problem: string | null;
   lastProblem: string | null;
   messages: Message[];
+
+  // Explore mode
+  exploreSeed: string | null;
+  exploreMessages: Message[];
+  exploreArtifacts: ExploreArtifacts | null;
+  exploreTurnId: number;
+  cancelExploreCurrent?: (() => void) | null;
+
   loading: boolean;
   error: string | null;
   errorDetails: string | null;
@@ -59,6 +68,15 @@ type StoreData = {
 
 interface AppState extends StoreData {
   reset: () => void;
+
+  // Explore navigation / state
+  startExplore: (seed?: string) => void;
+  setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
+  setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
+  bumpExploreTurnId: () => number;
+  getExploreTurnId: () => number;
+  setExploreCancelCurrent: (cancel: (() => void) | null) => void;
+  promoteToProof: (statement: string) => Promise<void>;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
   retry: () => Promise<void>;
@@ -91,6 +109,13 @@ const initialState: StoreData = {
   problem: null,
   lastProblem: null,
   messages: [],
+
+  exploreSeed: null,
+  exploreMessages: [],
+  exploreArtifacts: null,
+  exploreTurnId: 0,
+  cancelExploreCurrent: null,
+
   loading: false,
   error: null,
   errorDetails: null,
@@ -112,6 +137,65 @@ const initialState: StoreData = {
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
+
+  startExplore: (seed?: string) => {
+    // Cancel any in-flight explore stream
+    const cancel = get().cancelExploreCurrent || null;
+    if (cancel) {
+      try { cancel(); } catch { }
+    }
+
+    const trimmed = seed?.trim() ? seed.trim() : null;
+
+    // If a new seed is provided (coming from Home), start a fresh explore session.
+    if (trimmed) {
+      set({
+        view: 'explore',
+        exploreSeed: trimmed,
+        exploreMessages: [],
+        exploreArtifacts: null,
+        exploreTurnId: 0,
+      });
+      return;
+    }
+
+    // Otherwise, preserve any existing thread (direct revisit of /explore).
+    set({
+      view: 'explore',
+      exploreSeed: get().exploreSeed,
+      exploreMessages: get().exploreMessages.length ? get().exploreMessages : [],
+      exploreArtifacts: get().exploreArtifacts,
+    });
+  },
+
+  setExploreMessages: (updater) => {
+    if (typeof updater === 'function') {
+      set((state) => ({
+        exploreMessages: (updater as (prev: Message[]) => Message[])(state.exploreMessages),
+      }));
+    } else {
+      set({ exploreMessages: updater });
+    }
+  },
+
+  setExploreArtifacts: (artifacts) => set({ exploreArtifacts: artifacts }),
+
+  bumpExploreTurnId: () => {
+    const next = get().exploreTurnId + 1;
+    set({ exploreTurnId: next });
+    return next;
+  },
+
+  getExploreTurnId: () => get().exploreTurnId,
+
+  setExploreCancelCurrent: (cancel) => set({ cancelExploreCurrent: cancel }),
+
+  promoteToProof: async (statement: string) => {
+    const trimmed = statement.trim();
+    if (!trimmed) return;
+    // Keep explore context in store; switch view to proof via startProof
+    await get().startProof(trimmed);
+  },
 
   startProof: async (problem: string, opts?: { force?: boolean }) => {
     const trimmed = problem.trim();
@@ -398,6 +482,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const cancel = get().cancelCurrent || null;
     if (cancel) {
       try { cancel(); } catch { }
+    }
+    const cancelExplore = get().cancelExploreCurrent || null;
+    if (cancelExplore) {
+      try { cancelExplore(); } catch { }
     }
     set((state) => ({ ...initialState, lastProblem: state.lastProblem }));
   },
