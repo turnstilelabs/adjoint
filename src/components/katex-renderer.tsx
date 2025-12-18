@@ -8,6 +8,7 @@ type KatexRendererProps = {
   content: string;
   className?: string;
   autoWrap?: boolean; // when false, only explicit $...$ / $$...$$ / \(...\) / \[...\] are rendered as math
+  inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
 };
 
 /**
@@ -180,7 +181,7 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   return result;
 }
 
-export function KatexRenderer({ content, className, autoWrap = true }: KatexRendererProps) {
+export function KatexRenderer({ content, className, autoWrap = true, inline = false }: KatexRendererProps) {
   const parts = useMemo(() => {
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
     const normalized = normalizeMathDelimiters(content);
@@ -232,5 +233,9 @@ export function KatexRenderer({ content, className, autoWrap = true }: KatexRend
   }, [content]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
-  return <div className={cn(className)}>{parts}</div>;
+  return inline ? (
+    <span className={cn(className)}>{parts}</span>
+  ) : (
+    <div className={cn(className)}>{parts}</div>
+  );
 }
