@@ -49,10 +49,18 @@ type StoreData = {
    */
   exploreArtifactEdits: {
     candidateStatements: Record<string, string>;
-    assumptions: Record<string, string>;
-    examples: Record<string, string>;
-    counterexamples: Record<string, string>;
-    openQuestions: Record<string, string>;
+    /**
+     * Non-statement artifacts are scoped per candidate statement (keyed by the original statement string).
+     */
+    perStatement: Record<
+      string,
+      {
+        assumptions: Record<string, string>;
+        examples: Record<string, string>;
+        counterexamples: Record<string, string>;
+        openQuestions: Record<string, string>;
+      }
+    >;
   };
   exploreTurnId: number;
   cancelExploreCurrent?: (() => void) | null;
@@ -86,6 +94,8 @@ interface AppState extends StoreData {
   setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
   setExploreArtifactEdit: (opts: {
     kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples' | 'openQuestions';
+    /** Candidate statement key for non-candidate edits. */
+    statementKey?: string;
     original: string;
     edited: string;
   }) => void;
@@ -132,10 +142,7 @@ const initialState: StoreData = {
   exploreArtifacts: null,
   exploreArtifactEdits: {
     candidateStatements: {},
-    assumptions: {},
-    examples: {},
-    counterexamples: {},
-    openQuestions: {},
+    perStatement: {},
   },
   exploreTurnId: 0,
   cancelExploreCurrent: null,
@@ -180,10 +187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         exploreArtifacts: null,
         exploreArtifactEdits: {
           candidateStatements: {},
-          assumptions: {},
-          examples: {},
-          counterexamples: {},
-          openQuestions: {},
+          perStatement: {},
         },
         exploreTurnId: 0,
       });
@@ -211,29 +215,58 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setExploreArtifacts: (artifacts) => set({ exploreArtifacts: artifacts }),
 
-  setExploreArtifactEdit: ({ kind, original, edited }) => {
+  setExploreArtifactEdit: ({ kind, statementKey, original, edited }) => {
     const o = (original ?? '').trim();
     if (!o) return;
     const e = (edited ?? '').trim();
-    set((state) => ({
-      exploreArtifactEdits: {
-        ...state.exploreArtifactEdits,
-        [kind]: {
-          ...state.exploreArtifactEdits[kind],
-          [o]: e,
+
+    if (kind === 'candidateStatements') {
+      set((state) => ({
+        exploreArtifactEdits: {
+          ...state.exploreArtifactEdits,
+          candidateStatements: {
+            ...state.exploreArtifactEdits.candidateStatements,
+            [o]: e,
+          },
         },
-      },
-    }));
+      }));
+      return;
+    }
+
+    const sk = (statementKey ?? '').trim();
+    if (!sk) return;
+
+    set((state) => {
+      const prevForStmt = state.exploreArtifactEdits.perStatement[sk] ?? {
+        assumptions: {},
+        examples: {},
+        counterexamples: {},
+        openQuestions: {},
+      };
+
+      return {
+        exploreArtifactEdits: {
+          ...state.exploreArtifactEdits,
+          perStatement: {
+            ...state.exploreArtifactEdits.perStatement,
+            [sk]: {
+              ...prevForStmt,
+              [kind]: {
+                ...prevForStmt[kind],
+                [o]: e,
+              },
+            },
+          },
+        },
+      };
+    });
   },
 
   clearExploreArtifactEdits: () =>
     set({
       exploreArtifactEdits: {
         candidateStatements: {},
-        assumptions: {},
-        examples: {},
-        counterexamples: {},
-        openQuestions: {},
+        perStatement: {},
       },
     }),
 

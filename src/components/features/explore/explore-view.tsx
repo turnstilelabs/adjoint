@@ -75,9 +75,11 @@ function ResizableAside({ children }: { children: React.ReactNode }) {
 }
 
 import { ExploreSidebar } from '@/components/explore-sidebar';
+import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
 
 export default function ExploreView() {
     const promoteToProof = useAppStore((s) => s.promoteToProof);
+    const [openAttemptProof, setOpenAttemptProof] = useState(false);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const exploreMessages = useAppStore((s) => s.exploreMessages);
     const exploreSeed = useAppStore((s) => s.exploreSeed);
@@ -120,9 +122,21 @@ export default function ExploreView() {
         }
     }, [artifacts, isExtracting, lastExtractHadNoStatements, toast]);
 
+    useEffect(() => {
+        const onOpen = () => setOpenAttemptProof(true);
+        window.addEventListener('explore:open-attempt-proof-chooser', onOpen as any);
+        return () => window.removeEventListener('explore:open-attempt-proof-chooser', onOpen as any);
+    }, []);
+
     return (
         <div className="inset-0 absolute overflow-hidden flex">
             <ExploreSidebar />
+            <AttemptProofChooser
+                open={openAttemptProof}
+                onOpenChange={setOpenAttemptProof}
+                title="Prove it"
+                description="Pick a candidate statement, optionally edit it, then attempt a proof."
+            />
             <main className="flex-1 min-w-0 min-h-0 h-full overflow-hidden flex flex-col">
                 <div className="mx-auto w-full max-w-6xl p-2 md:p-4 pb-0 gap-3 flex-1 min-h-0 flex flex-col">
                     {/* Header intentionally minimized to let content start higher */}

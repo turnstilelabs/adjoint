@@ -51,11 +51,13 @@ function SingleStatementCarousel({
     onPromote,
     edits,
     setEdit,
+    onActiveStatementChange,
 }: {
     items: string[];
     onPromote: (s: string) => void;
     edits: Record<string, string>;
     setEdit: (opts: { kind: 'candidateStatements'; original: string; edited: string }) => void;
+    onActiveStatementChange?: (stmt: string) => void;
 }) {
     // Normalize & flatten any multi-statement entries
     const flat = items.flatMap(splitStatements);
@@ -64,6 +66,11 @@ function SingleStatementCarousel({
 
     const original = (flat[index] ?? '').trim();
     const current = (edits[original] ?? original).trim();
+
+    React.useEffect(() => {
+        if (current && onActiveStatementChange) onActiveStatementChange(current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [current]);
 
     if (count === 0) {
         return <div className="text-sm text-muted-foreground">No statement extracted yet.</div>;
@@ -127,6 +134,12 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
 
     const a: ExploreArtifacts = artifacts ?? {
         candidateStatements: [],
+        statementArtifacts: {},
+    };
+
+    const [activeStatement, setActiveStatement] = React.useState<string>('');
+
+    const scoped = a.statementArtifacts[activeStatement] ?? {
         assumptions: [],
         examples: [],
         counterexamples: [],
@@ -158,26 +171,35 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                             onPromote={onPromote}
                             edits={edits.candidateStatements}
                             setEdit={(opts) => setEdit(opts)}
+                            onActiveStatementChange={setActiveStatement}
                         />
                     )}
                 </Section>
 
                 <Separator />
                 <Section title="Assumptions and Definitions">
-                    {a.assumptions.length === 0 ? (
+                    {scoped.assumptions.length === 0 ? (
                         <div className="text-sm text-muted-foreground">None yet.</div>
                     ) : (
                         <ul className="list-disc pl-5 text-sm space-y-1">
-                            {a.assumptions.map((x, idx) => {
+                            {scoped.assumptions.map((x: string, idx: number) => {
                                 const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
-                                const value = (edits.assumptions[original] ?? original).trim();
+                                const value = (
+                                    edits.perStatement[activeStatement]?.assumptions?.[original] ??
+                                    original
+                                ).trim();
                                 return (
                                     <li key={idx} className="break-words">
                                         <EditableArtifactItem
                                             value={value}
                                             block={false}
                                             onCommit={(next) =>
-                                                setEdit({ kind: 'assumptions', original, edited: next })
+                                                setEdit({
+                                                    kind: 'assumptions',
+                                                    statementKey: activeStatement,
+                                                    original,
+                                                    edited: next,
+                                                })
                                             }
                                         />
                                     </li>
@@ -187,21 +209,29 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                     )}
                 </Section>
 
-                {a.examples.length > 0 && (
+                {scoped.examples.length > 0 && (
                     <>
                         <Separator />
                         <Section title="Examples">
                             <ul className="list-disc pl-5 text-sm space-y-1">
-                                {a.examples.map((x, idx) => {
+                                {scoped.examples.map((x: string, idx: number) => {
                                     const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
-                                    const value = (edits.examples[original] ?? original).trim();
+                                    const value = (
+                                        edits.perStatement[activeStatement]?.examples?.[original] ??
+                                        original
+                                    ).trim();
                                     return (
                                         <li key={idx} className="break-words">
                                             <EditableArtifactItem
                                                 value={value}
                                                 block={false}
                                                 onCommit={(next) =>
-                                                    setEdit({ kind: 'examples', original, edited: next })
+                                                    setEdit({
+                                                        kind: 'examples',
+                                                        statementKey: activeStatement,
+                                                        original,
+                                                        edited: next,
+                                                    })
                                                 }
                                             />
                                         </li>
@@ -212,21 +242,29 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                     </>
                 )}
 
-                {a.counterexamples.length > 0 && (
+                {scoped.counterexamples.length > 0 && (
                     <>
                         <Separator />
                         <Section title="Counterexamples">
                             <ul className="list-disc pl-5 text-sm space-y-1">
-                                {a.counterexamples.map((x, idx) => {
+                                {scoped.counterexamples.map((x: string, idx: number) => {
                                     const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
-                                    const value = (edits.counterexamples[original] ?? original).trim();
+                                    const value = (
+                                        edits.perStatement[activeStatement]?.counterexamples?.[original] ??
+                                        original
+                                    ).trim();
                                     return (
                                         <li key={idx} className="break-words">
                                             <EditableArtifactItem
                                                 value={value}
                                                 block={false}
                                                 onCommit={(next) =>
-                                                    setEdit({ kind: 'counterexamples', original, edited: next })
+                                                    setEdit({
+                                                        kind: 'counterexamples',
+                                                        statementKey: activeStatement,
+                                                        original,
+                                                        edited: next,
+                                                    })
                                                 }
                                             />
                                         </li>
@@ -237,21 +275,29 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                     </>
                 )}
 
-                {a.openQuestions.length > 0 && (
+                {scoped.openQuestions.length > 0 && (
                     <>
                         <Separator />
                         <Section title="Open Questions">
                             <ul className="list-disc pl-5 text-sm space-y-1">
-                                {a.openQuestions.map((x, idx) => {
+                                {scoped.openQuestions.map((x: string, idx: number) => {
                                     const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
-                                    const value = (edits.openQuestions[original] ?? original).trim();
+                                    const value = (
+                                        edits.perStatement[activeStatement]?.openQuestions?.[original] ??
+                                        original
+                                    ).trim();
                                     return (
                                         <li key={idx} className="break-words">
                                             <EditableArtifactItem
                                                 value={value}
                                                 block={false}
                                                 onCommit={(next) =>
-                                                    setEdit({ kind: 'openQuestions', original, edited: next })
+                                                    setEdit({
+                                                        kind: 'openQuestions',
+                                                        statementKey: activeStatement,
+                                                        original,
+                                                        edited: next,
+                                                    })
                                                 }
                                             />
                                         </li>

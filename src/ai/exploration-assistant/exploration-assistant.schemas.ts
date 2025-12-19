@@ -1,13 +1,24 @@
 import { z } from 'genkit';
 
+const PerStatementArtifactsSchema = z.object({
+    assumptions: z.array(z.string()).describe('Assumptions / definitions for this statement.'),
+    examples: z.array(z.string()).describe('Examples supporting understanding for this statement.'),
+    counterexamples: z.array(z.string()).describe('Counterexamples / failure modes for this statement.'),
+    openQuestions: z.array(z.string()).describe('Open questions to investigate next for this statement.'),
+});
+
 export const ExploreArtifactsSchema = z.object({
     candidateStatements: z
         .array(z.string())
         .describe('Candidate statements discussed in the exploration session.'),
-    assumptions: z.array(z.string()).describe('Assumptions / definitions extracted from discussion.'),
-    examples: z.array(z.string()).describe('Examples supporting understanding.'),
-    counterexamples: z.array(z.string()).describe('Counterexamples / failure modes raised.'),
-    openQuestions: z.array(z.string()).describe('Open questions to investigate next.'),
+
+    /**
+     * Per-statement scoped artifacts.
+     * Keyed by the exact candidate statement string.
+     */
+    statementArtifacts: z
+        .record(z.string(), PerStatementArtifactsSchema)
+        .describe('Artifacts scoped to each candidate statement.'),
 });
 
 export type ExploreArtifacts = z.infer<typeof ExploreArtifactsSchema>;

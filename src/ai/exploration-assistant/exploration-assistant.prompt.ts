@@ -46,10 +46,16 @@ Seed (optional):
 Artifacts so far (if any):
 {{#if artifacts}}
 - Candidate statements: {{#each artifacts.candidateStatements}}\n  - {{this}}{{/each}}
-- Assumptions: {{#each artifacts.assumptions}}\n  - {{this}}{{/each}}
-- Examples: {{#each artifacts.examples}}\n  - {{this}}{{/each}}
-- Counterexamples: {{#each artifacts.counterexamples}}\n  - {{this}}{{/each}}
-- Open questions: {{#each artifacts.openQuestions}}\n  - {{this}}{{/each}}
+- Statement artifacts:
+{{#each artifacts.candidateStatements}}
+  - Statement: {{this}}
+  {{#with (lookup ../artifacts.statementArtifacts this)}}
+    - Assumptions: {{#each assumptions}}\n      - {{this}}{{/each}}
+    - Examples: {{#each examples}}\n      - {{this}}{{/each}}
+    - Counterexamples: {{#each counterexamples}}\n      - {{this}}{{/each}}
+    - Open questions: {{#each openQuestions}}\n      - {{this}}{{/each}}
+  {{/with}}
+{{/each}}
 {{/if}}
 
 Conversation so far (recent):
@@ -66,7 +72,16 @@ A) Call update_artifacts immediately with the full artifacts payload.
 {{else}}
 A) Write your full natural-language response.
 B) THEN call update_artifacts once with:
-   { turnId: <same as input>, artifacts: { candidateStatements: [...], assumptions: [...], examples: [...], counterexamples: [...], openQuestions: [...] } }
+   {
+     turnId: <same as input>,
+     artifacts: {
+       candidateStatements: [...],
+       statementArtifacts: {
+         "<candidate statement>": { assumptions: [...], examples: [...], counterexamples: [...], openQuestions: [...] },
+         ...
+       }
+     }
+   }
 {{/if}}
 After calling the tool, stop and end the turn.
 `,

@@ -10,7 +10,7 @@ function HomeExamples() {
 
   return (
     <div className="mt-16 text-center">
-      <h2 className="text-2xl font-bold font-headline text-primary">Explore Examples</h2>
+      <h2 className="text-2xl font-bold font-headline text-primary">Sample Problems</h2>
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         {exampleProblems.map((example, index) => (
           <Card key={index} className="text-left flex flex-col">
@@ -47,7 +47,7 @@ function HomeExamples() {
                 className="w-full"
                 onClick={() => startProof(example.problem)}
               >
-                Explore Proof <ArrowRight className="ml-2 h-4 w-4" />
+                Attempt proof <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </Card>

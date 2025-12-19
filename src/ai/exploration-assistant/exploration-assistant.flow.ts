@@ -70,6 +70,21 @@ export const explorationAssistantFlow = ai.defineFlow(
             );
         };
 
+        const looksLikeBareProofCommand = (s: string): boolean => {
+            const t = (s ?? '').trim().toLowerCase();
+            if (!t) return false;
+            // Common "prove it" / "show it" / "prove this" commands that should not become
+            // candidate statements (they are not self-contained mathematical statements).
+            return (
+                t === 'prove it' ||
+                t === 'show it' ||
+                t === 'prove this' ||
+                t === 'show this' ||
+                t === 'prove' ||
+                t === 'show'
+            );
+        };
+
         const fallbackCandidateFromInput = (innerInput: typeof input): string | null => {
             const basis = (innerInput.request || innerInput.seed || '').trim();
             if (!basis) return null;
@@ -77,12 +92,27 @@ export const explorationAssistantFlow = ai.defineFlow(
         };
 
         const sanitizeArtifacts = (innerInput: typeof input, artifacts: any): any => {
-            const safe = artifacts ?? {
+            const safe = (artifacts ?? {
                 candidateStatements: [],
-                assumptions: [],
-                examples: [],
-                counterexamples: [],
-                openQuestions: [],
+                statementArtifacts: {},
+            }) as any;
+
+            const mergeList = (prev: any[] | undefined, next: any[] | undefined): string[] => {
+                const p = Array.isArray(prev) ? prev : [];
+                const n = Array.isArray(next) ? next : [];
+                const merged = [...p, ...n]
+                    .map((x) => String(x ?? '').trim())
+                    .filter(Boolean)
+                    .map(normalizeDuplicatedFragments);
+                const out: string[] = [];
+                const seen = new Set<string>();
+                for (const item of merged) {
+                    if (!item) continue;
+                    if (seen.has(item)) continue;
+                    seen.add(item);
+                    out.push(item);
+                }
+                return out;
             };
 
             const prevCandidates = innerInput.artifacts?.candidateStatements ?? [];
@@ -92,6 +122,8 @@ export const explorationAssistantFlow = ai.defineFlow(
             // If the model produced an empty array, do NOT wipe existing candidates.
             if (nonEmpty.length === 0 && prevCandidates.length > 0) {
                 safe.candidateStatements = prevCandidates;
+                // Preserve the previous per-statement map
+                safe.statementArtifacts = (innerInput.artifacts as any)?.statementArtifacts ?? safe.statementArtifacts ?? {};
                 return safe;
             }
 
@@ -99,15 +131,59 @@ export const explorationAssistantFlow = ai.defineFlow(
             // user's request/seed verbatim (normalized).
             if (nonEmpty.length === 0) {
                 const basis = (innerInput.request || innerInput.seed || '').trim();
+
+                // Do NOT turn "prove it"-style commands into candidate statements.
+                if (basis && looksLikeBareProofCommand(basis)) {
+                    safe.candidateStatements = prevCandidates;
+                    safe.statementArtifacts = (innerInput.artifacts as any)?.statementArtifacts ?? safe.statementArtifacts ?? {};
+                    return safe;
+                }
+
                 if (basis && looksLikeMathProblem(basis)) {
                     const fb = fallbackCandidateFromInput(innerInput);
-                    if (fb) safe.candidateStatements = [fb];
+                    if (fb) {
+                        safe.candidateStatements = [fb];
+                        safe.statementArtifacts = {
+                            ...(safe.statementArtifacts ?? {}),
+                            [fb]: (safe.statementArtifacts?.[fb] ?? {
+                                assumptions: [],
+                                examples: [],
+                                counterexamples: [],
+                                openQuestions: [],
+                            }),
+                        };
+                    }
                 }
                 return safe;
             }
 
-            // Otherwise keep the model candidates but normalize common duplication.
-            safe.candidateStatements = nonEmpty.map(normalizeDuplicatedFragments);
+            // Otherwise merge the model candidates with previous candidates (deduped),
+            // then normalize common duplication.
+            // This prevents the model from accidentally "forgetting" earlier statements.
+            const mergedCandidates = mergeList(prevCandidates, nonEmpty);
+            safe.candidateStatements = mergedCandidates;
+
+            const prevPerStmt = (innerInput.artifacts as any)?.statementArtifacts ?? {};
+            const nextPerStmt = (safe as any)?.statementArtifacts ?? {};
+
+            const mergedPerStmt: Record<
+                string,
+                { assumptions: string[]; examples: string[]; counterexamples: string[]; openQuestions: string[] }
+            > = {};
+
+            for (const stmt of mergedCandidates) {
+                const prev = prevPerStmt?.[stmt] ?? {};
+                const next = nextPerStmt?.[stmt] ?? {};
+                mergedPerStmt[stmt] = {
+                    assumptions: mergeList(prev.assumptions, next.assumptions),
+                    examples: mergeList(prev.examples, next.examples),
+                    counterexamples: mergeList(prev.counterexamples, next.counterexamples),
+                    openQuestions: mergeList(prev.openQuestions, next.openQuestions),
+                };
+            }
+
+            safe.statementArtifacts = mergedPerStmt;
+
             return safe;
         };
         // ----------------------------------------------------------------------

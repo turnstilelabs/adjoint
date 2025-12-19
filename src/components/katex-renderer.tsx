@@ -207,10 +207,18 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
             displayMode: true,
             errorColor: '#dc2626',
           });
+
+          // If KaTeX could not parse the expression, it emits a "katex-error" span.
+          // For Explore artifacts, we prefer to fall back to plain text rather than show
+          // a big red error fragment.
+          if (html.includes('katex-error')) {
+            return renderTextWithLineBreaks(latex, index);
+          }
+
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return renderTextWithLineBreaks(part, index);
+          return renderTextWithLineBreaks(latex, index);
         }
       } else if (part.startsWith('$') && part.endsWith('$')) {
         const latex = part.substring(1, part.length - 1);
@@ -220,17 +228,22 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
             displayMode: false,
             errorColor: '#dc2626',
           });
+
+          if (html.includes('katex-error')) {
+            return renderTextWithLineBreaks(latex, index);
+          }
+
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return renderTextWithLineBreaks(part, index);
+          return renderTextWithLineBreaks(latex, index);
         }
       } else {
         // Render plain text parts, handling newlines
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content]);
+  }, [content, autoWrap]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
   return inline ? (
