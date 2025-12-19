@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import * as React from 'react';
+import { useAppStore } from '@/state/app-store';
 import { LogoSmall } from '@/components/logo-small';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,11 +14,17 @@ export function ExploreSidebar() {
     const [openLiterature, setOpenLiterature] = React.useState(false);
     const [openCode, setOpenCode] = React.useState(false);
     const [openProve, setOpenProve] = React.useState(false);
+    const reset = useAppStore((s) => s.reset);
 
     return (
         <TooltipProvider>
             <aside className="w-14 flex flex-col items-center py-4 border-r bg-card shrink-0">
-                <Link href="/" className="mb-6 cursor-pointer" aria-label="Go to homepage">
+                <Link
+                    href="/"
+                    onClick={reset}
+                    className="mb-6 cursor-pointer"
+                    aria-label="Go to homepage"
+                >
                     <LogoSmall />
                 </Link>
 
