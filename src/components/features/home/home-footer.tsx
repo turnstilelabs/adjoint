@@ -45,10 +45,10 @@ export function HomeFooter() {
             </div>
             <DialogFooterArea>
               <a
-                href="mailto:adjoint@turnstilelabs.com"
+                href="mailto:leo@turnstile.labs"
                 className="text-sm text-primary hover:underline"
               >
-                adjoint@turnstilelabs.com
+                leo@turnstile.labs
               </a>
             </DialogFooterArea>
           </DialogContent>
@@ -76,7 +76,7 @@ export function HomeFooter() {
           </DialogContent>
         </Dialog>
         <span className="mx-2">•</span>
-        <a href="mailto:adjoint@turnstilelabs.com" className="hover:underline">
+        <a href="mailto:leo@turnstile.labs" className="hover:underline">
           Contact
         </a>
       </p>

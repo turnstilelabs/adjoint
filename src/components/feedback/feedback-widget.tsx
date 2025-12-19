@@ -164,7 +164,7 @@ export function FeedbackWidget() {
                             <Input
                                 id="fb-email"
                                 type="email"
-                                placeholder="name@example.com"
+                                placeholder="leo@turnstile.labs"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 autoComplete="email"
