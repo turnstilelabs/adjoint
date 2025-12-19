@@ -16,6 +16,11 @@ export default function HomeView() {
       <HomeHeader />
       <div className="-mt-2 mb-6">
         <HomeModeToggle mode={mode} onChange={setMode} />
+        <div className="mt-2 text-center text-xs text-muted-foreground">
+          {mode === 'explore'
+            ? 'Analyse the problem and formulate a precise statement to be proved.'
+            : 'Attempt and structure a proof of your statement.'}
+        </div>
       </div>
       <ProblemInputForm mode={mode} />
       <HomeExamples />
