@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Wand2, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
@@ -67,8 +67,7 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
     await submitProblem(problem);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
+  const runCurrentMode = () => {
     startTransition(async () => {
       if (mode === 'explore') {
         runExplore();
@@ -76,6 +75,11 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
         await runProve();
       }
     });
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    runCurrentMode();
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -98,13 +102,7 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  startTransition(async () => {
-                    if (mode === 'explore') {
-                      runExplore();
-                    } else {
-                      await runProve();
-                    }
-                  });
+                  runCurrentMode();
                 }
               }}
               className={cn(
@@ -115,6 +113,15 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
               disabled={isPending}
               rows={1}
             />
+            <button
+              type="button"
+              onClick={runCurrentMode}
+              disabled={isPending}
+              className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
+              aria-label={mode === 'explore' ? 'Explore this problem with Adjoint' : 'Attempt a proof of this statement with Adjoint'}
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
           </div>
 
           {error && (
