@@ -47,7 +47,7 @@ function HomeExamples() {
                 className="w-full"
                 onClick={() => startProof(example.problem)}
               >
-                Attempt proof <ArrowRight className="ml-2 h-4 w-4" />
+                Attempt Proof <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </Card>

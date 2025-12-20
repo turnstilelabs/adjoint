@@ -20,7 +20,7 @@ export function HomeModeToggle({
                         Explore
                     </TabsTrigger>
                     <TabsTrigger value="prove" className="px-3 py-1 text-xs">
-                        Attempt proof
+                        Prove
                     </TabsTrigger>
                 </TabsList>
             </Tabs>
