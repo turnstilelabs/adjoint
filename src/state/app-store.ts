@@ -104,6 +104,7 @@ interface AppState extends StoreData {
   getExploreTurnId: () => number;
   setExploreCancelCurrent: (cancel: (() => void) | null) => void;
   promoteToProof: (statement: string) => Promise<void>;
+  startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
   retry: () => Promise<void>;
@@ -287,6 +288,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().startProof(trimmed);
   },
 
+  startExploreFromFailedProof: () => {
+    const problem = (get().problem || '').trim();
+    const original = (get().lastProblem || '').trim();
+    const draft = (get().liveDraft || '').trim();
+
+    const userContent = original || problem;
+    const seededMessages: Message[] = [];
+
+    if (userContent) {
+      seededMessages.push({ role: 'user', content: userContent });
+    }
+    if (draft) {
+      seededMessages.push({ role: 'assistant', content: draft });
+    }
+
+    set({
+      view: 'explore',
+      exploreSeed: userContent || null,
+      exploreMessages: seededMessages,
+      exploreArtifacts: null,
+      exploreArtifactEdits: {
+        candidateStatements: {},
+        perStatement: {},
+      },
+      exploreTurnId: 0,
+    });
+  },
+
   startProof: async (problem: string, opts?: { force?: boolean }) => {
     const trimmed = problem.trim();
     if (!trimmed) return;
@@ -334,7 +363,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           loading: false,
           error: null,
           pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
-          proofHistory: [],
+          proofHistory: [
+            {
+              sublemmas: [],
+              timestamp: new Date(),
+            },
+          ],
           activeVersionIdx: 0,
         });
         return;
@@ -425,9 +459,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           es2.addEventListener('attempt', (ev: MessageEvent) => {
             try {
               const data = JSON.parse(ev.data || '{}');
-              if (data?.status === 'FAILED') appendLog('Unable to provide a proof....');
-              else if (data?.status === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
-              else appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
+              if (data?.status === 'FAILED') {
+                appendLog("Couldn't prove the statement as written. Showing explanation...");
+              } else if (data?.status === 'PROVED_VARIANT') {
+                appendLog('Proof generated for a revised statement....');
+              } else {
+                appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
+              }
             } catch { }
           });
           es2.addEventListener('decompose', (ev: MessageEvent) => {
@@ -456,7 +494,18 @@ export const useAppStore = create<AppState>((set, get) => ({
               const attempt = data?.attempt; const decomp = data?.decompose;
               if (!attempt) { set({ loading: false, error: 'Malformed SSE response.' }); return; }
               if (attempt.status === 'FAILED') {
-                set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
+                set({
+                  loading: false,
+                  error: null,
+                  pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
+                  proofHistory: [
+                    {
+                      sublemmas: [],
+                      timestamp: new Date(),
+                    },
+                  ],
+                  activeVersionIdx: 0,
+                });
               } else if (!decomp) {
                 set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
               } else if (attempt.status === 'PROVED_AS_IS') {
@@ -495,8 +544,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           try {
             const d = JSON.parse(ev.data || '{}');
             const st = d?.status;
-            if (st === 'PROVED_VARIANT') appendLog('Proof generated for a revised statement....');
-            else if (st === 'FAILED') appendLog('Unable to provide a proof....');
+            if (st === 'PROVED_VARIANT') {
+              appendLog('Proof generated for a revised statement....');
+            } else if (st === 'FAILED') {
+              appendLog("Draft doesn't prove the statement as written. Showing explanation...");
+            }
           } catch { }
         });
 
@@ -529,7 +581,18 @@ export const useAppStore = create<AppState>((set, get) => ({
             const attempt = data?.attempt; const decomp = data?.decompose;
             if (!attempt) { set({ loading: false, error: 'Malformed stream response.' }); return; }
             if (attempt.status === 'FAILED') {
-              set({ loading: false, error: null, pendingRejection: { explanation: attempt.explanation || 'No details provided.' }, proofHistory: [], activeVersionIdx: 0 });
+              set({
+                loading: false,
+                error: null,
+                pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
+                proofHistory: [
+                  {
+                    sublemmas: [],
+                    timestamp: new Date(),
+                  },
+                ],
+                activeVersionIdx: 0,
+              });
             } else if (!decomp) {
               set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
             } else if (attempt.status === 'PROVED_AS_IS') {

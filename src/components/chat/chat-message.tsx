@@ -15,9 +15,9 @@ function ChatMessage({ message }: { message: Message }) {
         }`}
     >
       <div
-        className={`p-4 rounded-2xl break-words ${message.role === 'user'
-          ? 'bg-primary text-primary-foreground shadow-md'
-          : 'bg-card border border-border shadow-sm'
+        className={`p-4 rounded-2xl break-words max-w-full overflow-x-auto ${message.role === 'user'
+            ? 'bg-primary text-primary-foreground shadow-md'
+            : 'bg-card border border-border shadow-sm'
           }`}
       >
         {message.role === 'assistant' && (
