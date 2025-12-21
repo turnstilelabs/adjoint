@@ -42,7 +42,7 @@ const prompt = ai.definePrompt({
         'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.',
     prompt: `Instructions
 Input: A mathematical proof text (possibly short, counterexample-style, or a full argument)
-Output: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$.
+Output: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$. For each sublemma.proof, write 2–6 narrative paragraphs for non-trivial steps with a BLANK LINE between paragraphs. Avoid bullet lists; keep natural prose. For very short/trivial proofs a single compact paragraph is acceptable.
 
 Decomposition Guidelines
 1. Identify Decomposition Candidates
@@ -94,7 +94,7 @@ const decomposeRawProofFlow = ai.defineFlow(
         }
 
         const system = 'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.';
-        const user = `Instructions\nInput: A mathematical proof text (possibly short, counterexample-style, or a full argument)\nOutput: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$.\n\nDecomposition Guidelines\n1. Identify Decomposition Candidates\n- Intermediate results used multiple times\n- Sub-arguments (>3–4 logical steps)\n- Conceptually distinct ideas or techniques\n- Standalone facts that simplify the main flow\n\n2. Atomic Statement Principle\nEach sublemma must:\n- Be self-contained with precise hypotheses/conclusions\n- Focus on a single mathematical idea\n- Be useful (reused or simplifies reasoning)\n- Clearly specify inputs/outputs\n\nAdditional constraints (critical)\n- You must return at least one sublemma. Never return an empty array.\n- If the proof is short or a counterexample, return exactly one sublemma:\n  • title: 'Counterexample' (or 'Direct proof' if appropriate)\n  • statement: the exact proved claim (same as provedStatement)\n  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)\n- Prefer 2–6 sublemmas for longer arguments.\n\nRaw proof:\n"""\n${input.rawProof}\n"""\n\nReturn strictly:\n{"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`;
+        const user = `Instructions\nInput: A mathematical proof text (possibly short, counterexample-style, or a full argument)\nOutput: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$. For each sublemma.proof, write 2–6 narrative paragraphs for non-trivial steps with a BLANK LINE between paragraphs. Avoid bullet lists; keep natural prose. For very short/trivial proofs a single compact paragraph is acceptable.\n\nDecomposition Guidelines\n1. Identify Decomposition Candidates\n- Intermediate results used multiple times\n- Sub-arguments (>3–4 logical steps)\n- Conceptually distinct ideas or techniques\n- Standalone facts that simplify the main flow\n\n2. Atomic Statement Principle\nEach sublemma must:\n- Be self-contained with precise hypotheses/conclusions\n- Focus on a single mathematical idea\n- Be useful (reused or simplifies reasoning)\n- Clearly specify inputs/outputs\n\nAdditional constraints (critical)\n- You must return at least one sublemma. Never return an empty array.\n- If the proof is short or a counterexample, return exactly one sublemma:\n  • title: 'Counterexample' (or 'Direct proof' if appropriate)\n  • statement: the exact proved claim (same as provedStatement)\n  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)\n- Prefer 2–6 sublemmas for longer arguments.\n\nRaw proof:\n"""\n${input.rawProof}\n"""\n\nReturn strictly:\n{"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`;
 
         let lastErr: any = null;
         for (const cand of candidates) {
@@ -108,7 +108,89 @@ const decomposeRawProofFlow = ai.defineFlow(
                 if (!output) {
                     throw new Error('The AI failed to decompose the raw proof.');
                 }
-                return output;
+
+                // Normalize paragraphing for readability without touching math segments.
+                const protectMath = (s: string) => {
+                    const blocks: { t: 'math' | 'text'; v: string }[] = [];
+                    let i = 0;
+                    const pushText = (v: string) => { if (v) blocks.push({ t: 'text', v }); };
+                    while (i < s.length) {
+                        if (s.startsWith('$$', i)) {
+                            const j = s.indexOf('$$', i + 2);
+                            const end = j >= 0 ? j + 2 : s.length;
+                            blocks.push({ t: 'math', v: s.slice(i, end) });
+                            i = end;
+                        } else if (s[i] === '$') {
+                            const j = s.indexOf('$', i + 1);
+                            const end = j >= 0 ? j + 1 : s.length;
+                            blocks.push({ t: 'math', v: s.slice(i, end) });
+                            i = end;
+                        } else if (s.startsWith('\\[', i)) {
+                            const j = s.indexOf('\\]', i + 2);
+                            const end = j >= 0 ? j + 2 : s.length;
+                            blocks.push({ t: 'math', v: s.slice(i, end) });
+                            i = end;
+                        } else if (s.startsWith('\\(', i)) {
+                            const j = s.indexOf('\\)', i + 2);
+                            const end = j >= 0 ? j + 2 : s.length;
+                            blocks.push({ t: 'math', v: s.slice(i, end) });
+                            i = end;
+                        } else {
+                            let j = i;
+                            while (j < s.length && s[j] !== '$' && !s.startsWith('$$', j) && !s.startsWith('\\[', j) && !s.startsWith('\\(', j)) j++;
+                            pushText(s.slice(i, j));
+                            i = j;
+                        }
+                    }
+                    return blocks;
+                };
+
+                const normalizeText = (txt: string) => {
+                    const trimmed = txt.trim();
+                    if (!trimmed) return txt; // preserve
+                    const hasBlank = /\n\s*\n/.test(trimmed);
+                    if (hasBlank || trimmed.length < 400) return txt; // already paragraphic or short
+
+                    // Split into sentences conservatively (outside math, we already split text-only)
+                    const sentences = trimmed
+                        .replace(/\s+/g, ' ')
+                        .split(/(?<=[\.\?\!])\s+/)
+                        .filter(Boolean);
+                    if (sentences.length < 3) return txt; // not enough to form paragraphs
+
+                    const para: string[] = [];
+                    let cur: string[] = [];
+                    for (const snt of sentences) {
+                        cur.push(snt);
+                        if (cur.length >= 3) { // 2–3 sentences per paragraph
+                            para.push(cur.join(' '));
+                            cur = [];
+                        }
+                    }
+                    if (cur.length) para.push(cur.join(' '));
+                    return para.join('\n\n');
+                };
+
+                const normalizeProof = (s: string) => {
+                    const parts = protectMath(s);
+                    return parts
+                        .map((p) => (p.t === 'math' ? p.v : normalizeText(p.v)))
+                        .join('');
+                };
+
+                // Apply to normalizedProof and each sublemma.proof
+                const out = { ...output } as any;
+                try { if (out.normalizedProof) out.normalizedProof = normalizeProof(String(out.normalizedProof)); } catch { }
+                try {
+                    if (Array.isArray(out.sublemmas)) {
+                        out.sublemmas = out.sublemmas.map((sl: any) => ({
+                            ...sl,
+                            proof: typeof sl?.proof === 'string' ? normalizeProof(sl.proof) : sl?.proof,
+                        }));
+                    }
+                } catch { }
+
+                return out as any;
             } catch (e: any) {
                 const norm = normalizeModelError(e);
                 lastErr = norm;

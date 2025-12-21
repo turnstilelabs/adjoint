@@ -719,7 +719,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   };
 
   // Copy to clipboard helpers and proof collapse state
-  const [isProofCollapsed, setIsProofCollapsed] = useState(false);
+  const [isProofCollapsed, setIsProofCollapsed] = useState(proof.length > 800);
   const [copiedStatement, setCopiedStatement] = useState(false);
   const [copiedProof, setCopiedProof] = useState(false);
 
@@ -862,7 +862,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                 </div>
               </div>
             ) : (
-              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-3">
+              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground mb-1">
                     <span>Statement</span>
@@ -881,7 +881,10 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       <span className="sr-only">Copy Statement</span>
                     </button>
                   </div>
-                  <div ref={statementViewRef} className="text-primary">
+                  <div
+                    ref={statementViewRef}
+                    className="mt-1 rounded-md bg-muted/40 px-3 py-2 text-sm text-primary"
+                  >
                     <KatexRenderer content={statement} />
                   </div>
                 </div>
@@ -917,8 +920,12 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                     </button>
                   </div>
                   {!isProofCollapsed && (
-                    <div ref={proofViewRef}>
-                      <KatexRenderer content={proof} />
+                    <div ref={proofViewRef} className="mt-1 text-sm leading-relaxed">
+                      {proof.split(/\n\s*\n/).map((para, idx) => (
+                        <div key={idx} className="mb-3 last:mb-0">
+                          <KatexRenderer content={para} />
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

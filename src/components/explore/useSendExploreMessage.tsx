@@ -34,6 +34,9 @@ export const useSendExploreMessage = () => {
         );
     };
 
+    // Basic length threshold to avoid streaming hiccups with huge basis
+    const MAX_BASIS_LEN = 4000;
+
     return async (
         request: string,
         opts?: { displayAs?: string; suppressUser?: boolean; extractOnly?: boolean },
@@ -56,6 +59,7 @@ export const useSendExploreMessage = () => {
             }
         }
 
+        const trimmedRequest = request.length > MAX_BASIS_LEN ? request.slice(0, MAX_BASIS_LEN) : request;
         const userVisibleText = opts?.displayAs ?? request;
 
         let newMessages: Message[] = exploreMessages;
@@ -105,7 +109,7 @@ export const useSendExploreMessage = () => {
             // Important: send the full request to the backend (can differ from displayed content)
             input: {
                 seed: seed ?? undefined,
-                request,
+                request: trimmedRequest,
                 history,
                 artifacts: artifacts ?? undefined,
                 extractOnly: effectiveExtractOnly,
@@ -114,32 +118,53 @@ export const useSendExploreMessage = () => {
         });
 
         try {
-            for await (const chunk of runner.stream) {
-                if (chunk.type === 'text' && !isExtractOnly && !proofIntent) {
+            for await (const raw of runner.stream) {
+                const chunk: any = raw && (raw as any).type ? raw : ((raw as any)?.message?.type ? (raw as any).message : raw);
+
+                if (chunk?.type === 'text' && !isExtractOnly && !proofIntent) {
                     setExploreMessages((prev: Message[]) =>
                         prev.map((msg, idx) =>
                             idx === prev.length - 1
-                                ? ({ ...msg, content: msg.content + chunk.content } as Message)
+                                ? ({ ...msg, content: msg.content + (chunk.content || '') } as Message)
                                 : msg,
                         ),
                     );
                 }
 
-                if (chunk.type === 'artifacts') {
+                if (chunk?.type === 'artifacts') {
                     // stale-guard
                     if (chunk.turnId === getExploreTurnId()) {
                         setExploreArtifacts(chunk.artifacts as ExploreArtifacts);
                     }
                 }
 
-                if (chunk.type === 'error') {
-                    // eslint-disable-next-line no-console
-                    console.error('[Explore] server error chunk', chunk);
+                if (chunk?.type === 'error' || chunk?.error || chunk?.code) {
+                    const msg = chunk?.message || chunk?.error || 'Adjoint could not extract statements from this text.';
+                    const isInterrupted = /interrupted/i.test(String(msg || ''));
+                    const baseTitle = isInterrupted ? 'Streaming interrupted' : 'Explore extraction failed';
+
+                    // Show toast with an inline retry
                     toast({
-                        title: 'Explore extraction failed',
-                        description: chunk.message || 'Unexpected exploration error.',
+                        title: baseTitle,
+                        description: msg,
                         variant: 'destructive',
                     });
+                    // Immediately clear typing indicator
+                    if (!isExtractOnly && !proofIntent) {
+                        setExploreMessages((prev: Message[]) =>
+                            prev.map((m, i) => (i === prev.length - 1 ? ({ ...m, isTyping: false } as Message) : m)),
+                        );
+                    }
+                    // Clear cancellation handle early on error
+                    setExploreCancelCurrent(null);
+
+                    // Optional silent immediate retry on interruption: comment out if undesired
+                    // if (isInterrupted) {
+                    //   void (async () => {
+                    //     await new Promise((r) => setTimeout(r, 400));
+                    //     await useSendExploreMessage()(request, opts);
+                    //   })();
+                    // }
                 }
             }
 
