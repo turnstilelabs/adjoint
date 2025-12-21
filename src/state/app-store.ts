@@ -12,7 +12,12 @@ export type View = 'home' | 'explore' | 'proof';
 export type ProofVersion = {
   sublemmas: Sublemma[];
   timestamp: Date;
+  /** Whole-proof analysis result (existing footer). */
   validationResult?: ProofValidationResult;
+  /** Per-step analysis results keyed by 0-based step index. */
+  stepValidation?: Record<number, ProofValidationResult>;
+  /** Which step was last edited (for contextual CTA). */
+  lastEditedStepIdx?: number | null;
   graphData?: GraphData;
 };
 
@@ -125,6 +130,11 @@ interface AppState extends StoreData {
   setActiveVersionIndex: (index: number) => void;
   addProofVersion: (version: Omit<ProofVersion, 'timestamp'>) => void;
   updateCurrentProofVersion: (updates: Partial<ProofVersion>) => void;
+  updateCurrentStepValidation: (opts: {
+    stepIndex: number;
+    result?: ProofValidationResult;
+  }) => void;
+  clearLastEditedStep: () => void;
 
   // Navigation
   goBack: () => void;
@@ -740,10 +750,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       proofHistory: [...state.proofHistory, { ...version, timestamp: new Date() }],
       activeVersionIdx: state.proofHistory.length,
     })),
+
   updateCurrentProofVersion: (updates: Partial<ProofVersion>) =>
     set((state) => ({
       proofHistory: state.proofHistory.map((version, idx) =>
         idx === state.activeVersionIdx ? { ...version, ...updates } : version,
+      ),
+    })),
+
+  updateCurrentStepValidation: ({ stepIndex, result }) =>
+    set((state) => ({
+      proofHistory: state.proofHistory.map((version, idx) => {
+        if (idx !== state.activeVersionIdx) return version;
+        const next = { ...version };
+        const prev = next.stepValidation || {};
+        if (result) {
+          next.stepValidation = { ...prev, [stepIndex]: result };
+        } else {
+          const { [stepIndex]: _omit, ...rest } = prev;
+          next.stepValidation = rest;
+        }
+        return next;
+      }),
+    })),
+
+  clearLastEditedStep: () =>
+    set((state) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, lastEditedStepIdx: null } : version,
       ),
     })),
 

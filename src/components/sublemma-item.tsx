@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  AlertCircle,
+  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -8,6 +10,7 @@ import {
   Copy,
   Lightbulb,
   Puzzle,
+  RefreshCw,
   Rocket,
   Save,
   Sigma,
@@ -16,17 +19,25 @@ import {
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { SelectionToolbar } from './selection-toolbar';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAppStore, type ProofValidationResult } from '@/state/app-store';
+import { validateSublemmaAction } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface SublemmaItemProps {
   step: number;
+  /** 0-based index in the proof array. */
+  stepIndex: number;
   title: string;
   statement: string;
   proof: string;
+  analysis?: ProofValidationResult;
+  showReanalyzeCta?: boolean;
   onChange: (updates: { statement?: string; title?: string; proof?: string }) => void;
 }
 
@@ -40,7 +51,24 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, statement, proof, onChange }: SublemmaItemProps) {
+export function SublemmaItem({
+  step,
+  stepIndex,
+  title,
+  statement,
+  proof,
+  analysis,
+  showReanalyzeCta,
+  onChange,
+}: SublemmaItemProps) {
+  const { toast } = useToast();
+  const problem = useAppStore((s) => s.problem!);
+  const fullProof = useAppStore((s) => s.proof());
+  const updateCurrentStepValidation = useAppStore((s) => s.updateCurrentStepValidation);
+  const clearLastEditedStep = useAppStore((s) => s.clearLastEditedStep);
+
+  const [isAnalyzing, startAnalyze] = useTransition();
+
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
   const [editedStatement, setEditedStatement] = useState(statement);
@@ -209,7 +237,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
       setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
     }
-  }, [isEditing]);
+  }, [isEditing, statement, proof]);
 
   const normalizeVisibleToLatex = (txt: string) =>
     txt
@@ -595,6 +623,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   const handleSave = () => {
     onChange({ statement: editedStatement, proof: editedProof });
+    // After saving, keep the step open and the proof expanded.
+    setIsProofCollapsed(false);
     setIsEditing(false);
   };
 
@@ -748,6 +778,60 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   };
 
   const toggleProofCollapsed = () => setIsProofCollapsed((v) => !v);
+
+  const analyzeStep = () => {
+    startAnalyze(async () => {
+      try {
+        updateCurrentStepValidation({ stepIndex, result: undefined });
+        const result = await validateSublemmaAction(problem, fullProof.sublemmas, stepIndex);
+
+        if (result.success) {
+          updateCurrentStepValidation({
+            stepIndex,
+            result: {
+              isValid: result.isValid || false,
+              isError: false,
+              feedback: result.feedback || 'No feedback provided.',
+              timestamp: new Date(),
+              model: undefined as any,
+            },
+          });
+          clearLastEditedStep();
+        } else {
+          const friendly =
+            result.error || 'Adjoint’s connection to the model was interrupted, please retry.';
+          updateCurrentStepValidation({
+            stepIndex,
+            result: {
+              isError: true,
+              timestamp: new Date(),
+              feedback: friendly,
+            },
+          });
+          toast({
+            title: 'System issue — analysis couldn’t complete',
+            description: friendly,
+            variant: 'default',
+          });
+        }
+      } catch (e) {
+        const friendly = e instanceof Error ? e.message : 'Unexpected error while analyzing step.';
+        updateCurrentStepValidation({
+          stepIndex,
+          result: {
+            isError: true,
+            timestamp: new Date(),
+            feedback: friendly,
+          },
+        });
+        toast({
+          title: 'System issue — analysis couldn’t complete',
+          description: friendly,
+          variant: 'default',
+        });
+      }
+    });
+  };
 
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
@@ -904,6 +988,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       )}
                       <span>Proof</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => handleCopy(proof, 'proof')}
@@ -919,6 +1004,21 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       <span className="sr-only">Copy Proof</span>
                     </button>
                   </div>
+
+                  {showReanalyzeCta && (
+                    <div className="mb-2 flex justify-end">
+                      <Button
+                        size="sm"
+                        className="h-7"
+                        onClick={analyzeStep}
+                        disabled={isAnalyzing}
+                      >
+                        {isAnalyzing ? 'Analyzing…' : 'Re-analyze step'}
+                        <RefreshCw className="ml-1 h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+
                   {!isProofCollapsed && (
                     <div ref={proofViewRef} className="mt-1 text-sm leading-relaxed">
                       {proof.split(/\n\s*\n/).map((para, idx) => (
@@ -926,6 +1026,55 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                           <KatexRenderer content={para} />
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {analysis && (
+                    <div className="mt-3">
+                      <Alert variant="default">
+                        {!analysis.isError && analysis.isValid === false && (
+                          <>
+                            <AlertTriangle className="h-4 w-4 text-primary" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              Issues found
+                            </AlertTitle>
+                          </>
+                        )}
+                        {analysis.isError && (
+                          <>
+                            <AlertCircle className="h-4 w-4 text-foreground" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              System issue — analysis couldn’t complete
+                            </AlertTitle>
+                          </>
+                        )}
+                        {!analysis.isError && analysis.isValid === true && (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              Looks consistent
+                            </AlertTitle>
+                          </>
+                        )}
+                        <AlertDescription>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/50 text-sm font-mono text-foreground/90 flex-1">
+                              <KatexRenderer content={analysis.feedback} />
+                            </div>
+                            <button
+                              type="button"
+                              className="mt-1 inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                              aria-label="Dismiss step analysis"
+                              title="Dismiss"
+                              onClick={() =>
+                                updateCurrentStepValidation({ stepIndex, result: undefined })
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   )}
                 </div>

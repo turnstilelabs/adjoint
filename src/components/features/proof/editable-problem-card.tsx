@@ -5,7 +5,7 @@ import { useAppStore } from '@/state/app-store';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
@@ -61,11 +61,11 @@ function EditableProblemCard() {
     });
   };
 
-  const cancel = () => {
+  const cancel = useCallback(() => {
     setIsEditing(false);
     setValue(problem);
     setEditError(null);
-  };
+  }, [problem]);
 
   // Close edit mode when clicking outside the problem box
   useEffect(() => {
@@ -78,7 +78,7 @@ function EditableProblemCard() {
     };
     document.addEventListener('mousedown', onDown, { capture: true });
     return () => document.removeEventListener('mousedown', onDown, { capture: true } as any);
-  }, [isEditing]);
+  }, [isEditing, cancel]);
 
   const hasSuggestion = !!pendingSuggestion;
   const hasRejection = !!pendingRejection;
@@ -136,7 +136,7 @@ function EditableProblemCard() {
               {hasRejection && pendingRejection && (
                 <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
                   <div className="text-sm mb-2 font-medium">
-                    Couldn't prove the statement as written. It may be false or require stronger assumptions:
+                    Could not prove the statement as written. It may be false or require stronger assumptions:
                   </div>
                   <div className="text-sm p-2 rounded-md bg-background border border-muted">
                     <KatexRenderer content={pendingRejection.explanation} />

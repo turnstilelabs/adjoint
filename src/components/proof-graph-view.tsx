@@ -67,7 +67,7 @@ export function ProofGraphView() {
         }
       }
     });
-  }, [viewMode, isGeneratingGraph, proof, updateCurrentProofVersion, toast]);
+  }, [viewMode, isGeneratingGraph, proof, updateCurrentProofVersion, toast, goBack]);
 
   if (isGeneratingGraph) {
     return (

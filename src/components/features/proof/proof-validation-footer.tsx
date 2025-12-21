@@ -14,6 +14,7 @@ function ProofValidationFooter() {
 
   const problem = useAppStore((s) => s.problem!);
   const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
+  const clearLastEditedStep = useAppStore((s) => s.clearLastEditedStep);
 
   const proof = useAppStore((s) => s.proof());
 
@@ -103,7 +104,10 @@ function ProofValidationFooter() {
             // Never display model name in UI — keep for internal logs if needed.
             model: undefined as any,
           },
+          // Whole-proof analysis doesn't invalidate step analyses, but we clear the CTA cue.
+          lastEditedStepIdx: null,
         });
+        clearLastEditedStep();
         if (!cancelledRef.current) {
           setIsRunning(false);
           setCanShowCancelCue(false);
