@@ -2,7 +2,7 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, History, MessageCircle, Share2 } from 'lucide-react';
+import { FileDown, History, MessageCircle, Share2, FileText } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -22,6 +22,7 @@ export function ProofSidebar() {
   const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
   const setIsHistoryOpen = useAppStore((s) => s.setIsHistoryOpen);
   const setViewMode = useAppStore((s) => s.setViewMode);
+  const toggleStructuredView = useAppStore((s) => s.toggleStructuredView);
   const reset = useAppStore((s) => s.reset);
 
   const onToggleHistory = () => {
@@ -32,8 +33,18 @@ export function ProofSidebar() {
     });
   };
 
+  const onToggleRaw = () => {
+    if (viewMode === 'raw') {
+      toggleStructuredView();
+    } else {
+      setViewMode('raw');
+    }
+  };
+
+  const rawToggleLabel = viewMode === 'raw' ? 'Structured proof' : 'Raw proof';
+
   const onToggleGraph = () => {
-    setViewMode(viewMode === 'graph' ? 'steps' : 'graph');
+    setViewMode(viewMode === 'graph' ? 'structured' : 'graph');
   };
 
   const onToggleChat = () => {
@@ -79,6 +90,16 @@ export function ProofSidebar() {
           >
             <History />
             <span className="sr-only">History</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={rawToggleLabel}
+            onClick={onToggleRaw}
+            className={viewMode === 'raw' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
+          >
+            <FileText />
+            <span className="sr-only">{rawToggleLabel}</span>
           </Button>
           <Button
             variant="ghost"

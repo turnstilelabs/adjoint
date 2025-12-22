@@ -114,7 +114,14 @@ export default function ProofView() {
     );
   }
 
-  if (loading || !proof()) {
+  if (loading) {
+    return <ProofLoading />;
+  }
+
+  if (!proof()) {
+    // With the new split-phase pipeline, we can temporarily have no structured proof
+    // (we still want to render the proof view so the user can edit raw proof).
+    // A minimal placeholder version will be created in the store when the draft completes.
     return <ProofLoading />;
   }
 

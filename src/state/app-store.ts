@@ -76,8 +76,21 @@ type StoreData = {
   errorCode: string | null;
   isChatOpen: boolean;
   isHistoryOpen: boolean;
-  viewMode: 'steps' | 'graph';
+  viewMode: 'raw' | 'structured' | 'graph';
   proofHistory: ProofVersion[];
+
+  // Raw proof + background decomposition state
+  rawProof: string;
+  attemptSummary: {
+    status: 'PROVED_AS_IS' | 'PROVED_VARIANT' | 'FAILED';
+    finalStatement: string | null;
+    variantType: 'WEAKENING' | 'OPPOSITE' | null;
+    explanation: string;
+  } | null;
+  isDecomposing: boolean;
+  decomposeError: string | null;
+  stepsReadyNonce: number;
+  decomposeMeta: { provedStatement: string; normalizedProof: string } | null;
   activeVersionIdx: number;
   pendingSuggestion: PendingSuggestion | null;
   pendingRejection: { explanation: string } | null;
@@ -124,7 +137,12 @@ interface AppState extends StoreData {
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setViewMode: (mode: 'steps' | 'graph') => void;
+  setViewMode: (mode: 'raw' | 'structured' | 'graph') => void;
+  toggleStructuredView: () => void;
+
+  // Raw proof
+  setRawProof: (raw: string) => void;
+  runDecomposition: () => Promise<void>;
 
   // Proof version management
   setActiveVersionIndex: (index: number) => void;
@@ -141,6 +159,8 @@ interface AppState extends StoreData {
 
   proof: () => ProofVersion;
 }
+
+let decomposeRunId = 0;
 
 const initialState: StoreData = {
   view: 'home',
@@ -165,9 +185,18 @@ const initialState: StoreData = {
   // proof display UI defaults
   isChatOpen: false,
   isHistoryOpen: false,
-  viewMode: 'steps',
+  viewMode: 'raw',
   // proof review/history defaults
   proofHistory: [],
+
+  // Raw proof + background decomposition state
+  rawProof: '',
+  attemptSummary: null,
+  isDecomposing: false,
+  decomposeError: null,
+  stepsReadyNonce: 0,
+  decomposeMeta: null,
+
   activeVersionIdx: 0,
   pendingSuggestion: null,
   pendingRejection: null,
@@ -331,6 +360,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!trimmed) return;
 
     // Initialize state for a new proof run
+    // Cancel any in-flight decomposition runs by bumping the run id.
+    decomposeRunId += 1;
+
     set({
       view: 'proof',
       problem: trimmed,
@@ -340,6 +372,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       error: null,
       errorDetails: null,
       errorCode: null,
+
+      // New split-phase proof state
+      viewMode: 'raw',
+      rawProof: '',
+      attemptSummary: null,
+      isDecomposing: false,
+      decomposeError: null,
+      stepsReadyNonce: 0,
+      decomposeMeta: null,
+
       pendingSuggestion: null,
       pendingRejection: null,
       proofHistory: [],
@@ -390,10 +432,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
 
       if (!decomp.success) {
+        // Decomposition is not fatal in the new split-phase UX.
+        // Keep the proof UI alive (Raw Proof is still available) and surface a non-blocking error.
         set({
           loading: false,
-          error: 'Failed to parse the proof produced by AI.',
-          proofHistory: [],
+          decomposeError: decomp.error || 'Failed to decompose the drafted proof.',
         });
         return;
       }
@@ -517,7 +560,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                   activeVersionIdx: 0,
                 });
               } else if (!decomp) {
-                set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
+                // Decomposition failure is not fatal; allow the user to view/edit Raw Proof.
+                set({ loading: false, decomposeError: 'Failed to decompose the drafted proof.' });
               } else if (attempt.status === 'PROVED_AS_IS') {
                 const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
                 const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'), };
@@ -549,7 +593,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         es.addEventListener('model.delta', (ev: MessageEvent) => {
           try { const data = JSON.parse(ev.data || '{}'); const t = data?.text || ''; if (t) { if (!gotDelta) { appendLog('Receiving model output...'); gotDelta = true; } set((s) => ({ liveDraft: s.liveDraft + t })); } } catch { }
         });
-        es.addEventListener('model.end', () => { set({ isDraftStreaming: false }); appendLog('Proof draft completed....'); });
+        es.addEventListener('model.end', () => {
+          set({ isDraftStreaming: false });
+          appendLog('Proof draft completed....');
+
+          // Phase A complete: show proof UI immediately with editable raw proof.
+          // Note: at this point liveDraft contains the full raw proof.
+          const raw = (get().liveDraft || '').trim();
+          if (raw.length > 0) {
+            // Ensure there is a proof version container so ProofView stops showing the loading screen.
+            set((state) => ({
+              loading: false,
+              viewMode: 'raw',
+              rawProof: raw,
+              decomposeError: null,
+              isDecomposing: true,
+              proofHistory: state.proofHistory.length ? state.proofHistory : [{ sublemmas: [], timestamp: new Date() }],
+              activeVersionIdx: state.proofHistory.length ? state.activeVersionIdx : 0,
+            }));
+
+            // Kick off background decomposition.
+            void get().runDecomposition();
+          }
+        });
         es.addEventListener('classify.result', (ev: MessageEvent) => {
           try {
             const d = JSON.parse(ev.data || '{}');
@@ -562,10 +628,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           } catch { }
         });
 
-
-
-        es.addEventListener('decompose.start', () => appendLog('Decomposing proof....'));
-        es.addEventListener('decompose.result', (ev: MessageEvent) => { try { const d = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${d?.sublemmasCount ?? 0} step(s)....`); } catch { } });
+        // attempt-stream no longer performs decomposition server-side.
+        // We do client-side decomposition after model.end.
 
         es.addEventListener('server-error', (ev: MessageEvent) => {
           if (finished) return; finished = true;
@@ -588,32 +652,33 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (finished) return; finished = true;
           try {
             const data = JSON.parse(ev.data || '{}');
-            const attempt = data?.attempt; const decomp = data?.decompose;
-            if (!attempt) { set({ loading: false, error: 'Malformed stream response.' }); return; }
-            if (attempt.status === 'FAILED') {
-              set({
-                loading: false,
-                error: null,
-                pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
-                proofHistory: [
-                  {
-                    sublemmas: [],
-                    timestamp: new Date(),
-                  },
-                ],
-                activeVersionIdx: 0,
-              });
-            } else if (!decomp) {
-              set({ loading: false, error: 'Failed to parse the proof produced by AI.' });
-            } else if (attempt.status === 'PROVED_AS_IS') {
-              const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
-              const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n') };
-              set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [{ sublemmas: steps, timestamp: new Date() }], activeVersionIdx: 0 });
-            } else {
-              set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined }, proofHistory: [{ sublemmas: [], timestamp: new Date() }], activeVersionIdx: 0 });
+            const attempt = data?.attempt;
+            if (!attempt) {
+              // If we never transitioned out of loading (e.g., no model.end), treat as fatal.
+              set({ loading: false, error: 'Malformed stream response.' });
+              return;
             }
-          } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
-          finally { try { es.close(); } catch { } set({ cancelCurrent: null, isDraftStreaming: false }); }
+
+            // Store classification outcome (decomposition happens client-side).
+            set({
+              attemptSummary: {
+                status: attempt.status,
+                finalStatement: attempt.finalStatement ?? null,
+                variantType: attempt.variantType ?? null,
+                explanation: attempt.explanation || '',
+              },
+            });
+
+            if (attempt.status === 'FAILED') {
+              // Still let the user inspect/edit the raw draft, but show the explanation banner.
+              set({ pendingRejection: { explanation: attempt.explanation || 'No details provided.' } });
+            }
+          } catch (e) {
+            set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
+          } finally {
+            try { es.close(); } catch { }
+            set({ cancelCurrent: null, isDraftStreaming: false });
+          }
         });
 
         es.onerror = () => {
@@ -692,6 +757,94 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   setViewMode: (mode) => set({ viewMode: mode }),
+  toggleStructuredView: () =>
+    set((state) => ({ viewMode: state.viewMode === 'structured' ? 'raw' : 'structured' })),
+
+  setRawProof: (raw) => {
+    const next = raw ?? '';
+    // Changing the raw proof invalidates steps/graph/analysis; we clear them and re-run decomposition.
+    set((state) => {
+      const cur = state.rawProof;
+      if (cur === next) return state;
+      return {
+        rawProof: next,
+        decomposeError: null,
+        decomposeMeta: null,
+        pendingSuggestion: null,
+        // Clear derived artifacts
+        proofHistory: state.proofHistory.map((v, idx) =>
+          idx === state.activeVersionIdx
+            ? {
+              ...v,
+              sublemmas: [],
+              graphData: undefined,
+              validationResult: undefined,
+              stepValidation: undefined,
+              lastEditedStepIdx: null,
+            }
+            : v,
+        ),
+      };
+    });
+
+    // Fire-and-forget recomposition (guarded by runId inside runDecomposition)
+    void get().runDecomposition();
+  },
+
+  runDecomposition: async () => {
+    const raw = (get().rawProof || '').trim();
+    if (raw.length < 10) return;
+
+    const myRun = ++decomposeRunId;
+    set({ isDecomposing: true, decomposeError: null });
+
+    try {
+      const result = await decomposeRawProofAction(raw);
+      if (decomposeRunId !== myRun) return;
+
+      if (!result.success) {
+        set({ isDecomposing: false, decomposeError: result.error || 'Failed to decompose proof.' });
+        return;
+      }
+
+      const steps: Sublemma[] =
+        (result.sublemmas && result.sublemmas.length > 0)
+          ? (result.sublemmas as Sublemma[])
+          : ([{
+            title: 'Proof',
+            statement: result.provedStatement,
+            proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
+          }] as Sublemma[]);
+
+      set((state) => ({
+        isDecomposing: false,
+        decomposeError: null,
+        decomposeMeta: {
+          provedStatement: result.provedStatement,
+          normalizedProof: (result as any).normalizedProof || '',
+        },
+        stepsReadyNonce: state.stepsReadyNonce + 1,
+        proofHistory: state.proofHistory.length
+          ? state.proofHistory.map((v, idx) =>
+            idx === state.activeVersionIdx
+              ? {
+                ...v,
+                sublemmas: steps,
+                graphData: undefined,
+                validationResult: undefined,
+                stepValidation: undefined,
+                lastEditedStepIdx: null,
+              }
+              : v,
+          )
+          : [{ sublemmas: steps, timestamp: new Date() }],
+        activeVersionIdx: state.proofHistory.length ? state.activeVersionIdx : 0,
+      }));
+    } catch (e: any) {
+      if (decomposeRunId !== myRun) return;
+      set({ isDecomposing: false, decomposeError: e?.message || 'Failed to decompose proof.' });
+    }
+  },
 
   acceptSuggestedChange: () => {
     const s = get().pendingSuggestion;
@@ -739,7 +892,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const nextIdx = Math.max(0, state.activeVersionIdx - 1);
       return {
         activeVersionIdx: nextIdx,
-        viewMode: 'steps',
+        viewMode: 'structured',
       };
     }),
 

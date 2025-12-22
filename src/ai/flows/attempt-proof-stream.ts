@@ -1,7 +1,6 @@
 import { ai, llmModel, llmId } from '@/ai/genkit';
 import { z } from 'genkit';
 import { classifyProofDraft, ClassifyProofDraftOutputSchema } from './classify-proof-draft';
-import { decomposeRawProof } from './decompose-raw-proof';
 import { SublemmaSchema } from './schemas';
 import { normalizeModelError } from '@/lib/model-error-core';
 import { env } from '@/env';
@@ -241,28 +240,9 @@ export async function attemptProofStreamOrchestrator(
         return { attempt, decompose: null };
     }
 
-    // Decomposition phase
-    onChunk({ type: 'decompose.start', ts: Date.now() });
-    let decomp: DecomposeRawProofOutput | null = null;
-    try {
-        decomp = await decomposeRawProof({ rawProof: fullDraft });
-        onChunk({
-            type: 'decompose.result',
-            sublemmasCount: decomp.sublemmas?.length ?? 0,
-            provedLen: decomp.provedStatement?.length ?? 0,
-            normLen: decomp.normalizedProof?.length ?? 0,
-        });
-    } catch (e: any) {
-        const norm = normalizeModelError(e);
-        onChunk({
-            type: 'server-error',
-            error: 'Failed to decompose drafted proof.',
-            detail: norm.detail,
-            code: norm.code || undefined,
-        });
-    }
-
-    return { attempt, decompose: decomp };
+    // Decomposition moved client-side (via decomposeRawProofAction).
+    // We keep the stream fast and return only the classified attempt + raw proof.
+    return { attempt, decompose: null };
 }
 
 /**
