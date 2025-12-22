@@ -31,7 +31,7 @@ export function ProofHistory() {
     const versionToRestore = proofHistory[index];
     toast({
       title: 'Proof Restored',
-      description: `Restored version from ${versionToRestore.timestamp.toLocaleTimeString()}`,
+      description: `Restored version from ${versionToRestore.timestamp.toLocaleString()}`,
     });
   };
 
@@ -61,29 +61,28 @@ export function ProofHistory() {
                   )}
                 >
                   <CardContent className="p-3">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-2">
                         {version.validationResult?.isValid === true && (
                           <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                         )}
                         {version.validationResult?.isValid === false && (
                           <CheckCircle className="h-4 w-4 text-destructive shrink-0" />
                         )}
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">
-                            Version {proofHistory.length - index}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">
+                            Version {version.versionNumber}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {version.timestamp.toLocaleTimeString()}
+                            {version.timestamp.toLocaleString()}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isActive && (
-                          <Badge variant="secondary" className="text-xs">
-                            Current
-                          </Badge>
-                        )}
+
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Badge variant={version.type === 'raw' ? 'secondary' : 'outline'} className="text-xs">
+                          {version.type === 'raw' ? 'Raw' : 'Structured'}
+                        </Badge>
                         <Button
                           size="sm"
                           variant="ghost"

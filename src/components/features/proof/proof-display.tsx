@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { InteractiveChat } from '../../chat/interactive-chat';
 import { ProofSidebar } from '../../proof-sidebar';
 import { ProofGraphView } from '../../proof-graph-view';
@@ -14,9 +14,21 @@ import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function ProofDisplay() {
     const { toast } = useToast();
+
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const isChatOpen = useAppStore((s) => s.isChatOpen);
     const viewMode = useAppStore((s) => s.viewMode);
@@ -27,6 +39,10 @@ export default function ProofDisplay() {
     const isDecomposing = useAppStore((s) => s.isDecomposing);
     const rawProof = useAppStore((s) => s.rawProof);
     const proof = useAppStore((s) => s.proof());
+    const hasUserEditedStructuredForCurrentRaw = useAppStore(
+        (s) => s.hasUserEditedStructuredForCurrentRaw,
+    );
+
     const hasStructuredProof = useMemo(() => Boolean(proof?.sublemmas && proof.sublemmas.length > 0), [proof]);
     const hasRawProof = useMemo(() => Boolean(rawProof?.trim().length), [rawProof]);
 
@@ -46,7 +62,19 @@ export default function ProofDisplay() {
 
     const handleStructureClick = () => {
         if (isDecomposing || !hasRawProof) return;
+
+        // Show warning before running decomposition if it would overwrite a user-edited structured view.
+        if (hasUserEditedStructuredForCurrentRaw()) {
+            setConfirmOpen(true);
+            return;
+        }
+
         void runDecomposition();
+    };
+
+    const handleConfirmOverride = () => {
+        void runDecomposition();
+        setConfirmOpen(false);
     };
 
     const toggleViewCtaLabel = viewMode === 'structured' ? 'Go to Raw Proof' : 'Go to Structured Proof';
@@ -92,6 +120,24 @@ export default function ProofDisplay() {
                                         )}
                                     </Button>
                                 )}
+
+                                <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Override structured edits?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                A structured version for this raw draft has user edits. Structuring again will
+                                                override the latest structured view. Continue?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleConfirmOverride}>
+                                                Structure (override)
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </div>
                         </div>
 

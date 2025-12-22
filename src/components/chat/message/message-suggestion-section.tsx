@@ -9,7 +9,7 @@ import MessageSuggestionDiff from '@/components/chat/message/message-suggestion-
 function MessageSuggestionSection({ message }: { message: Message }) {
   const proof = useAppStore((s) => s.proof());
   const setMessages = useAppStore((s) => s.setMessages);
-  const addProofVersion = useAppStore((s) => s.addProofVersion);
+  const snapshotStructuredEdit = useAppStore((s) => s.snapshotStructuredEdit);
 
   if (message.isTyping || !message.suggestion || !message.suggestion.revisedSublemmas.length) {
     return null;
@@ -24,19 +24,19 @@ function MessageSuggestionSection({ message }: { message: Message }) {
       messages.map((msg) =>
         msg === message
           ? {
-              ...msg,
-              suggestion: {
-                ...msg.suggestion!,
-                isHandled: true,
-                status: 'accepted',
-                prevSublemmas: proof.sublemmas,
-              },
-            }
+            ...msg,
+            suggestion: {
+              ...msg.suggestion!,
+              isHandled: true,
+              status: 'accepted',
+              prevSublemmas: proof.sublemmas,
+            },
+          }
           : msg,
       ),
     );
 
-    addProofVersion({ sublemmas: effective });
+    snapshotStructuredEdit({ sublemmas: effective });
   };
 
   const onDecline = () => {
@@ -44,13 +44,13 @@ function MessageSuggestionSection({ message }: { message: Message }) {
       messages.map((msg) =>
         msg === message
           ? {
-              ...msg,
-              suggestion: {
-                ...message.suggestion!,
-                isHandled: true,
-                status: 'declined',
-              },
-            }
+            ...msg,
+            suggestion: {
+              ...message.suggestion!,
+              isHandled: true,
+              status: 'declined',
+            },
+          }
           : msg,
       ),
     );

@@ -5,14 +5,23 @@ import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
 
 function ProofSteps() {
   const proof = useAppStore((s) => s.proof());
-  const addProofVersion = useAppStore((s) => s.addProofVersion);
+  const snapshotStructuredEdit = useAppStore((s) => s.snapshotStructuredEdit);
+
+  if (!proof?.sublemmas?.length) {
+    return (
+      <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+        No structured steps are available for this version yet. Switch to <b>Raw Proof</b> or click{' '}
+        <b>Structure Proof</b>.
+      </div>
+    );
+  }
 
   const handleSublemmaChange = (index: number, updates: Partial<Sublemma>) => {
     const prevStepValidation = proof.stepValidation || {};
     // Invalidate analysis for the edited step, and mark it as last edited.
     const { [index]: _omit, ...rest } = prevStepValidation;
 
-    addProofVersion({
+    snapshotStructuredEdit({
       sublemmas: proof.sublemmas.map((sublemma, idx) =>
         idx === index ? { ...sublemma, ...updates } : sublemma,
       ),
