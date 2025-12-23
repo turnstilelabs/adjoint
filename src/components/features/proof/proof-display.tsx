@@ -38,13 +38,39 @@ export default function ProofDisplay() {
     const runDecomposition = useAppStore((s) => s.runDecomposition);
     const isDecomposing = useAppStore((s) => s.isDecomposing);
     const rawProof = useAppStore((s) => s.rawProof);
+    const decomposedRaw = useAppStore((s) => s.decomposedRaw);
     const proof = useAppStore((s) => s.proof());
     const hasUserEditedStructuredForCurrentRaw = useAppStore(
         (s) => s.hasUserEditedStructuredForCurrentRaw,
     );
 
-    const hasStructuredProof = useMemo(() => Boolean(proof?.sublemmas && proof.sublemmas.length > 0), [proof]);
     const hasRawProof = useMemo(() => Boolean(rawProof?.trim().length), [rawProof]);
+
+    // The currently selected raw version (if any). This matters when you restore older raw versions.
+    const activeRaw = useMemo(() => (proof?.type === 'raw' ? proof : null), [proof]);
+
+    // If the editor text differs from the selected raw version content, treat it as a new draft.
+    const rawIsDirty = useMemo(() => {
+        if (!activeRaw) return false;
+        return (rawProof || '').trim() !== (activeRaw.content || '').trim();
+    }, [rawProof, activeRaw]);
+
+    // Whether there exists any structured versions saved for the currently selected raw version.
+    // NOTE: this intentionally looks at history, not only `decomposedRaw`, so restoring an old raw
+    // version with existing structured minors shows "Go to Structured Proof".
+    const hasStructuredForActiveRawMajor = useAppStore((s) => {
+        const cur = s.proof();
+        if (!cur || cur.type !== 'raw') return false;
+        return s.proofHistory.some((v) => v.type === 'structured' && v.baseMajor === cur.baseMajor);
+    });
+
+    // We consider steps "ready" iff we decomposed *this exact raw draft*.
+    // Used to decide whether clicking should toggle vs re-decompose.
+    const hasStructuredForCurrentRaw = useMemo(() => {
+        const a = (rawProof || '').trim();
+        const b = (decomposedRaw || '').trim();
+        return a.length > 0 && b.length > 0 && a === b;
+    }, [rawProof, decomposedRaw]);
 
     // Phase B signal: background decomposition finished.
     useEffect(() => {
@@ -95,12 +121,41 @@ export default function ProofDisplay() {
                         <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 mb-3 bg-background border-b py-2">
                             <div>
                                 <h2 className="text-2xl font-bold font-headline">
-                                    {viewMode === 'raw' ? 'Original Tentative Proof' : 'Structured Tentative Proof'}
+                                    {viewMode === 'raw' ? 'Tentative Proof' : 'Structured Tentative Proof'}
                                 </h2>
                             </div>
 
                             <div className="flex items-center gap-2">
-                                {hasStructuredProof ? (
+                                {isDecomposing ? (
+                                    <Button size="sm" disabled>
+                                        <span className="inline-flex items-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Structuring proof...
+                                        </span>
+                                    </Button>
+                                ) : viewMode === 'structured' ? (
+                                    <Button variant="outline" size="sm" onClick={() => setViewMode('raw')}>
+                                        Go to Raw Proof
+                                    </Button>
+                                ) : viewMode === 'raw' ? (
+                                    rawIsDirty || !hasStructuredForActiveRawMajor ? (
+                                        <Button
+                                            size="sm"
+                                            onClick={handleStructureClick}
+                                            disabled={!hasRawProof}
+                                        >
+                                            Structure Proof
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setViewMode('structured')}
+                                        >
+                                            Go to Structured Proof
+                                        </Button>
+                                    )
+                                ) : hasStructuredForCurrentRaw ? (
                                     <Button variant="outline" size="sm" onClick={handleToggleView}>
                                         {toggleViewCtaLabel}
                                     </Button>
@@ -108,16 +163,9 @@ export default function ProofDisplay() {
                                     <Button
                                         size="sm"
                                         onClick={handleStructureClick}
-                                        disabled={!hasRawProof || isDecomposing}
+                                        disabled={!hasRawProof}
                                     >
-                                        {isDecomposing ? (
-                                            <span className="inline-flex items-center gap-2">
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                Structuring proof...
-                                            </span>
-                                        ) : (
-                                            'Structure Proof'
-                                        )}
+                                        Structure Proof
                                     </Button>
                                 )}
 

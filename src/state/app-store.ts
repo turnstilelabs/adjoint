@@ -169,6 +169,8 @@ type StoreData = {
   decomposeError: string | null;
   stepsReadyNonce: number;
   decomposeMeta: { provedStatement: string; normalizedProof: string } | null;
+  /** The raw proof text that the latest decomposition corresponds to (used to know whether steps are up-to-date). */
+  decomposedRaw: string | null;
   activeVersionIdx: number;
   pendingSuggestion: PendingSuggestion | null;
   pendingRejection: { explanation: string } | null;
@@ -240,6 +242,16 @@ interface AppState extends StoreData {
   }) => void;
   clearLastEditedStep: () => void;
 
+  /**
+   * Delete a proof version by id.
+   *
+   * Deletion rules:
+   * - Deleting a raw version deletes all versions for that baseMajor.
+   * - Deleting a structured version deletes only that entry, unless it's the only
+   *   structured version for that baseMajor (in which case we delete the entire group).
+   */
+  deleteProofVersion: (id: string) => void;
+
   // Navigation
   goBack: () => void;
 
@@ -282,6 +294,7 @@ const initialState: StoreData = {
   decomposeError: null,
   stepsReadyNonce: 0,
   decomposeMeta: null,
+  decomposedRaw: null,
 
   activeVersionIdx: 0,
   pendingSuggestion: null,
@@ -467,6 +480,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       decomposeError: null,
       stepsReadyNonce: 0,
       decomposeMeta: null,
+      decomposedRaw: null,
 
       pendingSuggestion: null,
       pendingRejection: null,
@@ -557,6 +571,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           error: null,
           proofHistory: [rawVersion, structuredVersion],
           activeVersionIdx: 1,
+          decomposedRaw: rawContent,
         });
         return;
       }
@@ -654,7 +669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
                 const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, { provedStatement: decomp.provedStatement, normalizedProof: (decomp as any).normalizedProof || '' }, { userEdited: false, derived: true });
 
-                set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [rawVersion, structuredVersion], activeVersionIdx: 1 });
+                set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [rawVersion, structuredVersion], activeVersionIdx: 1, decomposedRaw: attempt.rawProof || '' });
               } else {
                 const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
                 set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [rawVersion], activeVersionIdx: 0 });
@@ -708,8 +723,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
             lastSavedRaw = raw;
 
-            // We do NOT kick off background decomposition automatically.
-            // Decomposition is performed only when the user explicitly requests it (Structure Proof -> confirm).
+            // Phase B: automatically compute a Structured Proof in the background.
+            // This keeps the UI responsive (user can read/edit the raw proof immediately) while
+            // steps are prepared without requiring an explicit "Structure Proof" click.
+            appendLog('Structuring proof into steps...');
+            void get().runDecomposition();
           }
         });
         es.addEventListener('classify.result', (ev: MessageEvent) => {
@@ -896,10 +914,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       const cur = state.rawProof;
       if (cur === next) return state;
+      const trimmedNext = (next || '').trim();
+      const trimmedDecomposed = (state.decomposedRaw || '').trim();
+      const decompositionIsStale = !!trimmedDecomposed && trimmedNext !== trimmedDecomposed;
       return {
         rawProof: next,
         decomposeError: null,
         decomposeMeta: null,
+        decomposedRaw: decompositionIsStale ? null : state.decomposedRaw,
         pendingSuggestion: null,
       };
     });
@@ -945,7 +967,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       /* ignore timers in SSR */
     }
 
-    // Note: decomposing is not automatic anymore. The user must explicitly request "Structure Proof" to run decomposition.
+    // Note: decomposition is automatic for the initial AI draft (Phase B),
+    // but we do NOT automatically decompose on every raw edit.
   },
 
   runDecomposition: async () => {
@@ -983,14 +1006,23 @@ export const useAppStore = create<AppState>((set, get) => ({
           provedStatement: result.provedStatement,
           normalizedProof: (result as any).normalizedProof || '',
         },
+        decomposedRaw: raw,
         stepsReadyNonce: state.stepsReadyNonce + 1,
       }));
 
       // Create a new structured version.
       const history = get().proofHistory;
 
-      // Determine baseMajor from the current raw proof content (prefer exact match, else max).
-      const baseMajor = get().getCurrentRawBaseMajor() ?? (getMaxRawMajor(history) || 0);
+      // Determine which raw major this structured version should attach to.
+      // Priority:
+      // 1) If the currently active version is a raw entry, attach to its baseMajor (user restored a prior raw).
+      // 2) Else if rawProof matches a saved raw entry, attach to that baseMajor.
+      // 3) Else fall back to latest raw major.
+      const active = get().proof();
+      const baseMajor =
+        (active?.type === 'raw' ? active.baseMajor : null) ??
+        get().getCurrentRawBaseMajor() ??
+        (getMaxRawMajor(history) || 0);
 
       const structuredVersion = makeStructuredVersion(
         history,
@@ -1003,8 +1035,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         { userEdited: false, derived: true },
       );
 
-      // Append a new structured version; do NOT change viewMode here.
-      get().addProofVersion(structuredVersion as any);
+      // Append a new structured version.
+      // IMPORTANT: keep the user's currently selected version stable (this often runs in the background).
+      set((state) => {
+        const nextIdx = state.proofHistory.length;
+        const shouldActivate = state.viewMode === 'structured';
+        return {
+          proofHistory: [...state.proofHistory, { ...structuredVersion, timestamp: new Date() } as any],
+          activeVersionIdx: shouldActivate ? nextIdx : state.activeVersionIdx,
+        };
+      });
     } catch (e: any) {
       if (decomposeRunId !== myRun) return;
       set({ isDecomposing: false, decomposeError: e?.message || 'Failed to decompose proof.' });
@@ -1120,6 +1160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       pendingSuggestion: null,
       proofHistory: [rawVersion, structuredVersion],
       activeVersionIdx: 1,
+      decomposedRaw: rawContent,
       messages: [
         {
           role: 'assistant',
@@ -1157,8 +1198,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!next) return state;
 
       // Default: switch to a sensible mode for the restored version type.
-      // (This matches user expectation: restoring a raw draft shows raw, restoring steps shows steps.)
-      const nextViewMode: StoreData['viewMode'] = next.type === 'raw' ? 'raw' : 'structured';
+      // If we're currently in Graph view, keep Graph view while switching versions.
+      // (Graph should render for whichever structured version is active.)
+      const nextViewMode: StoreData['viewMode'] =
+        state.viewMode === 'graph' ? 'graph' : next.type === 'raw' ? 'raw' : 'structured';
 
       // Ensure rawProof reflects the restored raw version.
       const nextRawProof = next.type === 'raw' ? (next.content ?? '') : state.rawProof;
@@ -1241,6 +1284,87 @@ export const useAppStore = create<AppState>((set, get) => ({
         idx === state.activeVersionIdx ? { ...version, lastEditedStepIdx: null } : version,
       ),
     })),
+
+  deleteProofVersion: (id: string) =>
+    set((state) => {
+      const history = state.proofHistory;
+      const idx = history.findIndex((v) => v.id === id);
+      if (idx < 0) return state;
+
+      const target = history[idx];
+      const baseMajor = target.baseMajor;
+
+      // Determine deletion set.
+      const structuredForMajor = history.filter(
+        (v) => v.baseMajor === baseMajor && v.type === 'structured',
+      );
+
+      const deleteWholeGroup =
+        target.type === 'raw' ||
+        (target.type === 'structured' && structuredForMajor.length <= 1);
+
+      const nextHistory = deleteWholeGroup
+        ? history.filter((v) => v.baseMajor !== baseMajor)
+        : history.filter((v) => v.id !== id);
+
+      // If nothing left, reset proof-specific state to a safe empty.
+      if (nextHistory.length === 0) {
+        return {
+          ...state,
+          proofHistory: [],
+          activeVersionIdx: 0,
+          viewMode: 'raw',
+          rawProof: '',
+          decomposedRaw: null,
+          decomposeMeta: null,
+        };
+      }
+
+      // Pick next active index.
+      // Prefer staying on the same numeric index; if we deleted something before it, shift left.
+      let nextActive = state.activeVersionIdx;
+
+      if (idx < state.activeVersionIdx) {
+        nextActive = Math.max(0, state.activeVersionIdx - 1);
+      }
+
+      // If we deleted the active item (or group), clamp to nearest valid entry.
+      nextActive = Math.max(0, Math.min(nextActive, nextHistory.length - 1));
+
+      const next = nextHistory[nextActive];
+
+      // Ensure viewMode makes sense.
+      let nextViewMode: StoreData['viewMode'] = state.viewMode;
+      if (nextViewMode !== 'graph') {
+        nextViewMode = next.type === 'raw' ? 'raw' : 'structured';
+      } else {
+        // Graph mode requires structured; if we ended up on raw, fall back.
+        if (next.type === 'raw') nextViewMode = 'raw';
+      }
+
+      // Keep rawProof in sync if we are on a raw version.
+      const nextRawProof = next.type === 'raw' ? (next.content ?? '') : state.rawProof;
+
+      // If we deleted the only structured for the currently decomposed raw, clear decomposition pointers.
+      // (Prevents UI thinking "steps are ready" when no structured versions remain for that major.)
+      const stillHasStructuredForMajor = nextHistory.some(
+        (v) => v.baseMajor === baseMajor && v.type === 'structured',
+      );
+
+      const shouldClearDecomposition =
+        deleteWholeGroup ||
+        (target.type === 'structured' && !stillHasStructuredForMajor);
+
+      return {
+        ...state,
+        proofHistory: nextHistory,
+        activeVersionIdx: nextActive,
+        viewMode: nextViewMode,
+        rawProof: nextRawProof,
+        decomposedRaw: shouldClearDecomposition ? null : state.decomposedRaw,
+        decomposeMeta: shouldClearDecomposition ? null : state.decomposeMeta,
+      };
+    }),
 
   proof: () => get().proofHistory[get().activeVersionIdx],
 }));

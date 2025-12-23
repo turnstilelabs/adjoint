@@ -135,9 +135,17 @@ export function ProofSidebar() {
         <div className="flex-1" />
       </aside>
       {isHistoryOpen && (
-        <aside className="fixed inset-y-0 left-14 right-0 z-30 md:static bg-card h-screen flex flex-col md:w-80 md:border-r">
-          <ProofHistory />
-        </aside>
+        <>
+          {/* Click-outside overlay to close history panel (mobile) */}
+          <div
+            className="fixed inset-0 z-20 bg-transparent xl:hidden"
+            onClick={() => setIsHistoryOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="fixed inset-y-0 left-14 z-30 w-[calc(100vw-3.5rem)] max-w-sm bg-card h-screen flex flex-col border-r shrink-0 md:static md:w-80">
+            <ProofHistory />
+          </aside>
+        </>
       )}
     </>
   );

@@ -2,16 +2,32 @@ import { Accordion } from '@/components/ui/accordion';
 import { SublemmaItem } from '@/components/sublemma-item';
 import { useAppStore } from '@/state/app-store';
 import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import { Button } from '@/components/ui/button';
 
 function ProofSteps() {
   const proof = useAppStore((s) => s.proof());
   const snapshotStructuredEdit = useAppStore((s) => s.snapshotStructuredEdit);
 
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const runDecomposition = useAppStore((s) => s.runDecomposition);
+  const isDecomposing = useAppStore((s) => s.isDecomposing);
+
   if (!proof?.sublemmas?.length) {
     return (
-      <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
-        No structured steps are available for this version yet. Switch to <b>Raw Proof</b> or click{' '}
-        <b>Structure Proof</b>.
+      <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground space-y-3">
+        <div>
+          No structured steps are available for this version yet. Switch to <b>Raw Proof</b> or structure
+          the proof.
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setViewMode('raw')}>
+            Go to Raw Proof
+          </Button>
+          <Button size="sm" onClick={() => void runDecomposition()} disabled={isDecomposing}>
+            {isDecomposing ? 'Structuring…' : 'Structure Proof'}
+          </Button>
+        </div>
       </div>
     );
   }
