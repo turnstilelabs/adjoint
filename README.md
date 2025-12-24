@@ -1,30 +1,32 @@
-# Adjoint
+# The Adjoint
 
-Adjoint is an interactive environment for **exploring** and **building** mathematical proofs.
+The Adjoint is an interactive environment for **exploring** and **building** mathematical proofs. The goal is to streamline collaboration with LLMs to prove mathematical statements.
 
 It’s built around a simple workflow:
 
-1. **Explore** — break a problem into candidate statements, assumptions, and a proof plan.
-2. **Prove** — turn the plan into a structured proof you can iterate on.
+1. **Explore**: to turn a problem or a question into candidate statements together with their assumptions.
+2. **Prove**: to transform a first proof into a structured proof, decomposed into smaller lemmas, that you can easily iterate on.
 
-> Note: Adjoint provides *AI-assisted reasoning and feedback*, not a formal proof checker.
 
+![The Adjoint](docs/images/homepage.png)
 ---
 
-## What you can do
+## The Main Features
 
-### Explore mode (find the right statement and plan)
+### Explore mode to formulate the best statement
 
-- Chat to refine the problem and context.
-- Automatically extract **candidate statements**, **assumptions**, and other artifacts.
-- Edit artifacts and **promote a candidate statement** to “Prove”.
+Chat to refine the problem and context:
+![Explore Chat](docs/images/explore_chat.png)
+The Adjoin will automatically extract **candidate statements**, **assumptions**, and other artifacts.
+You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
 
-### Prove mode (write, iterate, and keep control)
+### Prove mode to structure and iterate on proof construction
 
-- Work in **sublemmas** (structured steps with statement + proof).
-- Ask for edits in chat; changes are presented as **explicit proposals** you can accept/decline.
+Structure the initial AI-suggested proof into a proof structured in **sublemmas**.
+![Structure Proof](docs/images/structured_proof.png)
+- Ask for edits in chat or directly edit the proposed proof.
 - Keep a **version history** so you can revisit earlier attempts.
-- Get AI **review/feedback** on the current proof (with a clear “looks correct / issues found” summary).
+- Get AI **review/feedback** on the current proof.
 - Switch to a **dependency graph** view to understand how steps connect.
 - **Export to LaTeX** (`proof.tex`).
 
@@ -45,7 +47,7 @@ npm install
 
 ### Configure an LLM provider
 
-Create `adjoint/.env.local`.
+Create `adjoint/.env.local` where you should specify either Gemini or OpenAI API keys.
 
 **Google (Gemini)**
 
@@ -67,7 +69,7 @@ OPENAI_API_KEY=your-key
 npm run dev
 ```
 
-Then open **http://localhost:9002**.
+Then open the Adjoint at **http://localhost:9002**.
 
 ---
 
@@ -81,4 +83,4 @@ If you’re planning a substantial change, please open an issue first so we can 
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT — see [LICENSE](LICENSE).
