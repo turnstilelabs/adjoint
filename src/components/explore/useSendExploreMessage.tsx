@@ -5,6 +5,8 @@ import type { Message } from '@/components/chat/interactive-chat';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import { useToast } from '@/hooks/use-toast';
 
+type ExploreIntent = 'PROOF_REQUEST' | 'EXPLORE';
+
 export const useSendExploreMessage = () => {
     const exploreMessages = useAppStore((s) => s.exploreMessages);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
@@ -17,21 +19,33 @@ export const useSendExploreMessage = () => {
     const setExploreCancelCurrent = useAppStore((s) => s.setExploreCancelCurrent);
     const { toast } = useToast();
 
-    const isProofIntent = (s: string): boolean => {
-        const t = (s ?? '').trim().toLowerCase();
-        if (!t) return false;
-        // Heuristic: "prove" / "show" requests that are likely asking for a proof.
-        // Keep intentionally conservative to avoid hijacking normal exploration prompts.
-        return (
-            t.startsWith('prove') ||
-            t.startsWith('show') ||
-            t.includes(' can you prove') ||
-            t.includes(' could you prove') ||
-            t.includes(' please prove') ||
-            t.includes(' can you show') ||
-            t.includes(' could you show') ||
-            t.includes(' please show')
-        );
+    const classifyIntent = async (
+        request: string,
+        history: { role: 'user' | 'assistant'; content: string }[],
+    ): Promise<ExploreIntent> => {
+        try {
+            // NOTE: @genkit-ai/next appRoute expects { data: <input> }.
+            const res = await fetch('/api/explore-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data: {
+                        request,
+                        // Keep this short; classifier should be fast.
+                        history: history.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+                    },
+                }),
+            });
+
+            if (!res.ok) return 'EXPLORE';
+            const json: any = await res.json();
+
+            // appRoute returns { result: <flow output> }
+            const intent = (json?.result?.intent ?? json?.intent) as ExploreIntent | undefined;
+            return intent === 'PROOF_REQUEST' ? 'PROOF_REQUEST' : 'EXPLORE';
+        } catch {
+            return 'EXPLORE';
+        }
     };
 
     // Basic length threshold to avoid streaming hiccups with huge basis
@@ -47,7 +61,8 @@ export const useSendExploreMessage = () => {
         // Extract-only runs should never add user/assistant messages to the chat UI.
         const suppressUser = isExtractOnly ? true : Boolean(opts?.suppressUser);
 
-        const proofIntent = !isExtractOnly && !suppressUser && isProofIntent(request);
+        const trimmedRequest = request.length > MAX_BASIS_LEN ? request.slice(0, MAX_BASIS_LEN) : request;
+        const userVisibleText = opts?.displayAs ?? request;
 
         // Cancel previous request if still running
         const cancel = useAppStore.getState().cancelExploreCurrent;
@@ -59,27 +74,53 @@ export const useSendExploreMessage = () => {
             }
         }
 
-        const trimmedRequest = request.length > MAX_BASIS_LEN ? request.slice(0, MAX_BASIS_LEN) : request;
-        const userVisibleText = opts?.displayAs ?? request;
-
         let newMessages: Message[] = exploreMessages;
         if (!suppressUser) {
             const userMessage: Message = { role: 'user', content: userVisibleText };
             newMessages = [...newMessages, userMessage];
         }
 
-        // If the user asked to prove/show something, keep the assistant response minimal and
-        // propose the direct action with a CTA.
-        if (proofIntent) {
-            const actionMessage: Message = {
-                role: 'assistant',
-                content: 'Want me to attempt a proof?',
-                actions: [{ type: 'attempt_proof', label: 'Attempt Proof' }],
-            };
-            setExploreMessages([...newMessages, actionMessage]);
-        } else if (!isExtractOnly) {
+        // Show a typing indicator immediately so the UI feels responsive while intent is classified.
+        const shouldShowAssistantBubble = !isExtractOnly;
+        if (shouldShowAssistantBubble) {
             const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
             setExploreMessages([...newMessages, typingMessage]);
+        }
+
+        // Determine whether this message is a proof request (LLM classifier).
+        // Prefer the user-visible text for keyword-based intent (displayAs may differ from the backend request).
+        let classified: ExploreIntent | null = null;
+        if (!isExtractOnly && !suppressUser) {
+            classified = await classifyIntent(trimmedRequest, newMessages);
+        }
+
+        const proofIntent = !isExtractOnly && !suppressUser && classified === 'PROOF_REQUEST';
+
+        if (process.env.NODE_ENV !== 'production') {
+            try {
+                // Useful for debugging and E2E verification.
+                // eslint-disable-next-line no-console
+                console.debug(
+                    '[Explore][Intent]',
+                    JSON.stringify({ request: trimmedRequest, visible: userVisibleText, classified, proofIntent }),
+                );
+            } catch {
+                // ignore
+            }
+        }
+
+        // If the user asked to prove/show something, replace the typing indicator with a minimal message + CTA.
+        // IMPORTANT (Option 2 UX): we only open the proof chooser AFTER extract-only completes,
+        // so the modal always has candidate statements.
+        if (proofIntent && shouldShowAssistantBubble) {
+            const actionMessage: Message = {
+                role: 'assistant',
+                content:
+                    "This chat is for exploration (assumptions, examples/counterexamples, reformulations). If you'd like, I can attempt a proof of the current statement:",
+                actions: [{ type: 'attempt_proof', label: 'Attempt Proof' }],
+                isTyping: false,
+            };
+            setExploreMessages([...newMessages, actionMessage]);
         }
 
         // Keep a small history window but EXCLUDE the current user message so the first turn has empty history.
@@ -87,6 +128,12 @@ export const useSendExploreMessage = () => {
         const history = [...exploreMessages]
             .slice(-10)
             .map((m) => ({ role: m.role, content: m.content }));
+
+        // IMPORTANT: refresh the latest artifacts/seed at send-time.
+        // The hook captures store slices at render time; without this, a "prove it" immediately
+        // after extraction can see stale/null artifacts and extract from the literal "prove it".
+        const liveArtifacts = useAppStore.getState().exploreArtifacts;
+        const liveSeed = useAppStore.getState().exploreSeed;
 
         const turnId = bumpExploreTurnId();
 
@@ -99,27 +146,83 @@ export const useSendExploreMessage = () => {
             }
         });
 
-        // If we already rendered a CTA-only response, run extraction in the background so
+        const looksLikeBareProofCommand = (s: string): boolean => {
+            const t = (s ?? '').trim().toLowerCase().replace(/[.?!,:;]+$/g, '').trim();
+            return (
+                t === 'prove it' ||
+                t === 'show it' ||
+                t === 'prove this' ||
+                t === 'show this' ||
+                t === 'prove' ||
+                t === 'show'
+            );
+        };
+
+        const openProofChooser = () => {
+            // ExploreView registers a window event listener in a useEffect.
+            // To avoid races on first load, dispatch now and once on the next tick.
+            try {
+                window.dispatchEvent(new CustomEvent('explore:open-attempt-proof-chooser'));
+            } catch {
+                // ignore
+            }
+            try {
+                setTimeout(() => {
+                    try {
+                        window.dispatchEvent(new CustomEvent('explore:open-attempt-proof-chooser'));
+                    } catch {
+                        // ignore
+                    }
+                }, 0);
+            } catch {
+                // ignore
+            }
+        };
+
+        // If we rendered a CTA-only response, run extraction in the background so
         // candidate statements stay fresh, but do not stream assistant text.
         const effectiveExtractOnly = proofIntent ? true : (opts?.extractOnly ?? undefined);
+
+        // For "prove it"-style commands, the request is NOT a statement.
+        // In that case, we must extract from a meaningful basis.
+        const candidateBasisFromStore =
+            (liveArtifacts?.candidateStatements ?? []).slice(-1)[0] || (liveSeed ?? '') || '';
+
+        const basisForExtraction = proofIntent
+            ? looksLikeBareProofCommand(userVisibleText)
+                ? (candidateBasisFromStore || userVisibleText || trimmedRequest)
+                : userVisibleText
+            : trimmedRequest;
+
+        const basisTrimmed =
+            basisForExtraction.length > MAX_BASIS_LEN
+                ? basisForExtraction.slice(0, MAX_BASIS_LEN)
+                : basisForExtraction;
 
         const runner = streamFlow<typeof explorationAssistantFlow>({
             url: '/api/explore',
             abortSignal: controller.signal,
-            // Important: send the full request to the backend (can differ from displayed content)
             input: {
                 seed: seed ?? undefined,
-                request: trimmedRequest,
+                request: basisTrimmed,
                 history,
-                artifacts: artifacts ?? undefined,
+                artifacts: liveArtifacts ?? undefined,
                 extractOnly: effectiveExtractOnly,
                 turnId,
             },
         });
 
+        let lastArtifacts: ExploreArtifacts | null = null;
+        let openedProofChooser = false;
+
         try {
             for await (const raw of runner.stream) {
-                const chunk: any = raw && (raw as any).type ? raw : ((raw as any)?.message?.type ? (raw as any).message : raw);
+                const chunk: any =
+                    raw && (raw as any).type
+                        ? raw
+                        : (raw as any)?.message?.type
+                            ? (raw as any).message
+                            : raw;
 
                 if (chunk?.type === 'text' && !isExtractOnly && !proofIntent) {
                     setExploreMessages((prev: Message[]) =>
@@ -134,7 +237,18 @@ export const useSendExploreMessage = () => {
                 if (chunk?.type === 'artifacts') {
                     // stale-guard
                     if (chunk.turnId === getExploreTurnId()) {
-                        setExploreArtifacts(chunk.artifacts as ExploreArtifacts);
+                        lastArtifacts = chunk.artifacts as ExploreArtifacts;
+                        setExploreArtifacts(lastArtifacts);
+
+                        // Option 2 UX: open the proof chooser as soon as we have candidate statements.
+                        if (
+                            proofIntent &&
+                            !openedProofChooser &&
+                            (lastArtifacts?.candidateStatements?.length ?? 0) > 0
+                        ) {
+                            openedProofChooser = true;
+                            openProofChooser();
+                        }
                     }
                 }
 
@@ -169,6 +283,12 @@ export const useSendExploreMessage = () => {
             }
 
             await runner.output;
+
+            // Option 2 UX: if not opened yet, open after extract-only completes.
+            if (proofIntent && !openedProofChooser && (lastArtifacts?.candidateStatements?.length ?? 0) > 0) {
+                openedProofChooser = true;
+                openProofChooser();
+            }
         } catch (e: any) {
             // Swallow AbortError triggered by user/system cancellation
             if (!(e && (e.name === 'AbortError' || e.message === 'The operation was aborted.'))) {

@@ -11,9 +11,21 @@ export function ExploreChatInput() {
     const [isSendingMessage, startSendMessage] = useTransition();
     const [input, setInput] = useState('');
 
+    useEffect(() => {
+        // No-op: previously we had a keyboard fallback to open the proof chooser.
+        // We now delay opening until extract-only completes.
+        return;
+    }, []);
+
     const handleSend = () => {
         const trimmed = input.trim();
         if (!trimmed) return;
+
+        // Note: we intentionally do NOT open the chooser here.
+        // If this is a proof request, the send hook will:
+        //   1) run extract-only (to ensure a statement exists)
+        //   2) then open the chooser (option 2 UX)
+
         startSendMessage(() => sendMessage(trimmed));
         setInput('');
     };

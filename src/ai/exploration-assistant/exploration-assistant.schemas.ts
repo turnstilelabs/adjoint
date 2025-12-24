@@ -1,10 +1,22 @@
 import { z } from 'genkit';
 
 const PerStatementArtifactsSchema = z.object({
-    assumptions: z.array(z.string()).describe('Assumptions / definitions for this statement.'),
-    examples: z.array(z.string()).describe('Examples supporting understanding for this statement.'),
-    counterexamples: z.array(z.string()).describe('Counterexamples / failure modes for this statement.'),
-    openQuestions: z.array(z.string()).describe('Open questions to investigate next for this statement.'),
+    assumptions: z
+        .array(z.string())
+        .default([])
+        .describe('Assumptions / definitions for this statement.'),
+    examples: z
+        .array(z.string())
+        .default([])
+        .describe('Examples supporting understanding for this statement.'),
+    counterexamples: z
+        .array(z.string())
+        .default([])
+        .describe('Counterexamples / failure modes for this statement.'),
+    openQuestions: z
+        .array(z.string())
+        .default([])
+        .describe('Open questions to investigate next for this statement.'),
 });
 
 export const ExploreArtifactsSchema = z.object({
