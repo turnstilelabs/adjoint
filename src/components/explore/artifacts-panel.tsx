@@ -4,7 +4,6 @@ import React from 'react';
 import { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { KatexRenderer } from '@/components/katex-renderer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';

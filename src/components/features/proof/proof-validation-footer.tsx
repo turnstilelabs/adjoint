@@ -18,9 +18,9 @@ function ProofValidationFooter() {
 
   const proof = useAppStore((s) => s.proof());
 
-  const [isProofValidating, startValidateProof] = useTransition();
+  const [, startValidateProof] = useTransition();
 
-  const [cancelled, setCancelled] = useState(false);
+  const [, setCancelled] = useState(false);
   const cancelledRef = useRef(false);
   const alertRef = useRef<HTMLDivElement | null>(null);
   const [isRunning, setIsRunning] = useState(false);

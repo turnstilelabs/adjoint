@@ -1,4 +1,4 @@
-import { ai, llmModel, llmId } from '@/ai/genkit';
+import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';
 import { classifyProofDraft, ClassifyProofDraftOutputSchema } from './classify-proof-draft';
 import { SublemmaSchema } from './schemas';
@@ -108,7 +108,6 @@ export async function attemptProofStreamOrchestrator(
     const shouldAbort = options?.shouldAbort ?? (() => false);
 
     const provider = (llmId.split('/')?.[0]) || 'unknown';
-    const model = llmModel;
 
     // Build candidate model chain: current -> same provider pro -> OpenAI (if configured)
     const candidates: string[] = [];

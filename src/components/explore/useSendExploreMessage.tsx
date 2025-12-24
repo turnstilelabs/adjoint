@@ -9,7 +9,6 @@ type ExploreIntent = 'PROOF_REQUEST' | 'EXPLORE';
 
 export const useSendExploreMessage = () => {
     const exploreMessages = useAppStore((s) => s.exploreMessages);
-    const artifacts = useAppStore((s) => s.exploreArtifacts);
     const seed = useAppStore((s) => s.exploreSeed);
 
     const setExploreMessages = useAppStore((s) => s.setExploreMessages);

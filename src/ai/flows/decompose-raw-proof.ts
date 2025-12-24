@@ -34,47 +34,6 @@ export async function decomposeRawProof(
     return decomposeRawProofFlow(input);
 }
 
-const prompt = ai.definePrompt({
-    name: 'decomposeRawProofPrompt',
-    input: { schema: DecomposeRawProofInputSchema },
-    output: { schema: DecomposeRawProofOutputSchema },
-    system:
-        'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.',
-    prompt: `Instructions
-Input: A mathematical proof text (possibly short, counterexample-style, or a full argument)
-Output: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$. For each sublemma.proof, write 2–6 narrative paragraphs for non-trivial steps with a BLANK LINE between paragraphs. Avoid bullet lists; keep natural prose. For very short/trivial proofs a single compact paragraph is acceptable.
-
-Decomposition Guidelines
-1. Identify Decomposition Candidates
-- Intermediate results used multiple times
-- Sub-arguments (>3–4 logical steps)
-- Conceptually distinct ideas or techniques
-- Standalone facts that simplify the main flow
-
-2. Atomic Statement Principle
-Each sublemma must:
-- Be self-contained with precise hypotheses/conclusions
-- Focus on a single mathematical idea
-- Be useful (reused or simplifies reasoning)
-- Clearly specify inputs/outputs
-
-Additional constraints (critical)
-- You must return at least one sublemma. Never return an empty array.
-- If the proof is short or a counterexample, return exactly one sublemma:
-  • title: 'Counterexample' (or 'Direct proof' if appropriate)
-  • statement: the exact proved claim (same as provedStatement)
-  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)
-- Prefer 2–6 sublemmas for longer arguments.
-
-Raw proof:
-"""
-{{{rawProof}}}
-"""
-
-Return strictly:
-{"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`,
-});
-
 const decomposeRawProofFlow = ai.defineFlow(
     {
         name: 'decomposeRawProofFlow',
