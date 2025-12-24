@@ -246,9 +246,13 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
   }, [content, autoWrap]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
+  // Ensure math never causes global horizontal overflow.
+  // Callers can still override/extend with `className`.
+  const wrapperClass = cn('katex-wrap', className);
+
   return inline ? (
-    <span className={cn(className)}>{parts}</span>
+    <span className={wrapperClass}>{parts}</span>
   ) : (
-    <div className={cn(className)}>{parts}</div>
+    <div className={wrapperClass}>{parts}</div>
   );
 }

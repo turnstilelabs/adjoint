@@ -699,36 +699,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           try { const data = JSON.parse(ev.data || '{}'); const t = data?.text || ''; if (t) { if (!gotDelta) { appendLog('Receiving model output...'); gotDelta = true; } set((s) => ({ liveDraft: s.liveDraft + t })); } } catch { }
         });
         es.addEventListener('model.end', () => {
+          // Draft complete, but we intentionally do NOT reveal it yet.
+          // We first wait for classification (event: done) so we can show
+          // PROVED_VARIANT suggestions *before* showing a tentative proof.
           set({ isDraftStreaming: false });
           appendLog('Proof draft completed....');
-
-          // Phase A complete: show proof UI immediately with editable raw proof.
-          // Note: at this point liveDraft contains the full raw proof.
-          const raw = (get().liveDraft || '').trim();
-          if (raw.length > 0) {
-            // Ensure there is a proof version container so ProofView stops showing the loading screen.
-            // Always commit the initial raw proof as a new version so the user can restore it.
-            const history = get().proofHistory;
-            const rawVersion = makeRawVersion(history, raw);
-
-            set((state) => ({
-              loading: false,
-              viewMode: 'raw',
-              rawProof: raw,
-              decomposeError: null,
-              isDecomposing: false,
-              proofHistory: [...state.proofHistory, rawVersion],
-              activeVersionIdx: state.proofHistory.length,
-            }));
-
-            lastSavedRaw = raw;
-
-            // Phase B: automatically compute a Structured Proof in the background.
-            // This keeps the UI responsive (user can read/edit the raw proof immediately) while
-            // steps are prepared without requiring an explicit "Structure Proof" click.
-            appendLog('Structuring proof into steps...');
-            void get().runDecomposition();
-          }
+          appendLog('Classifying draft...');
         });
         es.addEventListener('classify.result', (ev: MessageEvent) => {
           try {
@@ -768,12 +744,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             const data = JSON.parse(ev.data || '{}');
             const attempt = data?.attempt;
             if (!attempt) {
-              // If we never transitioned out of loading (e.g., no model.end), treat as fatal.
               set({ loading: false, error: 'Malformed stream response.' });
               return;
             }
 
-            // Store classification outcome (decomposition happens client-side when requested).
+            // Cache classification outcome.
             set({
               attemptSummary: {
                 status: attempt.status,
@@ -783,9 +758,68 @@ export const useAppStore = create<AppState>((set, get) => ({
               },
             });
 
-            if (attempt.status === 'FAILED') {
-              // Still let the user inspect/edit the raw draft, but show the explanation banner.
-              set({ pendingRejection: { explanation: attempt.explanation || 'No details provided.' } });
+            // IMPORTANT UX RULE:
+            // - If PROVED_VARIANT, show the suggestion FIRST and only show the tentative proof after Accept.
+            // - Otherwise, reveal the tentative proof immediately.
+            const raw = ((attempt.rawProof || get().liveDraft) ?? '').trim();
+
+            if (attempt.status === 'PROVED_VARIANT') {
+              const suggested = (attempt.finalStatement || '').trim();
+              if (suggested) {
+                set({
+                  loading: false,
+                  pendingSuggestion: {
+                    suggested,
+                    variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                    provedStatement: suggested,
+                    sublemmas: [],
+                    explanation: attempt.explanation || '',
+                    rawProof: raw || undefined,
+                    normalizedProof: undefined,
+                  },
+                });
+              } else {
+                // Fallback: no suggested statement; just show the draft.
+                const rawVersion = makeRawVersion(get().proofHistory, raw);
+                set((state) => ({
+                  loading: false,
+                  viewMode: 'raw',
+                  rawProof: raw,
+                  decomposeError: null,
+                  isDecomposing: false,
+                  proofHistory: [...state.proofHistory, rawVersion],
+                  activeVersionIdx: state.proofHistory.length,
+                }));
+                lastSavedRaw = raw;
+              }
+              return;
+            }
+
+            // Reveal raw proof for PROVED_AS_IS and FAILED.
+            if (raw.length > 0) {
+              const rawVersion = makeRawVersion(get().proofHistory, raw);
+              set((state) => ({
+                loading: false,
+                viewMode: 'raw',
+                rawProof: raw,
+                decomposeError: null,
+                isDecomposing: false,
+                proofHistory: [...state.proofHistory, rawVersion],
+                activeVersionIdx: state.proofHistory.length,
+                pendingRejection:
+                  attempt.status === 'FAILED'
+                    ? { explanation: attempt.explanation || 'No details provided.' }
+                    : null,
+              }));
+              lastSavedRaw = raw;
+            } else {
+              set({
+                loading: false,
+                pendingRejection:
+                  attempt.status === 'FAILED'
+                    ? { explanation: attempt.explanation || 'No details provided.' }
+                    : null,
+              });
             }
           } catch (e) {
             set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
@@ -1133,43 +1167,84 @@ export const useAppStore = create<AppState>((set, get) => ({
   acceptSuggestedChange: () => {
     const s = get().pendingSuggestion;
     if (!s) return;
-    const steps: Sublemma[] = (s.sublemmas && s.sublemmas.length > 0)
-      ? s.sublemmas
-      : ([{
-        title: 'Proof',
-        statement: s.provedStatement,
-        proof: s.normalizedProof || s.rawProof || s.explanation || 'Proof unavailable.',
-      }] as Sublemma[]);
-    try {
-      console.debug('[UI][AppStore] acceptSuggestedChange', {
-        stepsBefore: s.sublemmas?.length ?? 0,
-        usedFallback: !(s.sublemmas && s.sublemmas.length > 0),
-      });
-    } catch { }
 
-    // Create raw + structured versions representing the accepted suggestion
-    const rawContent = s.rawProof || '';
-    const rawVersion = makeRawVersion(get().proofHistory, rawContent);
-    const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, {
-      provedStatement: s.provedStatement,
-      normalizedProof: s.normalizedProof || '',
-    }, { userEdited: false, derived: true });
+    // When the suggestion is accepted, we reveal the tentative proof.
+    // In streaming mode we might not have decomposed steps yet.
+    const rawContent = (s.rawProof || '').trim();
+    const provedStatement = (s.provedStatement || s.suggested || '').trim();
 
-    set({
-      problem: s.provedStatement,
-      pendingSuggestion: null,
-      proofHistory: [rawVersion, structuredVersion],
-      activeVersionIdx: 1,
-      decomposedRaw: rawContent,
-      messages: [
+    // Ensure a raw version exists in history for this content (avoid bumping majors unnecessarily).
+    const curHistory = get().proofHistory;
+    let rawIdx = curHistory.findIndex(
+      (v) => v.type === 'raw' && (v.content || '').trim() === rawContent,
+    );
+
+    let nextHistory = curHistory;
+    let rawVersion: ProofVersion | null = rawIdx >= 0 ? curHistory[rawIdx] : null;
+
+    if (!rawVersion) {
+      rawVersion = makeRawVersion(curHistory, rawContent);
+      nextHistory = [...curHistory, rawVersion];
+      rawIdx = nextHistory.length - 1;
+    }
+
+    lastSavedRaw = rawContent;
+
+    // Commit the accepted statement and reveal raw proof.
+    // Important: only create a structured version immediately if we already have decomposed steps.
+    // Otherwise, kick off background decomposition so Structured Proof gets real sublemmas.
+    const hasSteps = Array.isArray(s.sublemmas) && s.sublemmas.length > 0;
+
+    if (hasSteps) {
+      const steps = s.sublemmas as Sublemma[];
+      const structuredVersion = makeStructuredVersion(
+        nextHistory,
+        rawVersion.baseMajor,
+        steps,
         {
-          role: 'assistant',
-          content:
-            `I've broken down the proof into the following steps:\n\n` +
-            steps.map((x) => `**${x.title}:** ${x.statement}`).join('\n\n'),
-        } as Message,
-      ],
+          provedStatement,
+          normalizedProof: s.normalizedProof || '',
+        },
+        { userEdited: false, derived: true },
+      );
+
+      set({
+        problem: provedStatement,
+        pendingSuggestion: null,
+        viewMode: 'raw',
+        rawProof: rawContent,
+        proofHistory: [...nextHistory, structuredVersion],
+        activeVersionIdx: rawIdx,
+        decomposedRaw: rawContent,
+        messages: [
+          {
+            role: 'assistant',
+            content:
+              `I've broken down the proof into the following steps:\n\n` +
+              steps.map((x) => `**${x.title}:** ${x.statement}`).join('\n\n'),
+          } as Message,
+        ],
+      });
+
+      return;
+    }
+
+    // No steps available yet (streaming path): switch to raw immediately and decompose in background.
+    set({
+      problem: provedStatement,
+      pendingSuggestion: null,
+      viewMode: 'raw',
+      rawProof: rawContent,
+      proofHistory: nextHistory,
+      activeVersionIdx: rawIdx,
+      decomposedRaw: null,
+      decomposeMeta: null,
+      decomposeError: null,
+      messages: [],
     });
+
+    // Fire-and-forget: generates a proper structured version once ready.
+    void get().runDecomposition();
   },
 
   clearSuggestion: () => set({ pendingSuggestion: null }),
