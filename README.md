@@ -1,6 +1,6 @@
 # The Adjoint
 
-The Adjoint is an interactive environment for **exploring** and **building** mathematical proofs. The goal is to streamline collaboration with LLMs to prove mathematical statements.
+The Adjoint is an interactive environment for **exploring** and **building** mathematical proofs together with state-of-the-art AI models. The goal is to streamline collaboration with LLMs to prove mathematical statements.
 
 It’s built around a simple workflow:
 
@@ -15,20 +15,27 @@ It’s built around a simple workflow:
 
 ### Explore mode to formulate the best statement
 
-Chat to refine the problem and context:
+Chat to refine the problem and context
 ![Explore Chat](docs/images/explore_chat.png)
-The Adjoin will automatically extract **candidate statements**, **assumptions**, and other artifacts.
-You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
+
+The Adjoin will automatically extract **candidate statements**, **assumptions**, and other artifacts. You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
+![Attempt Prove](docs/images/attempt_proof.png)
 
 ### Prove mode to structure and iterate on proof construction
 
 Structure the initial AI-suggested proof into a proof structured in **sublemmas**.
 ![Structure Proof](docs/images/structured_proof.png)
-- Ask for edits in chat or directly edit the proposed proof.
-- Keep a **version history** so you can revisit earlier attempts.
-- Get AI **review/feedback** on the current proof.
-- Switch to a **dependency graph** view to understand how steps connect.
-- **Export to LaTeX** (`proof.tex`).
+
+Switch to a **dependency graph** view to understand how steps connect.
+![Dependency Graph](docs/images/dependency_graph.png)
+
+Ask for edits in chat or directly edit the proposed proof.
+![Edit Proof](docs/images/edit_proof.png)
+
+Keep a **version history** so you can revisit earlier attempts.
+![Version History](docs/images/proof_versioning.png)
+
+And last but not least, **Export to LaTeX** (`proof.tex`).
 
 ---
 
@@ -72,6 +79,11 @@ npm run dev
 Then open the Adjoint at **http://localhost:9002**.
 
 ---
+
+## Future Directions
+
+There is still a lot of work to do. From better prompts for all internal AI models to validation with either symbolic engines (like Sympy) and formal engines (like Lean or Rocq) or literature exploration...  
+
 
 ## Contributing
 
