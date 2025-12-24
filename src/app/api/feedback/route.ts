@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
         }
 
         // Augment with request metadata
-        const fwd = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
         // Omit IP entirely for privacy (do not store it)
         const ip = "";
         // Truncate user agent for storage

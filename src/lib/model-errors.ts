@@ -31,14 +31,12 @@ export function classifyModelCommError(errLike: unknown): ModelErrorCode | null 
         // Normalize to string and metadata
         let msg = '';
         let status: number | undefined;
-        let name = '';
         let code: string | number | undefined;
 
         if (typeof errLike === 'string') {
             msg = errLike;
         } else if (errLike && typeof errLike === 'object') {
             const e: any = errLike as any;
-            name = typeof e.name === 'string' ? e.name : '';
             code = e.code;
             status = typeof e.status === 'number' ? e.status : (typeof e.statusCode === 'number' ? e.statusCode : undefined);
             if (typeof e.message === 'string') msg = e.message;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
@@ -434,7 +434,6 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
   const headerColor = useMemo(() => 'hsl(var(--primary))', []);
   const mutedStroke = useMemo(() => 'hsl(var(--muted-foreground))', []);
   const activeStroke = useMemo(() => 'hsl(var(--primary))', []);
-  const dangerStroke = useMemo(() => 'hsl(var(--destructive))', []);
 
   const isNodeActive = (id: string) => hoveredNode === id;
 

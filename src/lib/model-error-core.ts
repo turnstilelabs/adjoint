@@ -38,14 +38,12 @@ export function classifyModelCommErrorCore(errLike: unknown): ModelErrorCode | n
     try {
         let msg = '';
         let status: number | undefined;
-        let name = '';
         let code: string | number | undefined;
 
         if (typeof errLike === 'string') {
             msg = errLike;
         } else if (errLike && typeof errLike === 'object') {
             const e: any = errLike as any;
-            name = typeof e.name === 'string' ? e.name : '';
             code = e.code;
             status =
                 typeof e.status === 'number'
