@@ -51,6 +51,21 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
+function normalizeVisibleToLatex(txt: string) {
+  return txt
+    .replace(/≥/g, '\\ge ')
+    .replace(/≤/g, '\\le ')
+    .replace(/∑/g, '\\sum ')
+    .replace(/[–−]/g, '-')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '') // strip zero-width artifacts
+    .replace(/[·×]/g, '\\cdot ')
+    // common smart quotes to plain
+    .replace(/[“”]/g, '"')
+    .replace(/[’]/g, "'")
+    .trim();
+}
+
 export function SublemmaItem({
   step,
   stepIndex,
@@ -101,6 +116,160 @@ export function SublemmaItem({
     anchor: { top: number; left: number } | null;
     target: 'statement' | 'proof' | null;
   }>({ text: '', anchor: null, target: null });
+
+  const computeCaretIndexFromSelection = useCallback(
+    (containerEl: HTMLElement, source: string, selectedText: string): number => {
+      try {
+        const sel = window.getSelection();
+        if (!sel || !sel.anchorNode) return 0;
+
+        // Measure prefix up to the clicked position
+        const range = document.createRange();
+        range.setStart(containerEl, 0);
+        range.setEnd(sel.anchorNode, sel.anchorOffset);
+
+        const visibleAllRaw = (containerEl.textContent || '').toString();
+        const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
+        const prefixRaw = range.toString();
+        const prefixNorm = normalizeVisibleToLatex(prefixRaw);
+        const selectedNorm = normalizeVisibleToLatex(selectedText || '');
+
+        // If no selected text (rare on double click), approximate by normalized ratio
+        if (!selectedNorm) {
+          const approx = Math.round(
+            (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+          );
+          return Math.max(0, Math.min(approx, source.length));
+        }
+
+        // Build small context windows around the click in the normalized visible text
+        const ctxLen = 12;
+        const leftCtxVis = prefixNorm.slice(
+          Math.max(0, prefixNorm.length - ctxLen),
+          prefixNorm.length,
+        );
+        const afterStart = prefixNorm.length + selectedNorm.length;
+        const rightCtxVis = visibleAllNorm.slice(afterStart, afterStart + ctxLen);
+
+        // Determine which occurrence of the selected text was clicked in the visible content
+        const occVis: number[] = [];
+        {
+          let vIdx = 0;
+          while (true) {
+            const f = visibleAllNorm.indexOf(selectedNorm, vIdx);
+            if (f < 0) break;
+            occVis.push(f);
+            vIdx = f + Math.max(1, selectedNorm.length);
+          }
+        }
+        let occNumber = 0;
+        for (let i = 0; i < occVis.length; i++) {
+          if (occVis[i] <= prefixNorm.length) occNumber = i;
+          else break;
+        }
+
+        // Helper scoring
+        const commonSuffixLen = (a: string, b: string) => {
+          let i = 0;
+          const al = a.length,
+            bl = b.length;
+          while (i < al && i < bl && a[al - 1 - i] === b[bl - 1 - i]) i++;
+          return i;
+        };
+        const commonPrefixLen = (a: string, b: string) => {
+          let i = 0;
+          const al = a.length,
+            bl = b.length;
+          while (i < al && i < bl && a[i] === b[i]) i++;
+          return i;
+        };
+
+        // Collect candidate indices in the raw source for the selected substring
+        const candidates: number[] = [];
+        let pos = 0;
+        while (true) {
+          const f = source.indexOf(selectedNorm, pos);
+          if (f < 0) break;
+          candidates.push(f);
+          pos = f + Math.max(1, selectedNorm.length);
+        }
+
+        // If no exact candidates, try ignoring whitespace differences
+        if (candidates.length === 0) {
+          const needleNS = selectedNorm.replace(/\s+/g, '');
+          if (needleNS) {
+            const sourceNS = source.replace(/\s+/g, '');
+            let p = 0;
+            while (true) {
+              const f = sourceNS.indexOf(needleNS, p);
+              if (f < 0) break;
+              // Map no-space index back to raw source index
+              let rawIdx = 0;
+              let nsCount = 0;
+              for (let i = 0; i < source.length; i++) {
+                if (source[i] !== ' ') {
+                  if (nsCount === f) {
+                    rawIdx = i;
+                    break;
+                  }
+                  nsCount++;
+                }
+              }
+              candidates.push(rawIdx);
+              p = f + Math.max(1, needleNS.length);
+            }
+          }
+        }
+
+        // Map by occurrence number first (prefer exact ordinal mapping to avoid picking the first match)
+        if (candidates.length > 0 && occVis.length > 0) {
+          const mappedByOrd = candidates[Math.min(occNumber, candidates.length - 1)];
+          return mappedByOrd;
+        }
+
+        // Fallback: ratio if still no candidates
+        if (candidates.length === 0) {
+          const approx = Math.round(
+            (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+          );
+          return Math.max(0, Math.min(approx, source.length));
+        }
+
+        // Choose candidate that best matches left/right context and is closest to approximate position
+        const approxIdx = Math.round(
+          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+        );
+
+        let bestIdx = candidates[0];
+        let bestScore = -1;
+        let bestDist = Number.MAX_SAFE_INTEGER;
+
+        for (const idx of candidates) {
+          const leftSrcNorm = normalizeVisibleToLatex(
+            source.slice(Math.max(0, idx - ctxLen * 2), idx),
+          );
+          const rightSrcNorm = normalizeVisibleToLatex(
+            source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2),
+          );
+          const l = commonSuffixLen(leftSrcNorm, leftCtxVis);
+          const r = commonPrefixLen(rightSrcNorm, rightCtxVis);
+          const score = l + r;
+          const dist = Math.abs(idx - approxIdx);
+
+          if (score > bestScore || (score === bestScore && dist < bestDist)) {
+            bestScore = score;
+            bestDist = dist;
+            bestIdx = idx;
+          }
+        }
+
+        return bestIdx;
+      } catch {
+        return 0;
+      }
+    },
+    [],
+  );
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
@@ -237,21 +406,8 @@ export function SublemmaItem({
       setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
     }
-  }, [isEditing, statement, proof]);
+  }, [isEditing, statement, proof, computeCaretIndexFromSelection]);
 
-  const normalizeVisibleToLatex = (txt: string) =>
-    txt
-      .replace(/≥/g, '\\ge ')
-      .replace(/≤/g, '\\le ')
-      .replace(/∑/g, '\\sum ')
-      .replace(/[–−]/g, '-')
-      .replace(/\u00A0/g, ' ')
-      .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '') // strip zero-width artifacts
-      .replace(/[·×]/g, '\\cdot ')
-      // common smart quotes to plain
-      .replace(/[“”]/g, '"')
-      .replace(/[’]/g, "'")
-      .trim();
 
   const placeCaret = (ta: HTMLTextAreaElement, idx: number) => {
     try {
@@ -264,162 +420,6 @@ export function SublemmaItem({
     }
   };
 
-  // Compute a caret index in the source string by aligning the clicked position
-  // within the rendered container with the same occurrence number in the source.
-  const computeCaretIndexFromSelection = (
-    containerEl: HTMLElement,
-    source: string,
-    selectedText: string,
-  ): number => {
-    try {
-      const sel = window.getSelection();
-      if (!sel || !sel.anchorNode) return 0;
-
-      // Measure prefix up to the clicked position
-      const range = document.createRange();
-      range.setStart(containerEl, 0);
-      range.setEnd(sel.anchorNode, sel.anchorOffset);
-
-      const visibleAllRaw = (containerEl.textContent || '').toString();
-      const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
-      const prefixRaw = range.toString();
-      const prefixNorm = normalizeVisibleToLatex(prefixRaw);
-      const selectedNorm = normalizeVisibleToLatex(selectedText || '');
-
-      // If no selected text (rare on double click), approximate by normalized ratio
-      if (!selectedNorm) {
-        const approx = Math.round(
-          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-        );
-        return Math.max(0, Math.min(approx, source.length));
-      }
-
-      // Build small context windows around the click in the normalized visible text
-      const ctxLen = 12;
-      const leftCtxVis = prefixNorm.slice(
-        Math.max(0, prefixNorm.length - ctxLen),
-        prefixNorm.length,
-      );
-      const afterStart = prefixNorm.length + selectedNorm.length;
-      const rightCtxVis = visibleAllNorm.slice(afterStart, afterStart + ctxLen);
-
-      // Determine which occurrence of the selected text was clicked in the visible content
-      const occVis: number[] = [];
-      {
-        let vIdx = 0;
-        while (true) {
-          const f = visibleAllNorm.indexOf(selectedNorm, vIdx);
-          if (f < 0) break;
-          occVis.push(f);
-          vIdx = f + Math.max(1, selectedNorm.length);
-        }
-      }
-      let occNumber = 0;
-      for (let i = 0; i < occVis.length; i++) {
-        if (occVis[i] <= prefixNorm.length) occNumber = i;
-        else break;
-      }
-
-      // Helper scoring
-      const commonSuffixLen = (a: string, b: string) => {
-        let i = 0;
-        const al = a.length,
-          bl = b.length;
-        while (i < al && i < bl && a[al - 1 - i] === b[bl - 1 - i]) i++;
-        return i;
-      };
-      const commonPrefixLen = (a: string, b: string) => {
-        let i = 0;
-        const al = a.length,
-          bl = b.length;
-        while (i < al && i < bl && a[i] === b[i]) i++;
-        return i;
-      };
-
-      // Collect candidate indices in the raw source for the selected substring
-      const candidates: number[] = [];
-      let pos = 0;
-      while (true) {
-        const f = source.indexOf(selectedNorm, pos);
-        if (f < 0) break;
-        candidates.push(f);
-        pos = f + Math.max(1, selectedNorm.length);
-      }
-
-      // If no exact candidates, try ignoring whitespace differences
-      if (candidates.length === 0) {
-        const needleNS = selectedNorm.replace(/\s+/g, '');
-        if (needleNS) {
-          const sourceNS = source.replace(/\s+/g, '');
-          let p = 0;
-          while (true) {
-            const f = sourceNS.indexOf(needleNS, p);
-            if (f < 0) break;
-            // Map no-space index back to raw source index
-            let rawIdx = 0;
-            let nsCount = 0;
-            for (let i = 0; i < source.length; i++) {
-              if (source[i] !== ' ') {
-                if (nsCount === f) {
-                  rawIdx = i;
-                  break;
-                }
-                nsCount++;
-              }
-            }
-            candidates.push(rawIdx);
-            p = f + Math.max(1, needleNS.length);
-          }
-        }
-      }
-
-      // Map by occurrence number first (prefer exact ordinal mapping to avoid picking the first match)
-      if (candidates.length > 0 && occVis.length > 0) {
-        const mappedByOrd = candidates[Math.min(occNumber, candidates.length - 1)];
-        return mappedByOrd;
-      }
-
-      // Fallback: ratio if still no candidates
-      if (candidates.length === 0) {
-        const approx = Math.round(
-          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-        );
-        return Math.max(0, Math.min(approx, source.length));
-      }
-
-      // Choose candidate that best matches left/right context and is closest to approximate position
-      const approxIdx = Math.round(
-        (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-      );
-
-      let bestIdx = candidates[0];
-      let bestScore = -1;
-      let bestDist = Number.MAX_SAFE_INTEGER;
-
-      for (const idx of candidates) {
-        const leftSrcNorm = normalizeVisibleToLatex(
-          source.slice(Math.max(0, idx - ctxLen * 2), idx),
-        );
-        const rightSrcNorm = normalizeVisibleToLatex(
-          source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2),
-        );
-        const l = commonSuffixLen(leftSrcNorm, leftCtxVis);
-        const r = commonPrefixLen(rightSrcNorm, rightCtxVis);
-        const score = l + r;
-        const dist = Math.abs(idx - approxIdx);
-
-        if (score > bestScore || (score === bestScore && dist < bestDist)) {
-          bestScore = score;
-          bestDist = dist;
-          bestIdx = idx;
-        }
-      }
-
-      return bestIdx;
-    } catch {
-      return 0;
-    }
-  };
 
   // Compute caret index using a snapshot captured BEFORE switching to edit mode.
   const computeCaretIndexFromSnapshot = (

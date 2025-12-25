@@ -15,19 +15,22 @@ export const explorationAssistantFlow = ai.defineFlow(
         streamSchema: ExplorationAssistantEventSchema,
     },
     async (input, { sendChunk }) => {
+        const isDev = process.env.NODE_ENV !== 'production';
         const debugId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        try {
-            console.info('[Explore][Flow] start', {
-                debugId,
-                turnId: input.turnId,
-                extractOnly: Boolean(input.extractOnly),
-                requestLen: input.request?.length ?? 0,
-                hasSeed: Boolean(input.seed),
-                historyLen: input.history?.length ?? 0,
-                hasArtifacts: Boolean(input.artifacts),
-            });
-        } catch {
-            // ignore
+        if (isDev) {
+            try {
+                console.info('[Explore][Flow] start', {
+                    debugId,
+                    turnId: input.turnId,
+                    extractOnly: Boolean(input.extractOnly),
+                    requestLen: input.request?.length ?? 0,
+                    hasSeed: Boolean(input.seed),
+                    historyLen: input.history?.length ?? 0,
+                    hasArtifacts: Boolean(input.artifacts),
+                });
+            } catch {
+                // ignore
+            }
         }
 
         // --- Robustness helpers -------------------------------------------------
@@ -240,12 +243,14 @@ export const explorationAssistantFlow = ai.defineFlow(
                                     ? sanitized.candidateStatements.length
                                     : 0;
                                 if (beforeLen === 0 && afterLen > 0) {
-                                    console.warn('[Explore][Flow] candidateStatements empty -> fallback applied', {
-                                        debugId,
-                                        turnId: normalizedInput.turnId,
-                                        model: cand,
-                                        afterLen,
-                                    });
+                                    if (isDev) {
+                                        console.warn('[Explore][Flow] candidateStatements empty -> fallback applied', {
+                                            debugId,
+                                            turnId: normalizedInput.turnId,
+                                            model: cand,
+                                            afterLen,
+                                        });
+                                    }
                                 }
                             } catch {
                                 // ignore
@@ -253,12 +258,14 @@ export const explorationAssistantFlow = ai.defineFlow(
 
                             try {
                                 if (typeof out?.turnId === 'number' && out.turnId !== normalizedInput.turnId) {
-                                    console.warn('[Explore][Flow] tool returned mismatched turnId; overriding', {
-                                        debugId,
-                                        model: cand,
-                                        toolTurnId: out.turnId,
-                                        expectedTurnId: normalizedInput.turnId,
-                                    });
+                                    if (isDev) {
+                                        console.warn('[Explore][Flow] tool returned mismatched turnId; overriding', {
+                                            debugId,
+                                            model: cand,
+                                            toolTurnId: out.turnId,
+                                            expectedTurnId: normalizedInput.turnId,
+                                        });
+                                    }
                                 }
                             } catch {
                                 // ignore
@@ -287,11 +294,13 @@ export const explorationAssistantFlow = ai.defineFlow(
 
                 // Tool call still missing: try the next candidate model (if any).
                 try {
-                    console.warn('[Explore][Flow] NO_TOOL_CALL (model completed without artifacts tool)', {
-                        debugId,
-                        turnId: input.turnId,
-                        model: cand,
-                    });
+                    if (isDev) {
+                        console.warn('[Explore][Flow] NO_TOOL_CALL (model completed without artifacts tool)', {
+                            debugId,
+                            turnId: input.turnId,
+                            model: cand,
+                        });
+                    }
                 } catch {
                     // ignore
                 }
@@ -300,14 +309,16 @@ export const explorationAssistantFlow = ai.defineFlow(
             } catch (e: any) {
                 const norm = normalizeModelError(e);
                 try {
-                    console.error('[Explore][Flow] model error', {
-                        debugId,
-                        turnId: input.turnId,
-                        model: cand,
-                        code: norm.code || null,
-                        message: norm.message,
-                        detail: norm.detail,
-                    });
+                    if (isDev) {
+                        console.error('[Explore][Flow] model error', {
+                            debugId,
+                            turnId: input.turnId,
+                            model: cand,
+                            code: norm.code || null,
+                            message: norm.message,
+                            detail: norm.detail,
+                        });
+                    }
                 } catch {
                     // ignore
                 }
@@ -325,19 +336,23 @@ export const explorationAssistantFlow = ai.defineFlow(
         // Exhausted candidates; report last error if any
         if (lastErr) {
             try {
-                console.error('[Explore][Flow] failed (exhausted candidates)', {
-                    debugId,
-                    turnId: input.turnId,
-                    code: lastErr.code,
-                    message: lastErr.message,
-                });
+                if (isDev) {
+                    console.error('[Explore][Flow] failed (exhausted candidates)', {
+                        debugId,
+                        turnId: input.turnId,
+                        code: lastErr.code,
+                        message: lastErr.message,
+                    });
+                }
             } catch {
                 // ignore
             }
             sendChunk({ type: 'error', message: lastErr.message } as any);
         } else {
             try {
-                console.error('[Explore][Flow] failed (no lastErr)', { debugId, turnId: input.turnId });
+                if (isDev) {
+                    console.error('[Explore][Flow] failed (no lastErr)', { debugId, turnId: input.turnId });
+                }
             } catch {
                 // ignore
             }

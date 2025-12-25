@@ -18,7 +18,7 @@ It’s built around a simple workflow:
 Chat to refine the problem and context
 ![Explore Chat](docs/images/explore_chat.png)
 
-The Adjoin will automatically extract **candidate statements**, **assumptions**, and other artifacts. You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
+The Adjoint will automatically extract **candidate statements**, **assumptions**, and other artifacts. You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
 ![Attempt Prove](docs/images/attempt_proof.png)
 
 ### Prove mode to structure and iterate on proof construction
@@ -76,7 +76,7 @@ OPENAI_API_KEY=your-key
 npm run dev
 ```
 
-Then open the Adjoint at **http://localhost:9002**.
+Then open the Adjoint at **http://localhost:9002** (or whatever port you configured).
 
 ---
 
