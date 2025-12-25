@@ -2,7 +2,7 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, History, MessageCircle, Share2 } from 'lucide-react';
+import { FileDown, History, MessageCircle, Share2, FileText } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex } from '@/lib/export-tex';
@@ -22,6 +22,7 @@ export function ProofSidebar() {
   const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
   const setIsHistoryOpen = useAppStore((s) => s.setIsHistoryOpen);
   const setViewMode = useAppStore((s) => s.setViewMode);
+  const toggleStructuredView = useAppStore((s) => s.toggleStructuredView);
   const reset = useAppStore((s) => s.reset);
 
   const onToggleHistory = () => {
@@ -32,8 +33,18 @@ export function ProofSidebar() {
     });
   };
 
+  const onToggleRaw = () => {
+    if (viewMode === 'raw') {
+      toggleStructuredView();
+    } else {
+      setViewMode('raw');
+    }
+  };
+
+  const rawToggleLabel = viewMode === 'raw' ? 'Structured proof' : 'Raw proof';
+
   const onToggleGraph = () => {
-    setViewMode(viewMode === 'graph' ? 'steps' : 'graph');
+    setViewMode(viewMode === 'graph' ? 'structured' : 'graph');
   };
 
   const onToggleChat = () => {
@@ -83,6 +94,16 @@ export function ProofSidebar() {
           <Button
             variant="ghost"
             size="icon"
+            title={rawToggleLabel}
+            onClick={onToggleRaw}
+            className={viewMode === 'raw' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
+          >
+            <FileText />
+            <span className="sr-only">{rawToggleLabel}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             title="Graph"
             onClick={onToggleGraph}
             className={viewMode === 'graph' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
@@ -114,9 +135,17 @@ export function ProofSidebar() {
         <div className="flex-1" />
       </aside>
       {isHistoryOpen && (
-        <aside className="fixed inset-y-0 left-14 right-0 z-30 md:static bg-card h-screen flex flex-col md:w-80 md:border-r">
-          <ProofHistory />
-        </aside>
+        <>
+          {/* Click-outside overlay to close history panel (mobile) */}
+          <div
+            className="fixed inset-0 z-20 bg-transparent xl:hidden"
+            onClick={() => setIsHistoryOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="fixed inset-y-0 left-14 z-30 w-[calc(100vw-3.5rem)] max-w-sm bg-card h-screen flex flex-col border-r shrink-0 md:static md:w-80">
+            <ProofHistory />
+          </aside>
+        </>
       )}
     </>
   );

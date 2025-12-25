@@ -7,9 +7,17 @@ import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import ChatInput from '@/components/chat/chat-input';
 import ChatMessages from '@/components/chat/chat-messages';
 
+export type MessageAction =
+  | {
+    type: 'attempt_proof';
+    label?: string;
+  };
+
 export type Message = {
   role: 'user' | 'assistant';
   content: string;
+  /** Optional lightweight CTAs rendered under the message bubble. */
+  actions?: MessageAction[];
   suggestion?: {
     revisedSublemmas: Sublemma[];
     prevSublemmas?: Sublemma[];

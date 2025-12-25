@@ -14,12 +14,13 @@ function ProofValidationFooter() {
 
   const problem = useAppStore((s) => s.problem!);
   const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
+  const clearLastEditedStep = useAppStore((s) => s.clearLastEditedStep);
 
   const proof = useAppStore((s) => s.proof());
 
-  const [isProofValidating, startValidateProof] = useTransition();
+  const [, startValidateProof] = useTransition();
 
-  const [cancelled, setCancelled] = useState(false);
+  const [, setCancelled] = useState(false);
   const cancelledRef = useRef(false);
   const alertRef = useRef<HTMLDivElement | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -103,7 +104,10 @@ function ProofValidationFooter() {
             // Never display model name in UI — keep for internal logs if needed.
             model: undefined as any,
           },
+          // Whole-proof analysis doesn't invalidate step analyses, but we clear the CTA cue.
+          lastEditedStepIdx: null,
         });
+        clearLastEditedStep();
         if (!cancelledRef.current) {
           setIsRunning(false);
           setCanShowCancelCue(false);

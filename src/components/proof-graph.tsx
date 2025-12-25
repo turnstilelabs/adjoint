@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
@@ -205,37 +205,38 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
       return;
     }
 
-    const prevById = new Map(nodes.map((n) => [n.id, n]));
-    const nextNodes: PositionedNode[] = graphData.nodes.map((n, idx) => {
-      const dims = measureTitle(n.label);
-      const prev = prevById.get(n.id);
-      if (prev) {
-        // update label/content and recalc size, keep position
+    // Use functional update to avoid depending on `nodes`.
+    // This keeps React Hook deps small and prevents stale-position bugs.
+    setNodes((prevNodes) => {
+      const prevById = new Map(prevNodes.map((n) => [n.id, n]));
+      return graphData.nodes.map((n, idx) => {
+        const dims = measureTitle(n.label);
+        const prev = prevById.get(n.id);
+        if (prev) {
+          // update label/content and recalc size, keep position
+          return {
+            ...prev,
+            label: n.label,
+            content: (n as any).content ?? prev.content,
+            width: dims.width,
+            height: dims.height,
+            lines: dims.lines,
+          };
+        }
+        // new node: place deterministically with measured size
+        const pos = initialPosition(idx, graphData.nodes.length);
         return {
-          ...prev,
+          id: n.id,
           label: n.label,
-          content: (n as any).content ?? prev.content,
+          x: pos.x,
+          y: pos.y,
           width: dims.width,
           height: dims.height,
           lines: dims.lines,
+          content: (n as any).content,
         };
-      }
-      // new node: place deterministically with measured size
-      const pos = initialPosition(idx, graphData.nodes.length);
-      return {
-        id: n.id,
-        label: n.label,
-        x: pos.x,
-        y: pos.y,
-        width: dims.width,
-        height: dims.height,
-        lines: dims.lines,
-        content: (n as any).content,
-      };
+      });
     });
-
-    setNodes(nextNodes);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphData?.nodes]);
 
   // Recompute edges when nodes or graphData.edges change
@@ -272,24 +273,29 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
     setEdges(nextEdges);
   }, [graphData?.edges, nodes]);
 
-  const getPoint = (e: React.MouseEvent | MouseEvent | React.WheelEvent<SVGSVGElement>) => {
-    // Map client coordinates -> SVG user coordinates, then account for pan/scale
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const clientX = 'clientX' in e ? e.clientX : 0;
-    const clientY = 'clientY' in e ? e.clientY : 0;
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
-    // Convert from transformed (screen) coords into graph local coords using pan/scale
-    const currentScale = scaleRef.current ?? scale;
-    const currentPan = panRef.current ?? pan;
-    return {
-      x: (svgP.x - currentPan.x) / currentScale,
-      y: (svgP.y - currentPan.y) / currentScale,
-    };
-  };
+  const getPoint = useCallback(
+    (e: React.MouseEvent | MouseEvent | React.WheelEvent<SVGSVGElement>) => {
+      // Map client coordinates -> SVG user coordinates, then account for pan/scale
+      const svg = svgRef.current;
+      if (!svg) return { x: 0, y: 0 };
+      const clientX = 'clientX' in e ? e.clientX : 0;
+      const clientY = 'clientY' in e ? e.clientY : 0;
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
+
+      // Use refs (kept up to date by effects) so this callback stays stable.
+      const currentScale = scaleRef.current ?? 1;
+      const currentPan = panRef.current ?? { x: 0, y: 0 };
+
+      return {
+        x: (svgP.x - currentPan.x) / currentScale,
+        y: (svgP.y - currentPan.y) / currentScale,
+      };
+    },
+    [],
+  );
 
   const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
     e.preventDefault();
@@ -381,19 +387,24 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
       const newY = pt.y - dragging.offsetY;
       const dist = Math.hypot(newX - dragging.startX, newY - dragging.startY);
       movedRef.current = dist > 3;
-      setNodes((prev) =>
-        prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n)),
-      );
-      setEdges((prev) =>
-        prev.map((edge) => {
+
+      setNodes((prev) => prev.map((n) => (n.id === dragging.nodeId ? { ...n, x: newX, y: newY } : n)));
+
+      // Recompute only edges connected to the moved node.
+      setEdges((prev) => {
+        const draggedNode = nodes.find((n) => n.id === dragging.nodeId);
+        const draggedHalfW = (draggedNode?.width || NODE_DIM.width) / 2;
+        const draggedHalfH = (draggedNode?.height || NODE_DIM.height) / 2;
+
+        return prev.map((edge) => {
           if (edge.sourceId === dragging.nodeId) {
             const targetNode = nodes.find((n) => n.id === edge.targetId);
             if (!targetNode) return edge;
             const { source, target } = computeEdgeEndpoints(
               newX,
               newY,
-              (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-              (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
+              draggedHalfW,
+              draggedHalfH,
               targetNode.x,
               targetNode.y,
               targetNode.width / 2,
@@ -411,14 +422,14 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
               sourceNode.height / 2,
               newX,
               newY,
-              (nodes.find((n) => n.id === dragging.nodeId)?.width || NODE_DIM.width) / 2,
-              (nodes.find((n) => n.id === dragging.nodeId)?.height || NODE_DIM.height) / 2,
+              draggedHalfW,
+              draggedHalfH,
             );
             return { ...edge, source, target };
           }
           return edge;
-        }),
-      );
+        });
+      });
     };
 
     const onUp = () => setDragging(null);
@@ -429,12 +440,11 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragging]);
+  }, [dragging, getPoint, nodes]);
 
   const headerColor = useMemo(() => 'hsl(var(--primary))', []);
   const mutedStroke = useMemo(() => 'hsl(var(--muted-foreground))', []);
   const activeStroke = useMemo(() => 'hsl(var(--primary))', []);
-  const dangerStroke = useMemo(() => 'hsl(var(--destructive))', []);
 
   const isNodeActive = (id: string) => hoveredNode === id;
 

@@ -8,6 +8,7 @@ type KatexRendererProps = {
   content: string;
   className?: string;
   autoWrap?: boolean; // when false, only explicit $...$ / $$...$$ / \(...\) / \[...\] are rendered as math
+  inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
 };
 
 /**
@@ -180,7 +181,7 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   return result;
 }
 
-export function KatexRenderer({ content, className, autoWrap = true }: KatexRendererProps) {
+export function KatexRenderer({ content, className, autoWrap = true, inline = false }: KatexRendererProps) {
   const parts = useMemo(() => {
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
     const normalized = normalizeMathDelimiters(content);
@@ -206,10 +207,18 @@ export function KatexRenderer({ content, className, autoWrap = true }: KatexRend
             displayMode: true,
             errorColor: '#dc2626',
           });
+
+          // If KaTeX could not parse the expression, it emits a "katex-error" span.
+          // For Explore artifacts, we prefer to fall back to plain text rather than show
+          // a big red error fragment.
+          if (html.includes('katex-error')) {
+            return renderTextWithLineBreaks(latex, index);
+          }
+
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return renderTextWithLineBreaks(part, index);
+          return renderTextWithLineBreaks(latex, index);
         }
       } else if (part.startsWith('$') && part.endsWith('$')) {
         const latex = part.substring(1, part.length - 1);
@@ -219,18 +228,31 @@ export function KatexRenderer({ content, className, autoWrap = true }: KatexRend
             displayMode: false,
             errorColor: '#dc2626',
           });
+
+          if (html.includes('katex-error')) {
+            return renderTextWithLineBreaks(latex, index);
+          }
+
           return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
-          return renderTextWithLineBreaks(part, index);
+          return renderTextWithLineBreaks(latex, index);
         }
       } else {
         // Render plain text parts, handling newlines
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content]);
+  }, [content, autoWrap]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
-  return <div className={cn(className)}>{parts}</div>;
+  // Ensure math never causes global horizontal overflow.
+  // Callers can still override/extend with `className`.
+  const wrapperClass = cn('katex-wrap', className);
+
+  return inline ? (
+    <span className={wrapperClass}>{parts}</span>
+  ) : (
+    <div className={wrapperClass}>{parts}</div>
+  );
 }

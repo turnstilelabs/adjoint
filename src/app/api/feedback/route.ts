@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const FeedbackSchema = z
     .object({
         rating: z.coerce.number().int().min(1).max(5).optional(),
@@ -24,8 +26,15 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const parsed = FeedbackSchema.safeParse(body);
         if (!parsed.success) {
-            // Provide a friendlier error payload for the client and log details server-side
-            try { console.warn('[api/feedback] validation failed', { body, issues: parsed.error.issues }); } catch { }
+            // Provide a friendlier error payload for the client.
+            // Avoid logging user-provided content (privacy); log schema issues only in dev.
+            if (isDev) {
+                try {
+                    console.warn('[api/feedback] validation failed', { issues: parsed.error.issues });
+                } catch {
+                    // ignore
+                }
+            }
             return new Response(
                 JSON.stringify({ ok: false, error: 'Invalid feedback payload. Add a rating or a short note.' }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
@@ -33,7 +42,6 @@ export async function POST(req: NextRequest) {
         }
 
         // Augment with request metadata
-        const fwd = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
         // Omit IP entirely for privacy (do not store it)
         const ip = "";
         // Truncate user agent for storage
@@ -74,7 +82,11 @@ export async function POST(req: NextRequest) {
                 );
             }
         } else {
-            console.warn('[api/feedback] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set; skipping DB insert');
+            if (isDev) {
+                console.warn(
+                    '[api/feedback] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set; skipping DB insert',
+                );
+            }
         }
 
         // Optional: forward to Slack/Discord webhook if configured (non-blocking)
@@ -84,7 +96,7 @@ export async function POST(req: NextRequest) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    text: `Feedback$${process.env.VERCEL_ENV ? ` (${process.env.VERCEL_ENV})` : ""}`,
+                    text: `Feedback${process.env.VERCEL_ENV ? ` (${process.env.VERCEL_ENV})` : ""}`,
                     blocks: [
                         { type: "header", text: { type: "plain_text", text: "New Feedback" } },
                         { type: "section", text: { type: "mrkdwn", text: `Rating: ${payload.rating ?? "(none)"}` } },
@@ -105,7 +117,17 @@ export async function POST(req: NextRequest) {
                 }),
             }).catch((e) => console.error('[api/feedback] webhook send failed', e));
         } else {
-            console.log("[api/feedback]", payload);
+            // In OSS/dev setups, FEEDBACK_WEBHOOK_URL is often not configured.
+            // Do not log raw feedback payloads by default (may contain email/comments).
+            if (isDev) {
+                console.info('[api/feedback] received', {
+                    rating: payload.rating ?? null,
+                    hasComment: Boolean(payload.comment),
+                    hasEmail: Boolean(payload.email),
+                    tag: payload.tag ?? null,
+                    source: payload.source ?? null,
+                });
+            }
         }
 
         return new Response(JSON.stringify({ ok: true }), {

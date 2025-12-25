@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { RefreshCw, Pencil, Info } from 'lucide-react';
 import { openFeedback } from '@/components/feedback/feedback-widget';
+import { KatexRenderer } from '@/components/katex-renderer';
 
 export default function ProofView() {
   const deriveErrorTitle = (code?: string | null, msg?: string | null) => {
@@ -30,18 +31,31 @@ export default function ProofView() {
         return 'Something went wrong';
     }
   };
-  const { loading, proof, startProof, problem, error, errorDetails, errorCode, retry, editProblem } =
-    useAppStore((s) => ({
-      loading: s.loading,
-      proof: s.proof,
-      startProof: s.startProof,
-      problem: s.problem,
-      error: s.error,
-      errorDetails: s.errorDetails,
-      errorCode: s.errorCode,
-      retry: s.retry,
-      editProblem: s.editProblem,
-    }));
+  const {
+    loading,
+    proof,
+    problem,
+    error,
+    errorDetails,
+    errorCode,
+    retry,
+    editProblem,
+    pendingSuggestion,
+    acceptSuggestedChange,
+    clearSuggestion,
+  } = useAppStore((s) => ({
+    loading: s.loading,
+    proof: s.proof,
+    problem: s.problem,
+    error: s.error,
+    errorDetails: s.errorDetails,
+    errorCode: s.errorCode,
+    retry: s.retry,
+    editProblem: s.editProblem,
+    pendingSuggestion: s.pendingSuggestion,
+    acceptSuggestedChange: s.acceptSuggestedChange,
+    clearSuggestion: s.clearSuggestion,
+  }));
 
   if (!loading && error) {
     return (
@@ -114,7 +128,69 @@ export default function ProofView() {
     );
   }
 
-  if (loading || !proof()) {
+  // If the model proved only a *variant*, we want to gate the proof UI behind
+  // an explicit Accept/Retry decision (so the user sees the suggestion before
+  // seeing the tentative proof content).
+  if (!loading && pendingSuggestion) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <Card className="w-full max-w-3xl border-primary/40">
+          <CardHeader>
+            <CardTitle>Proposed Revision</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {problem ? (
+              <div className="rounded-md border bg-muted/20 p-3">
+                <div className="text-xs uppercase tracking-wide text-foreground/60">Original statement</div>
+                <div className="mt-1">
+                  <KatexRenderer content={problem} />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-md border p-3">
+              <div className="text-sm mb-2 font-medium">
+                The AI was unable to prove this statement and proposed an alternative formulation:
+              </div>
+              <div className="rounded-md border bg-background p-2">
+                <KatexRenderer content={pendingSuggestion.provedStatement} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" onClick={acceptSuggestedChange} autoFocus>
+                  Accept
+                </Button>
+                <Button size="sm" variant="outline" onClick={retry}>
+                  Retry
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    clearSuggestion();
+                    editProblem();
+                  }}
+                >
+                  Edit
+                </Button>
+              </div>
+              {pendingSuggestion.explanation ? (
+                <div className="text-xs text-muted-foreground mt-2">{pendingSuggestion.explanation}</div>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <ProofLoading />;
+  }
+
+  if (!proof()) {
+    // With the new split-phase pipeline, we can temporarily have no structured proof
+    // (we still want to render the proof view so the user can edit raw proof).
+    // A minimal placeholder version will be created in the store when the draft completes.
     return <ProofLoading />;
   }
 

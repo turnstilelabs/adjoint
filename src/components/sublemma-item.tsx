@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  AlertCircle,
+  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -8,6 +10,7 @@ import {
   Copy,
   Lightbulb,
   Puzzle,
+  RefreshCw,
   Rocket,
   Save,
   Sigma,
@@ -16,17 +19,25 @@ import {
 import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { KatexRenderer } from './katex-renderer';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { SelectionToolbar } from './selection-toolbar';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useAppStore, type ProofValidationResult } from '@/state/app-store';
+import { validateSublemmaAction } from '@/app/actions';
+import { useToast } from '@/hooks/use-toast';
 
 interface SublemmaItemProps {
   step: number;
+  /** 0-based index in the proof array. */
+  stepIndex: number;
   title: string;
   statement: string;
   proof: string;
+  analysis?: ProofValidationResult;
+  showReanalyzeCta?: boolean;
   onChange: (updates: { statement?: string; title?: string; proof?: string }) => void;
 }
 
@@ -40,7 +51,39 @@ const icons = [
   { Icon: Lightbulb, bg: 'bg-indigo-100', text: 'text-indigo-600' },
 ];
 
-export function SublemmaItem({ step, title, statement, proof, onChange }: SublemmaItemProps) {
+function normalizeVisibleToLatex(txt: string) {
+  return txt
+    .replace(/≥/g, '\\ge ')
+    .replace(/≤/g, '\\le ')
+    .replace(/∑/g, '\\sum ')
+    .replace(/[–−]/g, '-')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '') // strip zero-width artifacts
+    .replace(/[·×]/g, '\\cdot ')
+    // common smart quotes to plain
+    .replace(/[“”]/g, '"')
+    .replace(/[’]/g, "'")
+    .trim();
+}
+
+export function SublemmaItem({
+  step,
+  stepIndex,
+  title,
+  statement,
+  proof,
+  analysis,
+  showReanalyzeCta,
+  onChange,
+}: SublemmaItemProps) {
+  const { toast } = useToast();
+  const problem = useAppStore((s) => s.problem!);
+  const fullProof = useAppStore((s) => s.proof());
+  const updateCurrentStepValidation = useAppStore((s) => s.updateCurrentStepValidation);
+  const clearLastEditedStep = useAppStore((s) => s.clearLastEditedStep);
+
+  const [isAnalyzing, startAnalyze] = useTransition();
+
   const { Icon, bg, text } = icons[(step - 1) % icons.length];
   const [isEditing, setIsEditing] = useState(false);
   const [editedStatement, setEditedStatement] = useState(statement);
@@ -73,6 +116,160 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     anchor: { top: number; left: number } | null;
     target: 'statement' | 'proof' | null;
   }>({ text: '', anchor: null, target: null });
+
+  const computeCaretIndexFromSelection = useCallback(
+    (containerEl: HTMLElement, source: string, selectedText: string): number => {
+      try {
+        const sel = window.getSelection();
+        if (!sel || !sel.anchorNode) return 0;
+
+        // Measure prefix up to the clicked position
+        const range = document.createRange();
+        range.setStart(containerEl, 0);
+        range.setEnd(sel.anchorNode, sel.anchorOffset);
+
+        const visibleAllRaw = (containerEl.textContent || '').toString();
+        const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
+        const prefixRaw = range.toString();
+        const prefixNorm = normalizeVisibleToLatex(prefixRaw);
+        const selectedNorm = normalizeVisibleToLatex(selectedText || '');
+
+        // If no selected text (rare on double click), approximate by normalized ratio
+        if (!selectedNorm) {
+          const approx = Math.round(
+            (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+          );
+          return Math.max(0, Math.min(approx, source.length));
+        }
+
+        // Build small context windows around the click in the normalized visible text
+        const ctxLen = 12;
+        const leftCtxVis = prefixNorm.slice(
+          Math.max(0, prefixNorm.length - ctxLen),
+          prefixNorm.length,
+        );
+        const afterStart = prefixNorm.length + selectedNorm.length;
+        const rightCtxVis = visibleAllNorm.slice(afterStart, afterStart + ctxLen);
+
+        // Determine which occurrence of the selected text was clicked in the visible content
+        const occVis: number[] = [];
+        {
+          let vIdx = 0;
+          while (true) {
+            const f = visibleAllNorm.indexOf(selectedNorm, vIdx);
+            if (f < 0) break;
+            occVis.push(f);
+            vIdx = f + Math.max(1, selectedNorm.length);
+          }
+        }
+        let occNumber = 0;
+        for (let i = 0; i < occVis.length; i++) {
+          if (occVis[i] <= prefixNorm.length) occNumber = i;
+          else break;
+        }
+
+        // Helper scoring
+        const commonSuffixLen = (a: string, b: string) => {
+          let i = 0;
+          const al = a.length,
+            bl = b.length;
+          while (i < al && i < bl && a[al - 1 - i] === b[bl - 1 - i]) i++;
+          return i;
+        };
+        const commonPrefixLen = (a: string, b: string) => {
+          let i = 0;
+          const al = a.length,
+            bl = b.length;
+          while (i < al && i < bl && a[i] === b[i]) i++;
+          return i;
+        };
+
+        // Collect candidate indices in the raw source for the selected substring
+        const candidates: number[] = [];
+        let pos = 0;
+        while (true) {
+          const f = source.indexOf(selectedNorm, pos);
+          if (f < 0) break;
+          candidates.push(f);
+          pos = f + Math.max(1, selectedNorm.length);
+        }
+
+        // If no exact candidates, try ignoring whitespace differences
+        if (candidates.length === 0) {
+          const needleNS = selectedNorm.replace(/\s+/g, '');
+          if (needleNS) {
+            const sourceNS = source.replace(/\s+/g, '');
+            let p = 0;
+            while (true) {
+              const f = sourceNS.indexOf(needleNS, p);
+              if (f < 0) break;
+              // Map no-space index back to raw source index
+              let rawIdx = 0;
+              let nsCount = 0;
+              for (let i = 0; i < source.length; i++) {
+                if (source[i] !== ' ') {
+                  if (nsCount === f) {
+                    rawIdx = i;
+                    break;
+                  }
+                  nsCount++;
+                }
+              }
+              candidates.push(rawIdx);
+              p = f + Math.max(1, needleNS.length);
+            }
+          }
+        }
+
+        // Map by occurrence number first (prefer exact ordinal mapping to avoid picking the first match)
+        if (candidates.length > 0 && occVis.length > 0) {
+          const mappedByOrd = candidates[Math.min(occNumber, candidates.length - 1)];
+          return mappedByOrd;
+        }
+
+        // Fallback: ratio if still no candidates
+        if (candidates.length === 0) {
+          const approx = Math.round(
+            (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+          );
+          return Math.max(0, Math.min(approx, source.length));
+        }
+
+        // Choose candidate that best matches left/right context and is closest to approximate position
+        const approxIdx = Math.round(
+          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
+        );
+
+        let bestIdx = candidates[0];
+        let bestScore = -1;
+        let bestDist = Number.MAX_SAFE_INTEGER;
+
+        for (const idx of candidates) {
+          const leftSrcNorm = normalizeVisibleToLatex(
+            source.slice(Math.max(0, idx - ctxLen * 2), idx),
+          );
+          const rightSrcNorm = normalizeVisibleToLatex(
+            source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2),
+          );
+          const l = commonSuffixLen(leftSrcNorm, leftCtxVis);
+          const r = commonPrefixLen(rightSrcNorm, rightCtxVis);
+          const score = l + r;
+          const dist = Math.abs(idx - approxIdx);
+
+          if (score > bestScore || (score === bestScore && dist < bestDist)) {
+            bestScore = score;
+            bestDist = dist;
+            bestIdx = idx;
+          }
+        }
+
+        return bestIdx;
+      } catch {
+        return 0;
+      }
+    },
+    [],
+  );
 
   const handleMouseUp = useCallback(() => {
     if (isEditing) return;
@@ -209,21 +406,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
       setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
     }
-  }, [isEditing]);
+  }, [isEditing, statement, proof, computeCaretIndexFromSelection]);
 
-  const normalizeVisibleToLatex = (txt: string) =>
-    txt
-      .replace(/≥/g, '\\ge ')
-      .replace(/≤/g, '\\le ')
-      .replace(/∑/g, '\\sum ')
-      .replace(/[–−]/g, '-')
-      .replace(/\u00A0/g, ' ')
-      .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '') // strip zero-width artifacts
-      .replace(/[·×]/g, '\\cdot ')
-      // common smart quotes to plain
-      .replace(/[“”]/g, '"')
-      .replace(/[’]/g, "'")
-      .trim();
 
   const placeCaret = (ta: HTMLTextAreaElement, idx: number) => {
     try {
@@ -236,162 +420,6 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
     }
   };
 
-  // Compute a caret index in the source string by aligning the clicked position
-  // within the rendered container with the same occurrence number in the source.
-  const computeCaretIndexFromSelection = (
-    containerEl: HTMLElement,
-    source: string,
-    selectedText: string,
-  ): number => {
-    try {
-      const sel = window.getSelection();
-      if (!sel || !sel.anchorNode) return 0;
-
-      // Measure prefix up to the clicked position
-      const range = document.createRange();
-      range.setStart(containerEl, 0);
-      range.setEnd(sel.anchorNode, sel.anchorOffset);
-
-      const visibleAllRaw = (containerEl.textContent || '').toString();
-      const visibleAllNorm = normalizeVisibleToLatex(visibleAllRaw);
-      const prefixRaw = range.toString();
-      const prefixNorm = normalizeVisibleToLatex(prefixRaw);
-      const selectedNorm = normalizeVisibleToLatex(selectedText || '');
-
-      // If no selected text (rare on double click), approximate by normalized ratio
-      if (!selectedNorm) {
-        const approx = Math.round(
-          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-        );
-        return Math.max(0, Math.min(approx, source.length));
-      }
-
-      // Build small context windows around the click in the normalized visible text
-      const ctxLen = 12;
-      const leftCtxVis = prefixNorm.slice(
-        Math.max(0, prefixNorm.length - ctxLen),
-        prefixNorm.length,
-      );
-      const afterStart = prefixNorm.length + selectedNorm.length;
-      const rightCtxVis = visibleAllNorm.slice(afterStart, afterStart + ctxLen);
-
-      // Determine which occurrence of the selected text was clicked in the visible content
-      const occVis: number[] = [];
-      {
-        let vIdx = 0;
-        while (true) {
-          const f = visibleAllNorm.indexOf(selectedNorm, vIdx);
-          if (f < 0) break;
-          occVis.push(f);
-          vIdx = f + Math.max(1, selectedNorm.length);
-        }
-      }
-      let occNumber = 0;
-      for (let i = 0; i < occVis.length; i++) {
-        if (occVis[i] <= prefixNorm.length) occNumber = i;
-        else break;
-      }
-
-      // Helper scoring
-      const commonSuffixLen = (a: string, b: string) => {
-        let i = 0;
-        const al = a.length,
-          bl = b.length;
-        while (i < al && i < bl && a[al - 1 - i] === b[bl - 1 - i]) i++;
-        return i;
-      };
-      const commonPrefixLen = (a: string, b: string) => {
-        let i = 0;
-        const al = a.length,
-          bl = b.length;
-        while (i < al && i < bl && a[i] === b[i]) i++;
-        return i;
-      };
-
-      // Collect candidate indices in the raw source for the selected substring
-      const candidates: number[] = [];
-      let pos = 0;
-      while (true) {
-        const f = source.indexOf(selectedNorm, pos);
-        if (f < 0) break;
-        candidates.push(f);
-        pos = f + Math.max(1, selectedNorm.length);
-      }
-
-      // If no exact candidates, try ignoring whitespace differences
-      if (candidates.length === 0) {
-        const needleNS = selectedNorm.replace(/\s+/g, '');
-        if (needleNS) {
-          const sourceNS = source.replace(/\s+/g, '');
-          let p = 0;
-          while (true) {
-            const f = sourceNS.indexOf(needleNS, p);
-            if (f < 0) break;
-            // Map no-space index back to raw source index
-            let rawIdx = 0;
-            let nsCount = 0;
-            for (let i = 0; i < source.length; i++) {
-              if (source[i] !== ' ') {
-                if (nsCount === f) {
-                  rawIdx = i;
-                  break;
-                }
-                nsCount++;
-              }
-            }
-            candidates.push(rawIdx);
-            p = f + Math.max(1, needleNS.length);
-          }
-        }
-      }
-
-      // Map by occurrence number first (prefer exact ordinal mapping to avoid picking the first match)
-      if (candidates.length > 0 && occVis.length > 0) {
-        const mappedByOrd = candidates[Math.min(occNumber, candidates.length - 1)];
-        return mappedByOrd;
-      }
-
-      // Fallback: ratio if still no candidates
-      if (candidates.length === 0) {
-        const approx = Math.round(
-          (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-        );
-        return Math.max(0, Math.min(approx, source.length));
-      }
-
-      // Choose candidate that best matches left/right context and is closest to approximate position
-      const approxIdx = Math.round(
-        (prefixNorm.length / Math.max(1, visibleAllNorm.length)) * source.length,
-      );
-
-      let bestIdx = candidates[0];
-      let bestScore = -1;
-      let bestDist = Number.MAX_SAFE_INTEGER;
-
-      for (const idx of candidates) {
-        const leftSrcNorm = normalizeVisibleToLatex(
-          source.slice(Math.max(0, idx - ctxLen * 2), idx),
-        );
-        const rightSrcNorm = normalizeVisibleToLatex(
-          source.slice(idx + selectedNorm.length, idx + selectedNorm.length + ctxLen * 2),
-        );
-        const l = commonSuffixLen(leftSrcNorm, leftCtxVis);
-        const r = commonPrefixLen(rightSrcNorm, rightCtxVis);
-        const score = l + r;
-        const dist = Math.abs(idx - approxIdx);
-
-        if (score > bestScore || (score === bestScore && dist < bestDist)) {
-          bestScore = score;
-          bestDist = dist;
-          bestIdx = idx;
-        }
-      }
-
-      return bestIdx;
-    } catch {
-      return 0;
-    }
-  };
 
   // Compute caret index using a snapshot captured BEFORE switching to edit mode.
   const computeCaretIndexFromSnapshot = (
@@ -595,6 +623,8 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
 
   const handleSave = () => {
     onChange({ statement: editedStatement, proof: editedProof });
+    // After saving, keep the step open and the proof expanded.
+    setIsProofCollapsed(false);
     setIsEditing(false);
   };
 
@@ -719,7 +749,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   };
 
   // Copy to clipboard helpers and proof collapse state
-  const [isProofCollapsed, setIsProofCollapsed] = useState(false);
+  const [isProofCollapsed, setIsProofCollapsed] = useState(proof.length > 800);
   const [copiedStatement, setCopiedStatement] = useState(false);
   const [copiedProof, setCopiedProof] = useState(false);
 
@@ -748,6 +778,60 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
   };
 
   const toggleProofCollapsed = () => setIsProofCollapsed((v) => !v);
+
+  const analyzeStep = () => {
+    startAnalyze(async () => {
+      try {
+        updateCurrentStepValidation({ stepIndex, result: undefined });
+        const result = await validateSublemmaAction(problem, fullProof.sublemmas, stepIndex);
+
+        if (result.success) {
+          updateCurrentStepValidation({
+            stepIndex,
+            result: {
+              isValid: result.isValid || false,
+              isError: false,
+              feedback: result.feedback || 'No feedback provided.',
+              timestamp: new Date(),
+              model: undefined as any,
+            },
+          });
+          clearLastEditedStep();
+        } else {
+          const friendly =
+            result.error || 'Adjoint’s connection to the model was interrupted, please retry.';
+          updateCurrentStepValidation({
+            stepIndex,
+            result: {
+              isError: true,
+              timestamp: new Date(),
+              feedback: friendly,
+            },
+          });
+          toast({
+            title: 'System issue — analysis couldn’t complete',
+            description: friendly,
+            variant: 'default',
+          });
+        }
+      } catch (e) {
+        const friendly = e instanceof Error ? e.message : 'Unexpected error while analyzing step.';
+        updateCurrentStepValidation({
+          stepIndex,
+          result: {
+            isError: true,
+            timestamp: new Date(),
+            feedback: friendly,
+          },
+        });
+        toast({
+          title: 'System issue — analysis couldn’t complete',
+          description: friendly,
+          variant: 'default',
+        });
+      }
+    });
+  };
 
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp);
@@ -862,7 +946,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                 </div>
               </div>
             ) : (
-              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-3">
+              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground mb-1">
                     <span>Statement</span>
@@ -881,7 +965,10 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       <span className="sr-only">Copy Statement</span>
                     </button>
                   </div>
-                  <div ref={statementViewRef} className="text-primary">
+                  <div
+                    ref={statementViewRef}
+                    className="mt-1 rounded-md bg-muted/40 px-3 py-2 text-sm text-primary"
+                  >
                     <KatexRenderer content={statement} />
                   </div>
                 </div>
@@ -901,6 +988,7 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       )}
                       <span>Proof</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => handleCopy(proof, 'proof')}
@@ -916,9 +1004,77 @@ export function SublemmaItem({ step, title, statement, proof, onChange }: Sublem
                       <span className="sr-only">Copy Proof</span>
                     </button>
                   </div>
+
+                  {showReanalyzeCta && (
+                    <div className="mb-2 flex justify-end">
+                      <Button
+                        size="sm"
+                        className="h-7"
+                        onClick={analyzeStep}
+                        disabled={isAnalyzing}
+                      >
+                        {isAnalyzing ? 'Analyzing…' : 'Re-analyze step'}
+                        <RefreshCw className="ml-1 h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+
                   {!isProofCollapsed && (
-                    <div ref={proofViewRef}>
-                      <KatexRenderer content={proof} />
+                    <div ref={proofViewRef} className="mt-1 text-sm leading-relaxed">
+                      {proof.split(/\n\s*\n/).map((para, idx) => (
+                        <div key={idx} className="mb-3 last:mb-0">
+                          <KatexRenderer content={para} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {analysis && (
+                    <div className="mt-3">
+                      <Alert variant="default">
+                        {!analysis.isError && analysis.isValid === false && (
+                          <>
+                            <AlertTriangle className="h-4 w-4 text-primary" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              Issues found
+                            </AlertTitle>
+                          </>
+                        )}
+                        {analysis.isError && (
+                          <>
+                            <AlertCircle className="h-4 w-4 text-foreground" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              System issue — analysis couldn’t complete
+                            </AlertTitle>
+                          </>
+                        )}
+                        {!analysis.isError && analysis.isValid === true && (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertTitle className="text-xs text-foreground/90">
+                              Looks consistent
+                            </AlertTitle>
+                          </>
+                        )}
+                        <AlertDescription>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/50 text-sm font-mono text-foreground/90 flex-1">
+                              <KatexRenderer content={analysis.feedback} />
+                            </div>
+                            <button
+                              type="button"
+                              className="mt-1 inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                              aria-label="Dismiss step analysis"
+                              title="Dismiss"
+                              onClick={() =>
+                                updateCurrentStepValidation({ stepIndex, result: undefined })
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   )}
                 </div>

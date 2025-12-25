@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Wand2, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
+import type { HomeMode } from '@/components/features/home/home-mode-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { validateStatementAction } from '@/app/actions';
@@ -13,13 +14,15 @@ import { Alert, AlertDescription } from './ui/alert';
 import { useAppStore } from '@/state/app-store';
 import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
 
-export default function ProblemInputForm() {
+export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
   const lastProblem = useAppStore((s) => s.lastProblem);
   const [problem, setProblem] = useState(lastProblem ?? '');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
   const startProof = useAppStore((s) => s.startProof);
+  const startExplore = useAppStore((s) => s.startExplore);
   const goBack = useAppStore((s) => s.goBack);
 
   const submitProblem = async (text: string) => {
@@ -29,12 +32,9 @@ export default function ProblemInputForm() {
       return;
     }
     setError(null);
-    console.debug('[UI][ProblemInput] submit start textLen=', trimmedProblem.length);
     const validationResult = await validateStatementAction(trimmedProblem);
-    console.debug('[UI][ProblemInput] validation done validity=', (validationResult as any).validity);
 
     if ('validity' in validationResult && validationResult.validity === 'VALID') {
-      console.debug('[UI][ProblemInput] calling startProof');
       await startProof(trimmedProblem);
     } else if ('validity' in validationResult) {
       // The statement was validated but not as a valid math problem
@@ -56,12 +56,30 @@ export default function ProblemInputForm() {
     }
   };
 
+  const runExplore = () => {
+    const trimmed = problem.trim();
+    startExplore(trimmed || undefined);
+    const url = trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : '/explore';
+    router.push(url);
+  };
+
+  const runProve = async () => {
+    await submitProblem(problem);
+  };
+
+  const runCurrentMode = () => {
+    startTransition(async () => {
+      if (mode === 'explore') {
+        runExplore();
+      } else {
+        await runProve();
+      }
+    });
+  };
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    console.debug('[UI][ProblemInput] onSubmit fired');
-    startTransition(async () => {
-      await submitProblem(problem);
-    });
+    runCurrentMode();
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -74,8 +92,8 @@ export default function ProblemInputForm() {
   };
 
   return (
-    <Card className="shadow-lg transition-shadow border-gray-200">
-      <CardContent className="p-6">
+    <Card className="border-border/50">
+      <CardContent className="p-4">
         <form onSubmit={handleSubmit}>
           <div className="relative">
             <Textarea
@@ -84,10 +102,7 @@ export default function ProblemInputForm() {
               onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  console.debug('[UI][ProblemInput] Enter detected, submitting');
-                  startTransition(async () => {
-                    await submitProblem(problem);
-                  });
+                  runCurrentMode();
                 }
               }}
               className={cn(
@@ -98,6 +113,15 @@ export default function ProblemInputForm() {
               disabled={isPending}
               rows={1}
             />
+            <button
+              type="button"
+              onClick={runCurrentMode}
+              disabled={isPending}
+              className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
+              aria-label={mode === 'explore' ? 'Explore this problem with Adjoint' : 'Attempt a proof of this statement with Adjoint'}
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
           </div>
 
           {error && (

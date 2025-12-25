@@ -69,11 +69,11 @@ export function ProofLoading() {
               )}
             </div>
             {renderMath && !isDraftStreaming ? (
-              <div className="prose max-w-none">
+              <div className="prose max-w-full max-h-64 overflow-auto">
                 <KatexRenderer content={liveDraft} />
               </div>
             ) : (
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
+              <pre className="max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
                 {liveDraft}
               </pre>
             )}

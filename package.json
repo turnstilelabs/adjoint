@@ -1,5 +1,5 @@
 {
-  "name": "nextn",
+  "name": "adjoint",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "typecheck": "tsc --noEmit",
+    "selfcheck": "node scripts/selfcheck.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

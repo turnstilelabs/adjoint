@@ -31,30 +31,6 @@ export async function validateProof(input: ValidateProofInput): Promise<Validate
   return validateProofFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'validateProofPrompt',
-  input: { schema: ValidateProofInputSchema },
-  output: { schema: ValidateProofOutputSchema },
-  prompt: `You are a meticulous mathematics professor reviewing a student's proof. Your task is to determine if the provided sequence of sublemmas constitutes a valid proof for the original problem.
-
-Original Problem:
-"{{{problem}}}"
-
-Tentative Proof Steps:
-{{#each proofSteps}}
-- **{{this.title}}**
-  - Statement: {{this.statement}}
-  - Proof: {{this.proof}}
-{{/each}}
-
-Analyze the entire proof structure. Check for:
-1.  **Logical Soundness**: Does each step logically follow from the previous ones and the initial assumptions?
-2.  **Completeness**: Do the steps, taken together, fully prove the original problem statement?
-3.  **Correctness**: Are there any mathematical errors in the sublemmas or the reasoning?
-
-Provide a final verdict ('isValid') and constructive 'feedback' explaining your reasoning. If the proof is invalid, clearly identify the flawed step and explain why it is incorrect. Your output must be in JSON format.`,
-});
-
 const validateProofFlow = ai.defineFlow(
   {
     name: 'validateProofFlow',

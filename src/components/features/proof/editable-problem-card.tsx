@@ -5,18 +5,21 @@ import { useAppStore } from '@/state/app-store';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
   const startProof = useAppStore((s) => s.startProof);
+  const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
   const pendingRejection = useAppStore((s) => s.pendingRejection);
   const clearRejection = useAppStore((s) => s.clearRejection);
   const acceptSuggestedChange = useAppStore((s) => s.acceptSuggestedChange);
   const clearSuggestion = useAppStore((s) => s.clearSuggestion);
+  const router = useRouter();
 
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(problem || '');
@@ -58,11 +61,11 @@ function EditableProblemCard() {
     });
   };
 
-  const cancel = () => {
+  const cancel = useCallback(() => {
     setIsEditing(false);
     setValue(problem);
     setEditError(null);
-  };
+  }, [problem]);
 
   // Close edit mode when clicking outside the problem box
   useEffect(() => {
@@ -75,7 +78,7 @@ function EditableProblemCard() {
     };
     document.addEventListener('mousedown', onDown, { capture: true });
     return () => document.removeEventListener('mousedown', onDown, { capture: true } as any);
-  }, [isEditing]);
+  }, [isEditing, cancel]);
 
   const hasSuggestion = !!pendingSuggestion;
   const hasRejection = !!pendingRejection;
@@ -133,14 +136,14 @@ function EditableProblemCard() {
               {hasRejection && pendingRejection && (
                 <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
                   <div className="text-sm mb-2 font-medium">
-                    The AI was unable to prove this statement and found evidence it may be incorrect:
+                    Could not prove the statement as written. It may be false or require stronger assumptions:
                   </div>
-                  <div className="text-sm p-2 rounded-md bg-background border border-muted whitespace-pre-wrap">
-                    {pendingRejection.explanation}
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted">
+                    <KatexRenderer content={pendingRejection.explanation} />
                   </div>
-                  <div className="flex items-center gap-2 mt-3">
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <Button size="sm" onClick={() => setIsEditing(true)}>
-                      Edit
+                      Edit statement
                     </Button>
                     <Button
                       size="sm"
@@ -150,7 +153,18 @@ function EditableProblemCard() {
                         await startProof(problem, { force: true });
                       }}
                     >
-                      Retry
+                      Try again
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        // Seed explore chat with the original statement + streamed draft, then navigate.
+                        startExploreFromFailedProof();
+                        router.push('/explore');
+                      }}
+                    >
+                      Explore instead
                     </Button>
                   </div>
                 </div>

@@ -3,6 +3,7 @@
 import { decomposeProof, type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { validateStatement, validateProofExcerptInContext } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
+import { validateSublemma } from '@/ai/flows/validate-sublemma';
 import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
 import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
@@ -282,6 +283,28 @@ export async function validateProofAction(problem: string, proofSteps: Sublemma[
     } catch (error) {
         logError('validateProof', reqId, hash, error);
         return { success: false as const, error: 'Failed to validate the proof with AI.' };
+    }
+}
+
+export async function validateSublemmaAction(problem: string, proofSteps: Sublemma[], stepIndex: number) {
+    const { reqId, hash } = logStart('validateSublemma', {
+        problem,
+        steps: proofSteps?.length,
+        stepIndex,
+    });
+    if (proofSteps.length === 0) {
+        return { success: false as const, error: 'There are no proof steps to validate.' };
+    }
+    if (stepIndex < 0 || stepIndex >= proofSteps.length) {
+        return { success: false as const, error: 'Invalid step index.' };
+    }
+    try {
+        const result = await validateSublemma({ problem, proofSteps, stepIndex });
+        logSuccess('validateSublemma', reqId, hash);
+        return { success: true as const, ...result, model: llmModel };
+    } catch (error) {
+        logError('validateSublemma', reqId, hash, error);
+        return { success: false as const, error: 'Failed to validate the step with AI.' };
     }
 }
 
