@@ -1,0 +1,84 @@
+[
+    {
+        "id": "tao-future-of-mathematics",
+        "kind": "video",
+        "title": "Terry Tao on the Future of Mathematics",
+        "blurb": "Interview where Terence Tao shares views on how mathematical research may evolve and how mathematicians might work in the future.",
+        "url": "https://www.youtube.com/watch?v=4ykbHwZQ8iU",
+        "tags": [
+            "interview",
+            "research-culture",
+            "meta"
+        ]
+    },
+    {
+        "id": "finding-grothendieck-documentary",
+        "kind": "video",
+        "title": "A Documentary on Finding Grothendieck",
+        "blurb": "A documentary-style video about people searching for Alexander Grothendieck after he withdrew from public life.",
+        "url": "https://www.youtube.com/watch?v=sGzVHQniIiE",
+        "tags": [
+            "history",
+            "biography",
+            "research-culture"
+        ]
+    },
+    {
+        "id": "williamson-neural-networks-discovery",
+        "kind": "video",
+        "title": "Geordie Williamson: Neural Networks for Mathematical Discovery",
+        "blurb": "Talk on using neural networks as tools that can assist or inspire mathematical discovery.",
+        "url": "https://www.youtube.com/watch?v=Uxr_HrbN1MQ",
+        "tags": [
+            "ai",
+            "ml",
+            "mathematical-discovery"
+        ]
+    },
+    {
+        "id": "quanta-beauty-truth-proof-ai",
+        "kind": "article",
+        "title": "Mathematical Beauty, Truth and Proof in the Age of AI (Quanta)",
+        "blurb": "Quanta Magazine article discussing how AI affects notions of proof, understanding, and mathematical aesthetics.",
+        "url": "https://www.quantamagazine.org/mathematical-beauty-truth-and-proof-in-the-age-of-ai-20250430/",
+        "tags": [
+            "ai",
+            "proof",
+            "philosophy"
+        ]
+    },
+    {
+        "id": "tao-mathstodon-115385022005130505",
+        "kind": "social",
+        "title": "Terry Tao on Mathstodon",
+        "blurb": "Terence Tao argues that AI's greatest near-term mathematical impact will come from accelerating mundane tasks like literature reviews—already demonstrated on the Erdos Problems website, where AI-assisted searches recently reclassified six open problems as solved by uncovering obscure papers.",
+        "url": "https://mathstodon.xyz/@tao/115385022005130505",
+        "tags": [
+            "social",
+            "tao"
+        ]
+    },
+    {
+        "id": "tao-mathstodon-115722360006034040",
+        "kind": "social",
+        "title": "Terry Tao on Mathstodon",
+        "blurb": "Terence Tao argues that while true artificial general intelligence remains elusive, we're witnessing the rise of \"artificial general cleverness\"—AI systems that can solve complex problems through brute force and pattern-matching rather than genuine understanding",
+        "url": "https://mathstodon.xyz/@tao/115722360006034040",
+        "tags": [
+            "social",
+            "tao"
+        ]
+    },
+    {
+        "id": "social-proof-how-mathematical-practice-is-evolving",
+        "kind": "article",
+        "title": "The Social Proof: How Mathematical Practice is Evolving",
+        "blurb": "Interviewing thirty mathematicians exposes a gap between AI hype and research reality: while headlines tout superhuman theorem-proving, working mathematicians quietly use AI for tedious tasks like searching obscure papers or proving small technical lemmas.",
+        "url": "https://dsleo.github.io/maths/2025/12/12/mathematicians-future.html",
+        "tags": [
+            "ai",
+            "research-culture",
+            "tools"
+        ]
+    }
+]

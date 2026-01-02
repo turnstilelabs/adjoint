@@ -4,6 +4,8 @@ import { KatexRenderer } from '@/components/katex-renderer';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
+import { TriviaCard } from '@/components/features/proof/trivia-card';
+import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
 
 export function ProofLoading() {
   const problem = useAppStore((s) => s.problem);
@@ -17,6 +19,12 @@ export function ProofLoading() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [renderMath, setRenderMath] = useState(false);
 
+  // Trivia: show only after we know the model and before first token arrives.
+  const [triviaDeck, setTriviaDeck] = useState<MathTriviaItem[]>([]);
+  const [triviaIndex, setTriviaIndex] = useState(0);
+  const [triviaVisible, setTriviaVisible] = useState(false);
+  const [triviaLoadError, setTriviaLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!loading) return;
     setElapsedMs(0);
@@ -26,6 +34,67 @@ export function ProofLoading() {
     }, 1000);
     return () => clearInterval(id);
   }, [loading]);
+
+  // Derive whether the model name has been displayed in the progress log.
+  const hasModelName = !!(progressLog || []).some((l) => typeof l === 'string' && l.startsWith('Using '));
+  const hasFirstToken = (liveDraft || '').length > 0;
+  const showTrivia = loading && hasModelName && !hasFirstToken;
+
+  const currentTrivia = triviaDeck.length
+    ? triviaDeck[((triviaIndex % triviaDeck.length) + triviaDeck.length) % triviaDeck.length]
+    : null;
+
+  // Load + shuffle trivia once per proof attempt (i.e. per loading session).
+  useEffect(() => {
+    if (!loading) return;
+
+    let cancelled = false;
+    setTriviaLoadError(null);
+    setTriviaDeck([]);
+    setTriviaIndex(0);
+
+    (async () => {
+      try {
+        const resp = await fetch('/api/trivia', { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const items = (await resp.json()) as MathTriviaItem[];
+        if (!Array.isArray(items)) throw new Error('Malformed trivia dataset');
+        if (cancelled) return;
+        setTriviaDeck(shuffleTrivia(items));
+      } catch (e) {
+        if (cancelled) return;
+        setTriviaLoadError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
+
+  // When trivia becomes eligible to show, start rotation every 10s.
+  useEffect(() => {
+    if (!showTrivia) {
+      setTriviaVisible(false);
+      return;
+    }
+
+    setTriviaVisible(true);
+
+    const id = window.setInterval(() => {
+      setTriviaIndex((i) => i + 1);
+    }, 10000);
+
+    return () => window.clearInterval(id);
+  }, [showTrivia]);
+
+  // When the first token arrives, fade/collapse trivia away quickly.
+  useEffect(() => {
+    if (!hasFirstToken) return;
+    // Give a small beat so users can register the transition.
+    const t = window.setTimeout(() => setTriviaVisible(false), 900);
+    return () => window.clearTimeout(t);
+  }, [hasFirstToken]);
 
   const minutes = String(Math.floor(elapsedMs / 60000)).padStart(2, '0');
   const seconds = String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
@@ -53,6 +122,19 @@ export function ProofLoading() {
             </ul>
           </div>
         )}
+
+        {/* Trivia appears only after model is known and before first token arrives. */}
+        {showTrivia && !triviaLoadError && currentTrivia && (
+          <div
+            className={
+              'mt-4 w-full flex justify-center transition-all duration-300 ease-out overflow-hidden ' +
+              (triviaVisible ? 'opacity-100 max-h-64 translate-y-0' : 'opacity-0 max-h-0 -translate-y-1 pointer-events-none')
+            }
+          >
+            <TriviaCard item={currentTrivia} />
+          </div>
+        )}
+
         {liveDraft && liveDraft.length > 0 && (
           <div className="mt-4 w-full max-w-xl rounded-md border p-3 bg-background">
             <div className="mb-2 flex items-center justify-between">
