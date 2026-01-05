@@ -1,10 +1,10 @@
-import ExploreClientPage from './ExploreClientPage';
+import ExploreClientPage from '../../explore/ExploreClientPage';
 
 /**
  * Route alias for Explore.
  *
  * Note: This file is intentionally a Server Component so we can read `searchParams`
- * without triggering Next.js build-time CSR bailout warnings.
+ * without triggering Next.js build-time `useSearchParams()` CSR bailout warnings.
  */
 export default async function ExplorePage({
     searchParams,
@@ -17,3 +17,4 @@ export default async function ExplorePage({
 
     return <ExploreClientPage q={q} />;
 }
+

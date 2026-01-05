@@ -9,6 +9,7 @@ type KatexRendererProps = {
   className?: string;
   autoWrap?: boolean; // when false, only explicit $...$ / $$...$$ / \(...\) / \[...\] are rendered as math
   inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
+  output?: 'html' | 'htmlAndMathml';
 };
 
 /**
@@ -181,7 +182,13 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   return result;
 }
 
-export function KatexRenderer({ content, className, autoWrap = true, inline = false }: KatexRendererProps) {
+export function KatexRenderer({
+  content,
+  className,
+  autoWrap = true,
+  inline = false,
+  output = 'htmlAndMathml',
+}: KatexRendererProps) {
   const parts = useMemo(() => {
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
     const normalized = normalizeMathDelimiters(content);
@@ -206,6 +213,7 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
             throwOnError: false,
             displayMode: true,
             errorColor: '#dc2626',
+            output,
           });
 
           // If KaTeX could not parse the expression, it emits a "katex-error" span.
@@ -227,6 +235,7 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
             throwOnError: false,
             displayMode: false,
             errorColor: '#dc2626',
+            output,
           });
 
           if (html.includes('katex-error')) {
@@ -243,7 +252,7 @@ export function KatexRenderer({ content, className, autoWrap = true, inline = fa
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content, autoWrap]);
+  }, [content, autoWrap, output]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
   // Ensure math never causes global horizontal overflow.
