@@ -139,4 +139,14 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
+
+  /*
+   * Unlock statement: avoid aggressive token breaking that can make inline math
+   * or words split awkwardly (e.g. "F:C→SetF:C→Set").
+   * Let the browser wrap normally at spaces.
+   */
+  .unlock-statement {
+    overflow-wrap: normal;
+    word-break: normal;
+  }
 }
