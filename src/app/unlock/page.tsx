@@ -1,101 +1,13 @@
-"use client";
-
-import { useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { YellowSnowBackground } from '@/components/yellow-snow-background';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { KatexRenderer } from '@/components/katex-renderer';
+import { Suspense } from 'react';
+import UnlockClient from './UnlockClient';
 
 export default function UnlockPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const next = useMemo(() => searchParams.get('next') || '/', [searchParams]);
-
-    const [password, setPassword] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const statement = useMemo(
-        () =>
-            [
-                'Let $\\mathcal{C}$ be a locally small category, and let $F : \\mathcal{C} \\to \\mathbf{Set}$ be a functor. Then, for any object $C \\in \\mathcal{C}$, there is a natural bijection:',
-                '\\[',
-                '\\mathrm{Nat}(\\mathrm{Hom}_{\\mathcal{C}}(C, -), F) \\;\\; \\cong \\;\\; F(C).',
-                '\\]',
-            ].join('\n'),
-        []
-    );
-
-    async function onSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            const res = await fetch('/api/unlock', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ password, next }),
-            });
-
-            if (!res.ok) {
-                const body = await res.json().catch(() => null);
-                setError(body?.error || 'Invalid password. Please try again.');
-                return;
-            }
-
-            // Persist unlock state for client-side gating.
-            try {
-                window.localStorage.setItem('adjoint_unlocked_v2', '1');
-            } catch {
-                // ignore
-            }
-
-            router.replace(next);
-        } finally {
-            setSubmitting(false);
-        }
-    }
-
+    // `useSearchParams()` (used inside UnlockClient) triggers a CSR bailout and must be
+    // wrapped in a Suspense boundary to satisfy Next.js prerendering constraints.
     return (
-        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background">
-            <YellowSnowBackground />
-            <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/60 via-black/40 to-transparent" />
-
-            <div className="relative z-20 mx-auto w-full max-w-xl px-4">
-                <Card className="border-border/60 bg-background/80 shadow-xl backdrop-blur">
-                    <CardContent className="space-y-6 p-8">
-                        <div className="text-base leading-relaxed text-foreground/80">
-                            <KatexRenderer
-                                content={statement}
-                                autoWrap={false}
-                                className="unlock-statement"
-                                // Avoid KaTeX emitting MathML text nodes that can duplicate
-                                // inline math when combined with aggressive wrapping styles.
-                                output="html"
-                            />
-                        </div>
-                        {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-                        <form onSubmit={onSubmit} className="space-y-4">
-                            <div className="space-y-2">
-                                <Input
-                                    id="password"
-                                    name="password"
-                                    type="password"
-                                    required
-                                    autoFocus
-                                    autoComplete="current-password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    disabled={submitting}
-                                    className="h-12 text-base"
-                                />
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
+        <Suspense fallback={null}>
+            <UnlockClient />
+        </Suspense>
     );
 }
+
