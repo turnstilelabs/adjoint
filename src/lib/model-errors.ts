@@ -13,7 +13,8 @@ export type ModelErrorCode =
 
 const MODEL_ERROR_MESSAGES: Record<ModelErrorCode, string> = {
     MODEL_TIMEOUT: 'Adjoint timed out contacting the model, please go back and try again.',
-    MODEL_RATE_LIMIT: 'Adjoint’s model is at capacity, please go back and retry in a moment.',
+    MODEL_RATE_LIMIT:
+        'The AI service is currently overloaded. Please wait a few seconds and try again.',
     MODEL_STREAM_INTERRUPTED: 'Adjoint’s connection to the model was interrupted, please go back and retry.',
     MODEL_OUTPUT_UNPARSABLE: 'The model’s reply could not be parsed reliably on Adjoint’s side, please go back or retry.',
     CONTEXT_WINDOW_EXCEEDED: 'This step exceeds the model’s context window, please go back and split the argument.',

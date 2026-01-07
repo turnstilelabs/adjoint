@@ -15,7 +15,7 @@ const FRIENDLY_MESSAGES: Record<ModelErrorCode, string> = {
     MODEL_TIMEOUT:
         'The model request timed out. Please try again.',
     MODEL_RATE_LIMIT:
-        'The model is at capacity. Please try again in a moment.',
+        'The AI service is currently overloaded. Please wait a few seconds and try again.',
     MODEL_STREAM_INTERRUPTED:
         'The streaming connection was interrupted. Please try again.',
     MODEL_OUTPUT_UNPARSABLE:

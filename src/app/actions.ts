@@ -3,6 +3,7 @@
 import { decomposeProof, type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { validateStatement, validateProofExcerptInContext } from '@/ai/flows/validate-statement';
 import { validateProof } from '@/ai/flows/validate-proof';
+import { validateRawProof } from '@/ai/flows/validate-raw-proof';
 import { validateSublemma } from '@/ai/flows/validate-sublemma';
 import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
@@ -31,6 +32,10 @@ export type AttemptProofActionResult =
 
 export type DecomposeRawProofActionResult =
     | ({ success: true } & DecomposeRawProofOutput)
+    | { success: false; error: string };
+
+export type ValidateRawProofActionResult =
+    | ({ success: true } & { isValid: boolean; feedback: string; model: string })
     | { success: false; error: string };
 
 // Decompose and Graph caches (dev-only)
@@ -283,6 +288,27 @@ export async function validateProofAction(problem: string, proofSteps: Sublemma[
     } catch (error) {
         logError('validateProof', reqId, hash, error);
         return { success: false as const, error: 'Failed to validate the proof with AI.' };
+    }
+}
+
+export async function validateRawProofAction(
+    problem: string,
+    rawProof: string,
+): Promise<ValidateRawProofActionResult> {
+    const { reqId, hash } = logStart('validateRawProof', {
+        problem,
+        rawLen: rawProof?.length ?? 0,
+    });
+    if (!rawProof?.trim()) {
+        return { success: false as const, error: 'Raw proof cannot be empty.' };
+    }
+    try {
+        const result = await validateRawProof({ problem, rawProof });
+        logSuccess('validateRawProof', reqId, hash);
+        return { success: true as const, ...result, model: llmModel };
+    } catch (error) {
+        logError('validateRawProof', reqId, hash, error);
+        return { success: false as const, error: 'Failed to validate the raw proof with AI.' };
     }
 }
 

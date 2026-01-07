@@ -51,6 +51,10 @@ export type ProofValidationResult = {
   feedback: string;
   timestamp: Date;
   model?: string;
+  /** Used to prevent re-running analysis when the underlying proof input is unchanged. */
+  sourceType?: 'raw' | 'structured';
+  /** Hash of the proof input (raw text or structured steps) for de-duping. */
+  sourceHash?: string;
 };
 
 // Lightweight UUID generator for client-side ids
@@ -236,6 +240,13 @@ interface AppState extends StoreData {
   setActiveVersionIndex: (index: number) => void;
   addProofVersion: (version: Omit<ProofVersion, 'timestamp'>) => void;
   updateCurrentProofVersion: (updates: Partial<ProofVersion>) => void;
+  /**
+   * Update non-versioned metadata for the currently active proof version.
+   *
+   * This is intended for ephemeral data like validation results and graph data.
+   * It MUST NOT append a new proof version.
+   */
+  updateCurrentProofMeta: (updates: Partial<ProofVersion>) => void;
   updateCurrentStepValidation: (opts: {
     stepIndex: number;
     result?: ProofValidationResult;
@@ -1293,6 +1304,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       proofHistory: [...state.proofHistory, { ...version, timestamp: new Date() }],
       activeVersionIdx: state.proofHistory.length,
+    })),
+
+  updateCurrentProofMeta: (updates) =>
+    set((state) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, ...updates } : version,
+      ),
     })),
 
   updateCurrentProofVersion: (updates) => {

@@ -3,9 +3,9 @@ import { ADJOINT_SYSTEM_POLICY } from '@/ai/policy';
 import { ExplorationAssistantInputSchema } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 
 export const explorationAssistantPrompt = ai.definePrompt({
-   name: 'explorationAssistantPrompt',
-   input: { schema: ExplorationAssistantInputSchema },
-   prompt: `${ADJOINT_SYSTEM_POLICY}
+  name: 'explorationAssistantPrompt',
+  input: { schema: ExplorationAssistantInputSchema },
+  prompt: `${ADJOINT_SYSTEM_POLICY}
 
 You are an expert mathematician and AI assistant helping the user explore whether a statement is true, what assumptions are needed, and what examples/counterexamples exist.
 
@@ -14,6 +14,12 @@ This is EXPLORATION MODE:
 - Do NOT edit proof steps (there are none).
 - Stay grounded: only extract artifacts that are explicitly present in the conversation (user or assistant).
 - Prefer short, crisp artifacts. Avoid duplicates.
+
+Assumptions extraction rule (important):
+- Extract assumptions/definitions as standalone, atomic items.
+- If the user writes a compound assumption like "Suppose A and B" or "Assume A, and assume B", extract BOTH A and B as separate assumptions.
+- Do not truncate assumptions at conjunctions ("and", "as well as") or dependent clauses (e.g. "... and the sum converges").
+- When in doubt, keep the wording verbatim from the user.
 
 First-turn extraction rule:
 - If this is the first turn (history is empty), extract artifacts ONLY from the user's message (and optional seed). Do not create artifacts based on your own response.
