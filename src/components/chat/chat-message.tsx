@@ -5,7 +5,7 @@ import MessageSuggestionSection from '@/components/chat/message/message-suggesti
 import { Button } from '@/components/ui/button';
 import { Sparkles } from 'lucide-react';
 
-function ChatMessage({ message }: { message: Message }) {
+function ChatMessage({ message, autoWrapMath = false }: { message: Message; autoWrapMath?: boolean }) {
   const attemptProofAction = message.actions?.find((a) => a.type === 'attempt_proof');
   const showAttemptProof = Boolean(attemptProofAction);
 
@@ -16,14 +16,14 @@ function ChatMessage({ message }: { message: Message }) {
     >
       <div
         className={`p-4 rounded-2xl break-words max-w-full overflow-x-auto ${message.role === 'user'
-            ? 'bg-primary text-primary-foreground shadow-md'
-            : 'bg-card border border-border shadow-sm'
+          ? 'bg-primary text-primary-foreground shadow-md'
+          : 'bg-card border border-border shadow-sm'
           }`}
       >
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
         )}
-        <KatexRenderer content={message.content} autoWrap={false} />
+        <KatexRenderer content={message.content} autoWrap={autoWrapMath} />
 
         {showAttemptProof && (
           <div className="mt-4 flex gap-2">
