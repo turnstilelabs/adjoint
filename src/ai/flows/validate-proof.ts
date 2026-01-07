@@ -49,7 +49,23 @@ const validateProofFlow = ai.defineFlow(
       candidates.push(llmId);
     }
 
-    const user = `You are a meticulous mathematics professor reviewing a student's proof. Your task is to determine if the provided sequence of sublemmas constitutes a valid proof for the original problem.\n\nOriginal Problem:\n"${input.problem}"\n\nTentative Proof Steps:\n${input.proofSteps.map((s) => `- **${s.title}**\n  - Statement: ${s.statement}\n  - Proof: ${s.proof}`).join('\n')}\n\nAnalyze the entire proof structure. Check for:\n1.  **Logical Soundness**: Does each step logically follow from the previous ones and the initial assumptions?\n2.  **Completeness**: Do the steps, taken together, fully prove the original problem statement?\n3.  **Correctness**: Are there any mathematical errors in the sublemmas or the reasoning?\n\nProvide a final verdict ('isValid') and constructive 'feedback' explaining your reasoning. Your output must be in JSON format.`;
+    const user = `You are a meticulous mathematics professor reviewing a student's proof.
+
+Your job is to determine whether the provided sequence of sublemmas constitutes a valid proof for the original problem.
+
+Original Problem:
+"${input.problem}"
+
+Tentative Proof Steps:
+${input.proofSteps.map((s) => `- **${s.title}**\n  - Statement: ${s.statement}\n  - Proof: ${s.proof}`).join('\n')}
+
+CRITICAL RESPONSE STYLE REQUIREMENTS
+- If the proof is VALID: set isValid=true and set feedback to a *very brief* confirmation (1–2 sentences). Do NOT provide suggestions, improvements, stylistic notes, or extra commentary.
+- If the proof is INVALID: set isValid=false and set feedback to ONLY the issues/gaps/errors, referencing the relevant step(s).
+- Do NOT include headings like "Strengths" / "What is good" / "Summary".
+- Do NOT add anything beyond what is needed to justify the verdict.
+
+Return ONLY a single JSON object matching the required schema.`;
 
     let lastErr: any = null;
     for (const cand of candidates) {

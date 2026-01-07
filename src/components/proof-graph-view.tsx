@@ -30,7 +30,7 @@ export function ProofGraphView() {
   const setActiveVersionIndex = useAppStore((s) => s.setActiveVersionIndex);
   const getCurrentRawBaseMajor = useAppStore((s) => s.getCurrentRawBaseMajor);
 
-  const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
+  const updateCurrentProofMeta = useAppStore((s) => s.updateCurrentProofMeta);
 
   const [isGeneratingGraph, startGeneratingGraph] = useTransition();
 
@@ -107,7 +107,7 @@ export function ProofGraphView() {
       console.debug('[UI][Graph] graph call done ms=', t1 - t0, 'ok=', (result as any)?.success === true);
       if ((result as any)?.success === true) {
         const { nodes, edges } = result as { success: true } & GenerateProofGraphOutput;
-        updateCurrentProofVersion({
+        updateCurrentProofMeta({
           graphData: {
             nodes: nodes.map((n: GenerateProofGraphOutput['nodes'][number]) => {
               const m = n.id.match(/step-(\d+)/);
@@ -119,7 +119,7 @@ export function ProofGraphView() {
           },
         });
       } else {
-        updateCurrentProofVersion({ graphData: undefined });
+        updateCurrentProofMeta({ graphData: undefined });
         console.debug('[UI][Graph] graph call failed error=', (result as any)?.error);
         const fallback = 'Adjoint’s connection to the model was interrupted, please go back and retry.';
         const code = showModelError(toast, (result as any)?.error, goBack, 'Graph error');
@@ -132,7 +132,7 @@ export function ProofGraphView() {
         }
       }
     });
-  }, [viewMode, isGeneratingGraph, proof, updateCurrentProofVersion, toast, goBack]);
+  }, [viewMode, isGeneratingGraph, proof, updateCurrentProofMeta, toast, goBack]);
 
   if (viewMode === 'graph' && (isDecomposing || !hasStructuredForCurrentRaw || !proof.sublemmas || proof.sublemmas.length === 0)) {
     return (

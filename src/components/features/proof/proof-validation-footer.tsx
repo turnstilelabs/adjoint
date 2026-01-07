@@ -6,15 +6,30 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { validateProofAction } from '@/app/actions';
-import { ChevronDown, RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
+import { validateProofAction, validateRawProofAction } from '@/app/actions';
+import { ChevronDown, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
+
+function hashString(input: string): string {
+  try {
+    // Fast, deterministic hash good enough for de-duping UI actions
+    let h = 0;
+    for (let i = 0; i < input.length; i++) {
+      h = (h * 31 + input.charCodeAt(i)) | 0;
+    }
+    return `h${h}`;
+  } catch {
+    return 'h0';
+  }
+}
 
 function ProofValidationFooter() {
   const { toast } = useToast();
 
   const problem = useAppStore((s) => s.problem!);
-  const updateCurrentProofVersion = useAppStore((s) => s.updateCurrentProofVersion);
+  const updateCurrentProofMeta = useAppStore((s) => s.updateCurrentProofMeta);
   const clearLastEditedStep = useAppStore((s) => s.clearLastEditedStep);
+  const viewMode = useAppStore((s) => s.viewMode);
+  const rawProof = useAppStore((s) => s.rawProof);
 
   const proof = useAppStore((s) => s.proof());
 
@@ -30,6 +45,24 @@ function ProofValidationFooter() {
   const [isOpen, setIsOpen] = useState(true);
   const lastResultTsRef = useRef<number | null>(null);
   const isAnalyzed = !!proof.validationResult && !isRunning;
+
+  const isRawMode = viewMode === 'raw' || proof.type === 'raw';
+
+  const computeSourceHash = () => {
+    if (isRawMode) {
+      return hashString((rawProof || '').trim());
+    }
+    // Structured: include all step content. Keep stable ordering.
+    const steps = (proof.sublemmas || []).map((s) => ({ title: s.title, statement: s.statement, proof: s.proof }));
+    return hashString(JSON.stringify(steps));
+  };
+
+  const currentSourceHash = computeSourceHash();
+  const lastSourceHash = proof.validationResult?.sourceHash;
+  const lastSourceType = proof.validationResult?.sourceType;
+  const canRunAnalysis = isRawMode
+    ? Boolean((rawProof || '').trim()) && (lastSourceType !== 'raw' || lastSourceHash !== currentSourceHash)
+    : proof.sublemmas.length > 0 && (lastSourceType !== 'structured' || lastSourceHash !== currentSourceHash);
 
   useEffect(() => {
     if (proof.validationResult && alertRef.current) {
@@ -71,6 +104,8 @@ function ProofValidationFooter() {
   }, [proof.validationResult?.timestamp]);
 
   const handleValidateProof = () => {
+    if (!canRunAnalysis) return;
+
     setCancelled(false);
     cancelledRef.current = false;
     setCanShowCancelCue(false);
@@ -83,9 +118,12 @@ function ProofValidationFooter() {
     runIdRef.current = myRun;
     setIsRunning(true);
     startValidateProof(async () => {
-      updateCurrentProofVersion({ validationResult: undefined });
+      // Clear existing result in-place so the UI can reflect that a fresh run is in progress.
+      updateCurrentProofMeta({ validationResult: undefined });
 
-      const result = await validateProofAction(problem, proof.sublemmas);
+      const result = isRawMode
+        ? await validateRawProofAction(problem, rawProof)
+        : await validateProofAction(problem, proof.sublemmas);
       if (runIdRef.current !== myRun) {
         return;
       }
@@ -95,7 +133,7 @@ function ProofValidationFooter() {
       }
 
       if (result.success) {
-        updateCurrentProofVersion({
+        updateCurrentProofMeta({
           validationResult: {
             isValid: result.isValid || false,
             isError: false,
@@ -103,6 +141,8 @@ function ProofValidationFooter() {
             timestamp: new Date(),
             // Never display model name in UI — keep for internal logs if needed.
             model: undefined as any,
+            sourceType: isRawMode ? 'raw' : 'structured',
+            sourceHash: currentSourceHash,
           },
           // Whole-proof analysis doesn't invalidate step analyses, but we clear the CTA cue.
           lastEditedStepIdx: null,
@@ -119,7 +159,7 @@ function ProofValidationFooter() {
       } else {
         const friendly =
           'Adjoint’s connection to the model was interrupted, please go back and retry.';
-        updateCurrentProofVersion({
+        updateCurrentProofMeta({
           validationResult: {
             isError: true,
             timestamp: new Date(),
@@ -167,7 +207,7 @@ function ProofValidationFooter() {
               handleValidateProof();
             }
           }}
-          disabled={!isRunning && proof.sublemmas.length === 0}
+          disabled={!isRunning && !canRunAnalysis}
           variant={isRunning ? 'secondary' : 'default'}
           className="group px-3"
           aria-busy={isRunning}
@@ -205,7 +245,7 @@ function ProofValidationFooter() {
             </span>
           ) : isAnalyzed ? (
             <span className="inline-flex items-center">
-              <span>Proof Structure Analyzed</span>
+              <span>{isRawMode ? 'Proof Analyzed' : 'Proof Structure Analyzed'}</span>
 
               <span
                 onClick={(e) => {
@@ -225,22 +265,10 @@ function ProofValidationFooter() {
             </span>
           ) : (
             <span className="inline-flex items-center">
-              <span>Analyze Proof Structure</span>
+              <span>{isRawMode ? 'Analyze Proof' : 'Analyze Proof Structure'}</span>
             </span>
           )}
         </Button>
-        {isAnalyzed && !isRunning && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-2"
-            onClick={handleValidateProof}
-            aria-label="Run again"
-            title="Run again"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        )}
       </div>
 
       {/* Proof structure review card */}
@@ -268,6 +296,14 @@ function ProofValidationFooter() {
                         <AlertCircle className="h-4 w-4 text-foreground" />
                         <AlertTitle className="text-xs text-foreground/90">
                           System issue — validation couldn’t complete
+                        </AlertTitle>
+                      </>
+                    )}
+                    {!proof.validationResult.isError && proof.validationResult.isValid === true && (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <AlertTitle className="text-xs text-foreground/90">
+                          Looks consistent
                         </AlertTitle>
                       </>
                     )}
