@@ -100,6 +100,52 @@ export const explorationAssistantFlow = ai.defineFlow(
                 statementArtifacts: {},
             }) as any;
 
+            // Heuristic backstop: if the user wrote "Suppose/Assume A and B ...", ensure both
+            // conjuncts appear in the assumptions list. This helps when the model only extracts
+            // the first clause.
+            const maybeSplitSupposeAssumptions = (req: string): string[] => {
+                const text = String(req ?? '');
+                if (!text.trim()) return [];
+
+                // Look for the first occurrence early in the message.
+                const m = text.match(/\b(suppose|assume)\b/i);
+                if (!m || m.index == null) return [];
+                const start = m.index + m[0].length;
+                let tail = text.slice(start);
+
+                // Stop at the first “instruction” keyword (then/prove/show/consider/let), or hard punctuation.
+                const stopRe = /\b(then|prove|show|consider|let)\b|[\n.;:]/i;
+                const stop = tail.search(stopRe);
+                if (stop >= 0) tail = tail.slice(0, stop);
+
+                // Trim common glue.
+                let clause = tail
+                    .replace(/^\s*(that\b\s*)?/i, '')
+                    .replace(/^\s*[,\-—:]\s*/, '')
+                    .trim();
+
+                if (!clause) return [];
+                if (!/\band\b/i.test(clause)) return [];
+
+                // Split on "and" (simple heuristic).
+                const parts = clause
+                    .split(/\s+and\s+/i)
+                    .map((p) => p.trim())
+                    .filter(Boolean)
+                    .map((p) => p.replace(/^\s*(that\b\s*)?/i, '').trim())
+                    .map((p) => p.replace(/[,\s]+$/g, '').trim());
+
+                // Only apply if it actually looks like multiple assumptions.
+                return parts.length >= 2 ? parts : [];
+            };
+
+            const normalizeAssumptionKey = (s: string) =>
+                String(s ?? '')
+                    .replace(/\s+/g, ' ')
+                    .replace(/[.;:,]+$/g, '')
+                    .trim()
+                    .toLowerCase();
+
             const mergeList = (prev: any[] | undefined, next: any[] | undefined): string[] => {
                 const p = Array.isArray(prev) ? prev : [];
                 const n = Array.isArray(next) ? next : [];
@@ -183,6 +229,22 @@ export const explorationAssistantFlow = ai.defineFlow(
                     counterexamples: mergeList(prev.counterexamples, next.counterexamples),
                     openQuestions: mergeList(prev.openQuestions, next.openQuestions),
                 };
+            }
+
+            // Apply the "suppose A and B" backstop only when we have a single active statement.
+            // This keeps behavior conservative and avoids accidentally polluting unrelated statements.
+            if (mergedCandidates.length === 1) {
+                const stmt = mergedCandidates[0];
+                const req = String(innerInput.request ?? '');
+                const extra = maybeSplitSupposeAssumptions(req);
+                if (extra.length > 0) {
+                    const existing = mergedPerStmt[stmt]?.assumptions ?? [];
+                    const seen = new Set(existing.map(normalizeAssumptionKey));
+                    const additions = extra.filter((x) => !seen.has(normalizeAssumptionKey(x)));
+                    if (additions.length > 0) {
+                        mergedPerStmt[stmt].assumptions = mergeList(existing, additions);
+                    }
+                }
             }
 
             safe.statementArtifacts = mergedPerStmt;

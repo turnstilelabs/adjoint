@@ -28,7 +28,7 @@ export function ExploreChatMessages() {
         <ScrollArea className="flex-1 px-3 md:px-6" ref={scrollAreaRef}>
             <div className="flex flex-col gap-4 py-6">
                 {(messages as Message[]).map((message, index) => (
-                    <ChatMessage message={message} key={index} />
+                    <ChatMessage message={message} autoWrapMath key={index} />
                 ))}
             </div>
         </ScrollArea>

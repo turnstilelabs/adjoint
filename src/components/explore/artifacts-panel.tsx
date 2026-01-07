@@ -5,9 +5,9 @@ import { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assista
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Pencil } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
-import { EditableArtifactItem } from '@/components/explore/editable-artifact-item';
+import { EditableArtifactItem, type EditableArtifactItemHandle } from '@/components/explore/editable-artifact-item';
 
 type Props = {
     artifacts: ExploreArtifacts | null;
@@ -16,10 +16,32 @@ type Props = {
     isExtracting?: boolean;
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+    title,
+    children,
+    onEdit,
+}: {
+    title: string;
+    children: React.ReactNode;
+    onEdit?: () => void;
+}) {
+    const editable = Boolean(onEdit);
     return (
         <div className="p-4">
-            <div className="text-xs font-medium text-muted-foreground mb-2">{title}</div>
+            <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                <span>{title}</span>
+                <button
+                    type="button"
+                    aria-label={editable ? `Edit ${title}` : undefined}
+                    title={editable ? 'Edit' : undefined}
+                    className={`h-6 w-6 rounded flex items-center justify-center ${editable ? 'hover:bg-muted/30' : 'opacity-40 cursor-default'
+                        }`}
+                    disabled={!editable}
+                    onClick={onEdit}
+                >
+                    <Pencil className="h-3.5 w-3.5" />
+                </button>
+            </div>
             {children}
         </div>
     );
@@ -51,12 +73,14 @@ function SingleStatementCarousel({
     edits,
     setEdit,
     onActiveStatementChange,
+    editorRef,
 }: {
     items: string[];
     onPromote: (s: string) => void;
     edits: Record<string, string>;
     setEdit: (opts: { kind: 'candidateStatements'; original: string; edited: string }) => void;
     onActiveStatementChange?: (stmt: string) => void;
+    editorRef?: React.Ref<EditableArtifactItemHandle>;
 }) {
     // Normalize & flatten any multi-statement entries
     const flat = items.flatMap(splitStatements);
@@ -82,6 +106,7 @@ function SingleStatementCarousel({
             <CardContent className="p-3 space-y-3 overflow-hidden">
                 <div className="text-sm break-words whitespace-pre-wrap overflow-hidden">
                     <EditableArtifactItem
+                        ref={editorRef}
                         value={current}
                         onCommit={(next) => setEdit({ kind: 'candidateStatements', original, edited: next })}
                         className="px-0"
@@ -138,6 +163,9 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
 
     const [activeStatement, setActiveStatement] = React.useState<string>('');
 
+    const firstAssumptionRef = React.useRef<EditableArtifactItemHandle | null>(null);
+    const candidateStatementRef = React.useRef<EditableArtifactItemHandle | null>(null);
+
     const scoped = a.statementArtifacts[activeStatement] ?? {
         assumptions: [],
         examples: [],
@@ -148,7 +176,10 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
     return (
         <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0 overflow-auto">
-                <Section title="Candidate Statements">
+                <Section
+                    title="Candidate Statements"
+                    onEdit={a.candidateStatements.length > 0 ? () => candidateStatementRef.current?.startEditing() : undefined}
+                >
                     {a.candidateStatements.length === 0 ? (
                         <div className="space-y-3">
                             <div className="text-sm text-muted-foreground">No statement extracted yet.</div>
@@ -171,12 +202,16 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                             edits={edits.candidateStatements}
                             setEdit={(opts) => setEdit(opts)}
                             onActiveStatementChange={setActiveStatement}
+                            editorRef={candidateStatementRef}
                         />
                     )}
                 </Section>
 
                 <Separator />
-                <Section title="Assumptions and Definitions">
+                <Section
+                    title="Assumptions and Definitions"
+                    onEdit={(scoped.assumptions?.length ?? 0) > 0 ? () => firstAssumptionRef.current?.startEditing() : undefined}
+                >
                     {scoped.assumptions.length === 0 ? (
                         <div className="text-sm text-muted-foreground">None yet.</div>
                     ) : (
@@ -190,6 +225,7 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                                 return (
                                     <li key={idx} className="break-words">
                                         <EditableArtifactItem
+                                            ref={idx === 0 ? firstAssumptionRef : undefined}
                                             value={value}
                                             block={false}
                                             onCommit={(next) =>
