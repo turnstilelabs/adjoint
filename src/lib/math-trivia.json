@@ -7,8 +7,7 @@
         "url": "https://www.youtube.com/watch?v=4ykbHwZQ8iU",
         "tags": [
             "interview",
-            "research-culture",
-            "meta"
+            "research-culture"
         ]
     },
     {
@@ -50,23 +49,21 @@
     {
         "id": "tao-mathstodon-115385022005130505",
         "kind": "social",
-        "title": "Terry Tao on Mathstodon",
+        "title": "Terry Tao on AI Accelerating Mundane Mathematical Tasks",
         "blurb": "Terence Tao argues that AI's greatest near-term mathematical impact will come from accelerating mundane tasks like literature reviews—already demonstrated on the Erdos Problems website, where AI-assisted searches recently reclassified six open problems as solved by uncovering obscure papers.",
         "url": "https://mathstodon.xyz/@tao/115385022005130505",
         "tags": [
-            "social",
-            "tao"
+            "social"
         ]
     },
     {
         "id": "tao-mathstodon-115722360006034040",
         "kind": "social",
-        "title": "Terry Tao on Mathstodon",
+        "title": "Terry Tao about Artificial General Cleverness",
         "blurb": "Terence Tao argues that while true artificial general intelligence remains elusive, we're witnessing the rise of \"artificial general cleverness\"—AI systems that can solve complex problems through brute force and pattern-matching rather than genuine understanding",
         "url": "https://mathstodon.xyz/@tao/115722360006034040",
         "tags": [
-            "social",
-            "tao"
+            "social"
         ]
     },
     {
@@ -79,6 +76,42 @@
             "ai",
             "research-culture",
             "tools"
+        ]
+    },
+    {
+        "id": "buzzard-formal-or-not-formal-ai-theorem-proving",
+        "kind": "article",
+        "title": "Formal or Not Formal? That Is the Question in AI for Theorem Proving",
+        "blurb": "Kevin Buzzard discusses the strategic and philosophical trade-offs between formal and informal mathematics in the context of AI-assisted theorem proving, drawing on experiences from the Lean community and the Xena Project.",
+        "url": "https://xenaproject.wordpress.com/2025/10/22/formal-or-not-formal-that-is-the-question-in-ai-for-theorem-proving/",
+        "tags": [
+            "ai",
+            "formal-methods",
+            "theorem-proving"
+        ]
+    },
+    {
+        "id": "gowers-x-1984340182351634571",
+        "kind": "social",
+        "title": "Timothy Gowers on AI and Mathematical Research",
+        "blurb": "Timothy Gowers reflects on the realistic capabilities and limitations of current AI systems in mathematics, emphasizing where automation may genuinely assist research versus where human insight remains essential.",
+        "url": "https://x.com/wtgowers/status/1984340182351634571",
+        "tags": [
+            "social",
+            "ai",
+            "research-culture"
+        ]
+    },
+    {
+        "id": "riehl-proof-assistants-mathematical-understanding",
+        "kind": "video",
+        "title": "Emily Riehl on Proof Assistants and Mathematical Understanding",
+        "blurb": "Emily Riehl reflects on the relationship between proof assistants and human mathematical understanding, arguing that formalization can enhance, but not replace, conceptual clarity.",
+        "url": "https://youtu.be/fzxW2XJS6SE",
+        "tags": [
+            "formalization",
+            "research-culture",
+            "talk"
         ]
     }
 ]
