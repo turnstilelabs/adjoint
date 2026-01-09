@@ -334,50 +334,65 @@ export async function validateSublemmaAction(problem: string, proofSteps: Sublem
     }
 }
 
-export async function generateProofGraphAction(proofSteps: Sublemma[]): Promise<GraphActionResult> {
-    const { reqId, hash } = logStart('generateProofGraph', { steps: proofSteps?.length });
+export async function generateProofGraphAction(
+    goalStatement: string,
+    proofSteps: Sublemma[],
+): Promise<GraphActionResult> {
+    // Backward-compatible API name: callers should pass the goal statement.
+    return generateProofGraphForGoalAction(goalStatement, proofSteps);
+}
+
+export async function generateProofGraphForGoalAction(
+    goalStatement: string,
+    proofSteps: Sublemma[],
+): Promise<GraphActionResult> {
+    const goal = (goalStatement || '').trim();
+    const { reqId, hash } = logStart('generateProofGraph(goal)', { goalLen: goal.length, steps: proofSteps?.length });
+    if (!goal) {
+        return { success: false as const, error: 'Goal statement cannot be empty.' };
+    }
     if (proofSteps.length === 0) {
         return {
-            success: false,
+            success: false as const,
             error: 'There are no proof steps to generate a graph from.',
         };
     }
 
-    // Normalize to satisfy SublemmaSchema (some upstream steps may only have { title, content })
+    // Normalize to satisfy SublemmaSchema and to ensure we only use lemma statements (not proofs).
     const normalizedSteps: Sublemma[] = proofSteps.map((s: any) => ({
         title: s?.title ?? '',
         statement: s?.statement ?? s?.content ?? '',
-        proof: s?.proof ?? s?.content ?? '',
+        // The graph prompt should ignore proofs; keep empty to avoid leakage.
+        proof: '',
     }));
+
+    const payload = { goalStatement: goal, proofSteps: normalizedSteps };
 
     if (isDev) {
         const now = Date.now();
-        const key = hashPayload(normalizedSteps);
+        const key = hashPayload(payload);
 
         const existing = graphCache.get(key);
         if (existing?.pending) {
-            console.info(`[SA][generateProofGraph] dedupe pending reqId=${reqId} hash=${hash}`);
+            console.info(`[SA][generateProofGraph(goal)] dedupe pending reqId=${reqId} hash=${hash}`);
             return existing.pending;
         }
         if (existing?.value && now - existing.ts < IDEMPOTENCY_TTL_MS) {
-            console.info(`[SA][generateProofGraph] cache hit reqId=${reqId} hash=${hash}`);
+            console.info(`[SA][generateProofGraph(goal)] cache hit reqId=${reqId} hash=${hash}`);
             return existing.value;
         }
 
         const pending = (async () => {
             try {
-                const result = await generateProofGraph({ proofSteps: normalizedSteps });
+                const result = await generateProofGraph(payload as any);
                 const out = { success: true as const, ...result };
-                logSuccess('generateProofGraph', reqId, hash);
+                logSuccess('generateProofGraph(goal)', reqId, hash);
                 graphCache.set(key, { value: out, ts: Date.now() });
                 return out;
             } catch (error) {
-                logError('generateProofGraph', reqId, hash, error);
+                logError('generateProofGraph(goal)', reqId, hash, error);
                 const norm = normalizeModelError(error);
-                const out = {
-                    success: false as const,
-                    error: norm.message,
-                };
+                const out = { success: false as const, error: norm.message };
                 graphCache.delete(key);
                 return out;
             }
@@ -387,17 +402,13 @@ export async function generateProofGraphAction(proofSteps: Sublemma[]): Promise<
         return pending;
     }
 
-    // Production: normal execution
     try {
-        const result = await generateProofGraph({ proofSteps: normalizedSteps });
-        logSuccess('generateProofGraph', reqId, hash);
+        const result = await generateProofGraph(payload as any);
+        logSuccess('generateProofGraph(goal)', reqId, hash);
         return { success: true as const, ...result };
     } catch (error) {
-        logError('generateProofGraph', reqId, hash, error);
+        logError('generateProofGraph(goal)', reqId, hash, error);
         const norm = normalizeModelError(error);
-        return {
-            success: false as const,
-            error: norm.message,
-        };
+        return { success: false as const, error: norm.message };
     }
 }

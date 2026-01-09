@@ -604,6 +604,7 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
             {nodes.map((node, idx) => {
               const isHovered = isNodeActive(node.id);
               const isDragging = dragging?.nodeId === node.id;
+              const isGoal = node.id === 'goal';
               const translateX = node.x - node.width / 2;
               const translateY = node.y - node.height / 2;
               const stepNumber = (() => {
@@ -636,63 +637,92 @@ export function ProofGraph({ graphData }: ProofGraphProps) {
                         }}
                         filter="url(#shadow)"
                       >
-                        <rect
-                          width={node.width}
-                          height={node.height}
-                          rx={NODE_DIM.rx}
-                          fill="hsl(var(--card))"
-                          stroke={isHovered || isDragging ? activeStroke : 'hsl(var(--border))'}
-                          strokeWidth={isHovered || isDragging ? 2 : 1}
-                        />
-                        <rect
-                          width={node.width}
-                          height={HEADER_H}
-                          fill={headerColor}
-                          opacity="0.15"
-                          style={{
-                            borderTopLeftRadius: NODE_DIM.rx,
-                            borderTopRightRadius: NODE_DIM.rx,
-                          }}
-                        />
-                        <line
-                          x1="0"
-                          y1={HEADER_H}
-                          x2={node.width}
-                          y2={HEADER_H}
-                          stroke={headerColor}
-                          strokeOpacity="0.35"
-                        />
+                        {isGoal ? (
+                          <>
+                            <circle
+                              cx={node.width / 2}
+                              cy={node.height / 2}
+                              r={Math.min(node.width, node.height) / 2}
+                              fill="hsl(var(--card))"
+                              stroke={isHovered || isDragging ? activeStroke : 'hsl(var(--border))'}
+                              strokeWidth={isHovered || isDragging ? 2 : 1}
+                            />
+                            <circle
+                              cx={node.width / 2}
+                              cy={node.height / 2}
+                              r={Math.min(node.width, node.height) / 2}
+                              fill={headerColor}
+                              opacity="0.10"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <rect
+                              width={node.width}
+                              height={node.height}
+                              rx={NODE_DIM.rx}
+                              fill="hsl(var(--card))"
+                              stroke={isHovered || isDragging ? activeStroke : 'hsl(var(--border))'}
+                              strokeWidth={isHovered || isDragging ? 2 : 1}
+                            />
+                            <rect
+                              width={node.width}
+                              height={HEADER_H}
+                              fill={headerColor}
+                              opacity="0.15"
+                              style={{
+                                borderTopLeftRadius: NODE_DIM.rx,
+                                borderTopRightRadius: NODE_DIM.rx,
+                              }}
+                            />
+                            <line
+                              x1="0"
+                              y1={HEADER_H}
+                              x2={node.width}
+                              y2={HEADER_H}
+                              stroke={headerColor}
+                              strokeOpacity="0.35"
+                            />
+                          </>
+                        )}
 
                         {/* Header text (small) */}
-                        <text
-                          x={12}
-                          y={HEADER_H - 8}
-                          fill={headerColor}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            letterSpacing: '0.08em',
-                          }}
-                        >
-                          {`Step ${stepNumber}`}
-                        </text>
+                        {!isGoal && (
+                          <text
+                            x={12}
+                            y={HEADER_H - 8}
+                            fill={headerColor}
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: '0.08em',
+                            }}
+                          >
+                            {`Step ${stepNumber}`}
+                          </text>
+                        )}
 
                         {/* Label (wrapped to lines) */}
                         <text
-                          x={12}
-                          y={HEADER_H + TITLE_PADDING_Y + 4}
+                          x={isGoal ? node.width / 2 : 12}
+                          y={isGoal ? node.height / 2 + 5 : HEADER_H + TITLE_PADDING_Y + 4}
                           fill="hsl(var(--foreground))"
+                          textAnchor={isGoal ? 'middle' : 'start'}
                           style={{
                             fontSize: 14,
                             fontWeight: 600,
                             fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto',
                           }}
                         >
-                          {node.lines.map((ln, i) => (
-                            <tspan key={i} x={12} dy={i === 0 ? 0 : TITLE_LINE_HEIGHT}>
-                              {ln}
-                            </tspan>
-                          ))}
+                          {isGoal ? (
+                            node.label
+                          ) : (
+                            node.lines.map((ln, i) => (
+                              <tspan key={i} x={12} dy={i === 0 ? 0 : TITLE_LINE_HEIGHT}>
+                                {ln}
+                              </tspan>
+                            ))
+                          )}
                         </text>
                       </g>
                     </g>

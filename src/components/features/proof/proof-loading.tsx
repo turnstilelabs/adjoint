@@ -100,8 +100,9 @@ export function ProofLoading() {
   const seconds = String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
 
   return (
-    <div className="max-w-5xl flex flex-col items-center justify-center p-8">
-      <Card className="text-left">
+    // Keep the same reading measure as the main proof page (`ProofDisplay`): max-w-4xl.
+    <div className="mx-auto w-full max-w-4xl p-3 md:p-10 flex flex-col items-center justify-center min-h-screen">
+      <Card className="w-full text-left">
         <CardContent className="pt-6">
           {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
         </CardContent>
@@ -111,7 +112,7 @@ export function ProofLoading() {
 
 
         {progressLog && progressLog.length > 0 && (
-          <div className="mt-4 w-full max-w-xl rounded-md bg-muted/30 p-3">
+          <div className="mt-4 w-full rounded-md bg-muted/30 p-3">
             <p className="mb-2 text-xs uppercase tracking-wide text-foreground/60">
               Progress <span className="ml-2 text-foreground/50">{minutes}:{seconds}</span>
             </p>
@@ -136,7 +137,7 @@ export function ProofLoading() {
         )}
 
         {liveDraft && liveDraft.length > 0 && (
-          <div className="mt-4 w-full max-w-xl rounded-md border p-3 bg-background">
+          <div className="mt-4 w-full rounded-md border p-3 bg-background">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs uppercase tracking-wide text-foreground/60">
                 Live draft {isDraftStreaming ? '(streaming...)' : '(complete)'}

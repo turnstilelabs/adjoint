@@ -100,6 +100,62 @@ export const explorationAssistantFlow = ai.defineFlow(
                 statementArtifacts: {},
             }) as any;
 
+            // Build a normalized conversation text (history + request) for conservative grounding checks.
+            const buildConversationText = (ii: typeof innerInput): string => {
+                const hist = Array.isArray(ii.history) ? ii.history : [];
+                const parts = [
+                    ...hist.map((m) => String(m?.content ?? '')),
+                    String(ii.request ?? ''),
+                ]
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                return parts.join('\n');
+            };
+
+            const normalizeForContainment = (s: string) =>
+                String(s ?? '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+
+            const conversationText = buildConversationText(innerInput);
+            const convoNorm = normalizeForContainment(conversationText);
+
+            // Conservative grounding filter: only keep items that are explicitly present
+            // in the conversation (history + request). This prevents hallucinated
+            // candidate statements / assumptions / examples / counterexamples.
+            const filterToConversation = (items: string[]): string[] => {
+                if (!Array.isArray(items) || items.length === 0) return [];
+                if (!convoNorm) return [];
+                const out: string[] = [];
+                const seen = new Set<string>();
+                for (const raw of items) {
+                    const s = String(raw ?? '').trim();
+                    if (!s) continue;
+                    const key = s.toLowerCase();
+                    if (seen.has(key)) continue;
+                    const sNorm = normalizeForContainment(s);
+                    if (!sNorm) continue;
+                    if (convoNorm.includes(sNorm)) {
+                        seen.add(key);
+                        out.push(s);
+                    }
+                }
+                return out;
+            };
+
+            // Heuristic: drop obviously non-mathematical/vague "statements".
+            // We keep this light because the prompt already enforces precision.
+            const isVagueCandidate = (s: string): boolean => {
+                const t = (s ?? '').trim().toLowerCase();
+                if (!t) return true;
+                // Explicitly speculative language.
+                if (/\b(i\s+(suspect|think|guess|wonder)|maybe|might|could|possibly)\b/.test(t)) return true;
+                // Pure meta commands.
+                if (/^\s*(prove|show|study|investigate)\b/.test(t)) return true;
+                return false;
+            };
+
             // Heuristic backstop: if the user wrote "Suppose/Assume A and B ...", ensure both
             // conjuncts appear in the assumptions list. This helps when the model only extracts
             // the first clause.
@@ -166,10 +222,17 @@ export const explorationAssistantFlow = ai.defineFlow(
 
             const prevCandidates = innerInput.artifacts?.candidateStatements ?? [];
             const candidatesArr = Array.isArray(safe.candidateStatements) ? safe.candidateStatements : [];
-            const nonEmpty = candidatesArr.map((x: any) => String(x ?? '').trim()).filter(Boolean);
+            const nonEmpty = candidatesArr
+                .map((x: any) => String(x ?? '').trim())
+                .filter(Boolean)
+                .filter((s: string) => !isVagueCandidate(s));
+
+            // Prefer latest extraction first. We assume the model lists statements in
+            // conversational order, so reverse within this turn before merging.
+            const nonEmptyRecentFirst = [...nonEmpty].reverse();
 
             // If the model produced an empty array, do NOT wipe existing candidates.
-            if (nonEmpty.length === 0 && prevCandidates.length > 0) {
+            if (nonEmptyRecentFirst.length === 0 && prevCandidates.length > 0) {
                 safe.candidateStatements = prevCandidates;
                 // Preserve the previous per-statement map
                 safe.statementArtifacts = (innerInput.artifacts as any)?.statementArtifacts ?? safe.statementArtifacts ?? {};
@@ -178,7 +241,7 @@ export const explorationAssistantFlow = ai.defineFlow(
 
             // If still empty but the request looks like a math problem, fall back to the
             // user's request/seed verbatim (normalized).
-            if (nonEmpty.length === 0) {
+            if (nonEmptyRecentFirst.length === 0) {
                 const basis = (innerInput.request || innerInput.seed || '').trim();
 
                 // Do NOT turn "prove it"-style commands into candidate statements.
@@ -198,7 +261,6 @@ export const explorationAssistantFlow = ai.defineFlow(
                                 assumptions: [],
                                 examples: [],
                                 counterexamples: [],
-                                openQuestions: [],
                             }),
                         };
                     }
@@ -209,7 +271,8 @@ export const explorationAssistantFlow = ai.defineFlow(
             // Otherwise merge the model candidates with previous candidates (deduped),
             // then normalize common duplication.
             // This prevents the model from accidentally "forgetting" earlier statements.
-            const mergedCandidates = mergeList(prevCandidates, nonEmpty);
+            // Merge with newest statements first so UI always shows the latest.
+            const mergedCandidates = mergeList(nonEmptyRecentFirst, prevCandidates);
             safe.candidateStatements = mergedCandidates;
 
             const prevPerStmt = (innerInput.artifacts as any)?.statementArtifacts ?? {};
@@ -217,19 +280,21 @@ export const explorationAssistantFlow = ai.defineFlow(
 
             const mergedPerStmt: Record<
                 string,
-                { assumptions: string[]; examples: string[]; counterexamples: string[]; openQuestions: string[] }
+                { assumptions: string[]; examples: string[]; counterexamples: string[] }
             > = {};
 
             for (const stmt of mergedCandidates) {
                 const prev = prevPerStmt?.[stmt] ?? {};
                 const next = nextPerStmt?.[stmt] ?? {};
                 mergedPerStmt[stmt] = {
-                    assumptions: mergeList(prev.assumptions, next.assumptions),
-                    examples: mergeList(prev.examples, next.examples),
-                    counterexamples: mergeList(prev.counterexamples, next.counterexamples),
-                    openQuestions: mergeList(prev.openQuestions, next.openQuestions),
+                    assumptions: filterToConversation(mergeList(prev.assumptions, next.assumptions)),
+                    examples: filterToConversation(mergeList(prev.examples, next.examples)),
+                    counterexamples: filterToConversation(mergeList(prev.counterexamples, next.counterexamples)),
                 };
             }
+
+            // Also ground candidate statements themselves.
+            safe.candidateStatements = filterToConversation(safe.candidateStatements);
 
             // Apply the "suppose A and B" backstop only when we have a single active statement.
             // This keeps behavior conservative and avoids accidentally polluting unrelated statements.
@@ -423,3 +488,4 @@ export const explorationAssistantFlow = ai.defineFlow(
         return { done: true };
     },
 );
+

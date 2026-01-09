@@ -184,8 +184,9 @@ export const useSendExploreMessage = () => {
 
         // For "prove it"-style commands, the request is NOT a statement.
         // In that case, we must extract from a meaningful basis.
+        // Candidate statements are ordered "latest first".
         const candidateBasisFromStore =
-            (liveArtifacts?.candidateStatements ?? []).slice(-1)[0] || (liveSeed ?? '') || '';
+            (liveArtifacts?.candidateStatements ?? [])[0] || (liveSeed ?? '') || '';
 
         const basisForExtraction = proofIntent
             ? looksLikeBareProofCommand(userVisibleText)

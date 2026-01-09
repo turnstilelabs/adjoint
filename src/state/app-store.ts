@@ -5,7 +5,12 @@ import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
-import { attemptProofAction, attemptProofActionForce, decomposeRawProofAction } from '@/app/actions';
+import {
+  attemptProofAction,
+  attemptProofActionForce,
+  decomposeRawProofAction,
+  generateProofGraphForGoalAction,
+} from '@/app/actions';
 
 export type View = 'home' | 'explore' | 'proof';
 
@@ -34,6 +39,8 @@ export type ProofVersion = {
   /** Which step was last edited (for contextual CTA). */
   lastEditedStepIdx?: number | null;
   graphData?: GraphData;
+  /** Hash used to dedupe graph generation for identical structured step sets. */
+  graphHash?: string;
 };
 
 export type PendingSuggestion = {
@@ -80,6 +87,7 @@ const makeRawVersion = (history: ProofVersion[], content: string) => {
     stepValidation: undefined,
     lastEditedStepIdx: null,
     graphData: undefined,
+    graphHash: undefined,
   } as ProofVersion;
 };
 
@@ -113,6 +121,7 @@ const makeStructuredVersion = (
     stepValidation: undefined,
     lastEditedStepIdx: null,
     graphData: undefined,
+    graphHash: undefined,
   } as ProofVersion;
 };
 
@@ -125,6 +134,16 @@ type StoreData = {
   problem: string | null;
   lastProblem: string | null;
   messages: Message[];
+
+  /** Draft text prefilled into the proof-mode chat input (used by global selection toolbar). */
+  chatDraft: string;
+  /** Bumped to request focus/apply of chatDraft. */
+  chatDraftNonce: number;
+
+  /** Draft text prefilled into the explore-mode chat input (used by global selection toolbar). */
+  exploreDraft: string;
+  /** Bumped to request focus/apply of exploreDraft. */
+  exploreDraftNonce: number;
 
   // Explore mode
   exploreSeed: string | null;
@@ -145,7 +164,6 @@ type StoreData = {
         assumptions: Record<string, string>;
         examples: Record<string, string>;
         counterexamples: Record<string, string>;
-        openQuestions: Record<string, string>;
       }
     >;
   };
@@ -163,6 +181,8 @@ type StoreData = {
 
   // Raw proof + background decomposition state
   rawProof: string;
+  /** Incremented to request that the Raw Proof editor enters editing mode + focuses. */
+  rawProofEditNonce: number;
   attemptSummary: {
     status: 'PROVED_AS_IS' | 'PROVED_VARIANT' | 'FAILED';
     finalStatement: string | null;
@@ -185,17 +205,27 @@ type StoreData = {
   // Live draft streaming (token-level)
   liveDraft: string;
   isDraftStreaming: boolean;
+
+  // Whole-proof analysis UI state
+  isAnalyzingProof: boolean;
+  analyzeProofRunId: number;
 };
 
 interface AppState extends StoreData {
   reset: () => void;
+
+  /** Prefill + focus the proof-mode chat input (and optionally open the chat panel). */
+  setChatDraft: (text: string, opts?: { open?: boolean }) => void;
+
+  /** Prefill + focus the explore-mode chat input. */
+  setExploreDraft: (text: string) => void;
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;
   setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
   setExploreArtifactEdit: (opts: {
-    kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples' | 'openQuestions';
+    kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
     /** Candidate statement key for non-candidate edits. */
     statementKey?: string;
     original: string;
@@ -224,9 +254,18 @@ interface AppState extends StoreData {
   setViewMode: (mode: 'raw' | 'structured' | 'graph') => void;
   toggleStructuredView: () => void;
 
+  /** Run whole-proof analysis for the current view (raw or structured). No-op in graph view. */
+  analyzeCurrentProof: () => Promise<void>;
+
+  /** Cancel an in-flight analysis run (best-effort: ignores late results). */
+  cancelAnalyzeCurrentProof: () => void;
+
   // Raw proof
   setRawProof: (raw: string) => void;
   runDecomposition: () => Promise<void>;
+
+  /** Request that the Raw Proof editor enters editing mode (focus textarea). */
+  requestRawProofEdit: () => void;
 
   // Version helpers (used by UI)
   getCurrentRawBaseMajor: () => number | null;
@@ -235,6 +274,9 @@ interface AppState extends StoreData {
 
   /** Snapshot a manual edit to a structured proof as a new structured minor version (N.k+1). */
   snapshotStructuredEdit: (updates: Partial<ProofVersion>) => void;
+
+  /** Ensure graphData exists for a structured proof version (silent + deduped). */
+  ensureGraphForVersion: (versionId: string) => Promise<void>;
 
   // Proof version management
   setActiveVersionIndex: (index: number) => void;
@@ -277,6 +319,12 @@ const initialState: StoreData = {
   lastProblem: null,
   messages: [],
 
+  chatDraft: '',
+  chatDraftNonce: 0,
+
+  exploreDraft: '',
+  exploreDraftNonce: 0,
+
   exploreSeed: null,
   exploreMessages: [],
   exploreArtifacts: null,
@@ -300,6 +348,7 @@ const initialState: StoreData = {
 
   // Raw proof + background decomposition state
   rawProof: '',
+  rawProofEditNonce: 0,
   attemptSummary: null,
   isDecomposing: false,
   decomposeError: null,
@@ -314,10 +363,235 @@ const initialState: StoreData = {
   cancelCurrent: null,
   liveDraft: '',
   isDraftStreaming: false,
+
+  isAnalyzingProof: false,
+  analyzeProofRunId: 0,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
+
+  setChatDraft: (text, opts) => {
+    const t = String(text ?? '');
+    set((s) => ({
+      chatDraft: t,
+      chatDraftNonce: (s.chatDraftNonce || 0) + 1,
+      // In proof mode, optionally open the chat panel.
+      isChatOpen: opts?.open ? true : s.isChatOpen,
+    }));
+  },
+
+  setExploreDraft: (text) => {
+    const t = String(text ?? '');
+    set((s) => ({
+      exploreDraft: t,
+      exploreDraftNonce: (s.exploreDraftNonce || 0) + 1,
+    }));
+  },
+
+  ensureGraphForVersion: async (versionId: string) => {
+    try {
+      const state = get();
+      const idx = state.proofHistory.findIndex((v) => v.id === versionId);
+      if (idx < 0) return;
+      const v = state.proofHistory[idx];
+      if (!v || v.type !== 'structured') return;
+      const steps = v.sublemmas || [];
+      if (steps.length === 0) return;
+
+      const goalStatement = (state.problem || '').trim();
+      if (!goalStatement) return;
+
+      const hashString = (input: string): string => {
+        try {
+          let h = 0;
+          for (let i = 0; i < input.length; i++) {
+            h = (h * 31 + input.charCodeAt(i)) | 0;
+          }
+          return `h${h}`;
+        } catch {
+          return 'h0';
+        }
+      };
+
+      const graphHash = hashString(
+        JSON.stringify({
+          goalStatement,
+          steps: steps.map((s) => ({ title: s.title, statement: s.statement })),
+        }),
+      );
+
+      // Dedup: if we already computed for this exact input, no-op.
+      if (v.graphData && v.graphHash === graphHash) return;
+
+      const result = await generateProofGraphForGoalAction(goalStatement, steps);
+      if ((result as any)?.success !== true) return;
+
+      const { nodes, edges } = result as any;
+      const normalizedNodes = (nodes as any[]).map((n) => {
+        const m = String(n.id || '').match(/step-(\d+)/);
+        const stepIdx = m ? parseInt(m[1], 10) - 1 : -1;
+        const content =
+          n.id === 'goal'
+            ? goalStatement
+            : stepIdx >= 0 && stepIdx < steps.length
+              ? steps[stepIdx].statement
+              : '';
+        return {
+          ...n,
+          label: n.id === 'goal' ? 'Goal' : n.label,
+          content,
+        };
+      });
+
+      // Only commit if the version still exists and hash still matches.
+      set((s) => {
+        const j = s.proofHistory.findIndex((x) => x.id === versionId);
+        if (j < 0) return s;
+        const cur = s.proofHistory[j];
+        if (!cur || cur.type !== 'structured') return s;
+        return {
+          ...s,
+          proofHistory: s.proofHistory.map((x) =>
+            x.id === versionId
+              ? {
+                ...x,
+                graphData: { nodes: normalizedNodes, edges },
+                graphHash,
+              }
+              : x,
+          ),
+        };
+      });
+    } catch {
+      // silent failure
+    }
+  },
+
+  cancelAnalyzeCurrentProof: () =>
+    set((s) => ({
+      isAnalyzingProof: false,
+      // bump run id so late results from an older run get ignored
+      analyzeProofRunId: (s.analyzeProofRunId || 0) + 1,
+    })),
+
+  analyzeCurrentProof: async () => {
+    const state = get();
+    const proof = state.proof();
+
+    // Mark analysis as running and capture a run id for cancellation.
+    const myRun = (state.analyzeProofRunId || 0) + 1;
+    set({ isAnalyzingProof: true, analyzeProofRunId: myRun });
+
+    // No analysis in graph view.
+    if (state.viewMode === 'graph') {
+      // ensure UI doesn't get stuck
+      set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+      return;
+    }
+
+    const problem = (state.problem || '').trim();
+    if (!problem) {
+      set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+      return;
+    }
+
+    const isRawMode = state.viewMode === 'raw' || proof.type === 'raw';
+
+    // Avoid pointless calls.
+    if (isRawMode) {
+      const raw = (state.rawProof || '').trim();
+      if (!raw) {
+        set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+        return;
+      }
+    } else {
+      if (!proof.sublemmas || proof.sublemmas.length === 0) {
+        set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+        return;
+      }
+    }
+
+    const hashString = (input: string): string => {
+      try {
+        let h = 0;
+        for (let i = 0; i < input.length; i++) {
+          h = (h * 31 + input.charCodeAt(i)) | 0;
+        }
+        return `h${h}`;
+      } catch {
+        return 'h0';
+      }
+    };
+
+    const computeSourceHash = () => {
+      if (isRawMode) return hashString((state.rawProof || '').trim());
+      const steps = (proof.sublemmas || []).map((s) => ({ title: s.title, statement: s.statement, proof: s.proof }));
+      return hashString(JSON.stringify(steps));
+    };
+
+    const sourceHash = computeSourceHash();
+    const last = proof.validationResult;
+    if (last?.sourceType === (isRawMode ? 'raw' : 'structured') && last?.sourceHash === sourceHash) {
+      set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+      return;
+    }
+
+    // Clear existing result so UI can show "fresh" state.
+    get().updateCurrentProofMeta({ validationResult: undefined });
+
+    try {
+      const { validateProofAction, validateRawProofAction } = await import('@/app/actions');
+      const result = isRawMode
+        ? await validateRawProofAction(problem, state.rawProof)
+        : await validateProofAction(problem, proof.sublemmas);
+
+      // Ignore late results if cancelled.
+      if (get().analyzeProofRunId !== myRun) return;
+
+      if ((result as any)?.success) {
+        get().updateCurrentProofMeta({
+          validationResult: {
+            isValid: (result as any).isValid || false,
+            isError: false,
+            feedback: (result as any).feedback || 'No feedback provided.',
+            timestamp: new Date(),
+            model: undefined as any,
+            sourceType: isRawMode ? 'raw' : 'structured',
+            sourceHash,
+          },
+          lastEditedStepIdx: null,
+        });
+        get().clearLastEditedStep();
+      } else {
+        const friendly =
+          (result as any)?.error ||
+          'Adjoint’s connection to the model was interrupted, please go back and retry.';
+        get().updateCurrentProofMeta({
+          validationResult: {
+            isError: true,
+            timestamp: new Date(),
+            feedback: friendly,
+          },
+        });
+      }
+    } catch (e: any) {
+      if (get().analyzeProofRunId !== myRun) return;
+      const friendly = e?.message || 'Adjoint’s connection to the model was interrupted, please go back and retry.';
+      get().updateCurrentProofMeta({
+        validationResult: {
+          isError: true,
+          timestamp: new Date(),
+          feedback: friendly,
+        },
+      });
+    } finally {
+      // Only clear running state if this run is still current.
+      set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
+    }
+  },
+
+  requestRawProofEdit: () => set((s) => ({ rawProofEditNonce: (s.rawProofEditNonce || 0) + 1 })),
 
   startExplore: (seed?: string) => {
     // Cancel any in-flight explore stream
@@ -391,7 +665,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         assumptions: {},
         examples: {},
         counterexamples: {},
-        openQuestions: {},
       };
 
       return {
@@ -584,6 +857,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeVersionIdx: 1,
           decomposedRaw: rawContent,
         });
+
+        // Silent: compute dependency graph for the new structured version.
+        setTimeout(() => {
+          void get().ensureGraphForVersion(structuredVersion.id);
+        }, 0);
         return;
       }
 
@@ -681,6 +959,11 @@ export const useAppStore = create<AppState>((set, get) => ({
                 const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, { provedStatement: decomp.provedStatement, normalizedProof: (decomp as any).normalizedProof || '' }, { userEdited: false, derived: true });
 
                 set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [rawVersion, structuredVersion], activeVersionIdx: 1, decomposedRaw: attempt.rawProof || '' });
+
+                // Silent: compute dependency graph for the new structured version.
+                setTimeout(() => {
+                  void get().ensureGraphForVersion(structuredVersion.id);
+                }, 0);
               } else {
                 const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
                 set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [rawVersion], activeVersionIdx: 0 });
@@ -919,6 +1202,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       if (state.viewMode === mode) return state;
 
+      // If the user changes the proof view, hide any previous analysis output and
+      // cancel any in-flight analysis run (best-effort).
+      const clearedHistory = state.proofHistory.map((v, idx) =>
+        idx === state.activeVersionIdx ? { ...v, validationResult: undefined } : v,
+      );
+
       const current = state.proofHistory[state.activeVersionIdx];
       const baseMajor = current?.baseMajor;
 
@@ -947,6 +1236,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         viewMode: mode,
         activeVersionIdx: nextIdx,
         rawProof: mode === 'raw' ? (next?.content ?? state.rawProof) : state.rawProof,
+
+        // cancel analysis + clear analysis result on view change
+        isAnalyzingProof: false,
+        analyzeProofRunId: (state.analyzeProofRunId || 0) + 1,
+        proofHistory: clearedHistory,
       };
     }),
   toggleStructuredView: () =>
@@ -1085,8 +1379,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => {
         const nextIdx = state.proofHistory.length;
         const shouldActivate = state.viewMode === 'structured';
+        const next = { ...structuredVersion, timestamp: new Date() } as any;
+        // Schedule silent auto-graph generation for the new structured version.
+        setTimeout(() => {
+          void get().ensureGraphForVersion(next.id);
+        }, 0);
         return {
-          proofHistory: [...state.proofHistory, { ...structuredVersion, timestamp: new Date() } as any],
+          proofHistory: [...state.proofHistory, next],
           activeVersionIdx: shouldActivate ? nextIdx : state.activeVersionIdx,
         };
       });
@@ -1237,6 +1536,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         ],
       });
 
+      // Silent: compute dependency graph for the new structured version.
+      setTimeout(() => {
+        void get().ensureGraphForVersion(structuredVersion.id);
+      }, 0);
+
       return;
     }
 
@@ -1301,10 +1605,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   addProofVersion: (version) =>
-    set((state) => ({
-      proofHistory: [...state.proofHistory, { ...version, timestamp: new Date() }],
-      activeVersionIdx: state.proofHistory.length,
-    })),
+    set((state) => {
+      const next = { ...version, timestamp: new Date() } as any;
+      const nextIdx = state.proofHistory.length;
+      // Schedule silent auto-graph generation for structured versions.
+      if (next.type === 'structured' && Array.isArray(next.sublemmas) && next.sublemmas.length > 0) {
+        setTimeout(() => {
+          void get().ensureGraphForVersion(next.id);
+        }, 0);
+      }
+      return {
+        proofHistory: [...state.proofHistory, next],
+        activeVersionIdx: nextIdx,
+      };
+    }),
 
   updateCurrentProofMeta: (updates) =>
     set((state) => ({

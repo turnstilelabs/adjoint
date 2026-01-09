@@ -3,7 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useTransition } from 'react';
 import { useAppStore } from '@/state/app-store';
-import { generateProofGraphAction } from '@/app/actions';
+import { generateProofGraphForGoalAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { showModelError } from '@/lib/model-errors';
 import { ProofGraph } from './proof-graph';
@@ -102,7 +102,7 @@ export function ProofGraphView() {
     startGeneratingGraph(async () => {
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       console.debug('[UI][Graph] calling generateProofGraphAction steps=', proof.sublemmas.length);
-      const result = await generateProofGraphAction(proof.sublemmas);
+      const result = await generateProofGraphForGoalAction(useAppStore.getState().problem || '', proof.sublemmas);
       const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       console.debug('[UI][Graph] graph call done ms=', t1 - t0, 'ok=', (result as any)?.success === true);
       if ((result as any)?.success === true) {
@@ -112,8 +112,18 @@ export function ProofGraphView() {
             nodes: nodes.map((n: GenerateProofGraphOutput['nodes'][number]) => {
               const m = n.id.match(/step-(\d+)/);
               const idx = m ? parseInt(m[1], 10) - 1 : -1;
-              const content = idx >= 0 && idx < proof.sublemmas.length ? proof.sublemmas[idx].statement : '';
-              return { ...n, content };
+              const content =
+                n.id === 'goal'
+                  ? (useAppStore.getState().problem || '')
+                  : idx >= 0 && idx < proof.sublemmas.length
+                    ? proof.sublemmas[idx].statement
+                    : '';
+              return {
+                ...n,
+                // Normalize goal node label (model sometimes returns "Statement").
+                label: n.id === 'goal' ? 'Goal' : n.label,
+                content,
+              };
             }),
             edges,
           },

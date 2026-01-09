@@ -57,7 +57,6 @@ const renderTextWithLineBreaks = (text: string, key: number) => {
 /**
  * Heuristic auto-wrapping of inline math when providers omit $...$ for math-y tokens.
  * - If content already contains $, leave as-is.
- * - Converts bare 'sum_{...}' -> '\\sum_{...}'.
  * - Wraps tokens containing math operators or TeX-like patterns with $...$.
  *   (operators: =, <, >, <=, >=, ^, _, \ge, \le, \frac, \sum, \int, etc.)
  */
@@ -76,24 +75,13 @@ function autoWrapInlineMathIfNeeded(input: string): string {
       .replace(/[–−]/g, '-') // en/em minus to ASCII hyphen
       .replace(/!=/g, '\\neq ')
       .replace(/->/g, '\\to ');
-    // Common TeX symbol fixes for bare words
-    // NOTE: only rewrite bare `sum`/`sum_` when it is NOT already a TeX command.
-    // `\b` is not sufficient here because `\sum` still has a word boundary before `s`.
-    // We use a capture group so this works in all JS runtimes (no lookbehind).
-    //   "sum_{n=1}^\\infty"  -> "\\sum_{n=1}^\\infty"
-    //   "\\sum_{n=1}^\\infty" -> (unchanged)
-    s = s.replace(/(^|[^\\])sum_/g, '$1\\sum_');
-    // Promote plain 'sum' to '\\sum' when it is followed by variables/indices or a parenthesized term
-    s = s.replace(/(^|[^\\])sum\b(?=\s*(?:\(|[A-Za-z](?:_[A-Za-z0-9]+)?))/g, '$1\\sum');
-    // Normalize cyclic/symmetric subscripts for sum whether or not the backslash is present:
-    // Handles: "\sum_{cyc}", "sum_{cyc}", "\sum_cyc", "sum_cyc" (and sym/all)
-    // IMPORTANT: do not match the `sum_` part inside `\\sum_...` (would create `\\\\sum`)
-    s = s.replace(/(^|[^\\])\\?sum_(?:\{(cyc|sym|all)\}|(cyc|sym|all))/gi, (_m, prefix, g1, g2) => {
-      const tag = (g1 || g2).toLowerCase();
-      return `${prefix}\\sum_{\\mathrm{${tag}}}`;
-    });
-    // Subscript text semantics in common notations
+
+    // NOTE: we intentionally do NOT rewrite plain English words like "sum"/"sum_" into TeX.
+    // Only explicit TeX ("\\sum") or unicode "∑" should render as a summation symbol.
+
+    // Subscript text semantics in common notations (independent of "sum")
     s = s.replace(/_\{(cyc|sym|all)\}/gi, (_m, g1) => `_{\\mathrm{${g1}}}`);
+
     // Normalize ASCII comparisons to TeX words
     s = s.replace(/>=/g, '\\ge ').replace(/<=/g, '\\le ');
     return s;

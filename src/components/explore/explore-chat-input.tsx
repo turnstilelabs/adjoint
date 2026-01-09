@@ -1,21 +1,42 @@
 'use client';
 
 import { Textarea } from '@/components/ui/textarea';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
+import { useAppStore } from '@/state/app-store';
 
 export function ExploreChatInput() {
     const sendMessage = useSendExploreMessage();
     const [isSendingMessage, startSendMessage] = useTransition();
     const [input, setInput] = useState('');
+    const draft = useAppStore((s) => s.exploreDraft);
+    const draftNonce = useAppStore((s) => s.exploreDraftNonce);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
         // No-op: previously we had a keyboard fallback to open the proof chooser.
         // We now delay opening until extract-only completes.
         return;
     }, []);
+
+    // When the global selection toolbar requests an "Ask AI", prefill + focus.
+    useEffect(() => {
+        if (!draftNonce) return;
+        const next = String(draft ?? '');
+        setInput(next);
+        try {
+            requestAnimationFrame(() => {
+                textareaRef.current?.focus();
+                const len = next.length;
+                textareaRef.current?.setSelectionRange(len, len);
+            });
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draftNonce]);
 
     const handleSend = () => {
         const trimmed = input.trim();
@@ -41,6 +62,7 @@ export function ExploreChatInput() {
                 }}
             >
                 <Textarea
+                    ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {

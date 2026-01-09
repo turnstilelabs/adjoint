@@ -27,7 +27,9 @@ export function AttemptProofChooser({
 
     // Clamp selection when candidates change.
     React.useEffect(() => {
-        setSelectedIdx((idx) => Math.min(Math.max(0, idx), Math.max(0, candidates.length - 1)));
+        // Candidate list is ordered with latest first.
+        // Default selection should always be the newest statement.
+        setSelectedIdx(0);
     }, [candidates.length]);
 
     const attemptSelected = async () => {
