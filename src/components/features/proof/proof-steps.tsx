@@ -63,10 +63,12 @@ function ProofSteps() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-4xl mx-auto">
       <Accordion
+        key={(proof as any)?.id ?? 'proof'}
         type="multiple"
-        defaultValue={proof.sublemmas.map((_, i) => `item-${i + 1}`)}
+        // By default, only show the first step open to reduce cognitive load.
+        defaultValue={[`item-1`]}
         className="w-full space-y-4 border-b-0"
       >
         {proof.sublemmas.map((sublemma, index) => (

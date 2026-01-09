@@ -25,6 +25,7 @@ const GraphEdgeSchema = z.object({
 });
 
 const GenerateProofGraphInputSchema = z.object({
+  goalStatement: z.string().describe('The original input statement to be proved (the goal node).'),
   proofSteps: z.array(SublemmaSchema).describe('The sequence of sublemmas in the proof.'),
 });
 export type GenerateProofGraphInput = z.infer<typeof GenerateProofGraphInputSchema>;
@@ -48,24 +49,37 @@ const generateProofGraphPrompt = ai.definePrompt({
   name: 'generateProofGraphPrompt',
   input: { schema: GenerateProofGraphInputSchema },
   output: { schema: GenerateProofGraphOutputSchema },
-  prompt: `You are an expert in mathematical logic and graph theory. Your task is to analyze a sequence of mathematical sublemmas and construct a dependency graph representing their logical relationships.
+  prompt: `You are an expert in mathematical logic and graph theory. Your task is to construct a dependency graph representing the logical relationships between lemma statements and the final goal statement.
 
-**Input:** A list of sublemmas, each with a title and content.
+**Input:**
+- The goal statement to be proved (the user's original statement).
+- A list of sublemmas, each with a title and a statement.
 
 **Instructions:**
-1.  Create a node for each sublemma. Use "step-N" as the node ID, where N is the 1-based index of the sublemma in the input array. The node's label should be the sublemma's title.
-2.  Analyze the dependencies between the sublemmas. An edge should exist from node A to node B if sublemma B directly depends on the result or statement of sublemma A.
-3.  The graph should represent the logical flow. Sometimes this will be a simple linear chain (1 -> 2 -> 3), but other times a step might depend on multiple previous steps.
-4.  Create DIRECTED edges connecting the nodes based on these dependencies. Edges MUST be oriented from dependency to dependent: set "source" to the step that is used (A) and "target" to the step that depends on it (B). Use "edge-S-T" as the edge ID, where S is the source step number and T is the target step number (1-based). Do not output undirected edges.
+1.  Create a fixed node for the GOAL statement:
+    - Node id MUST be exactly "goal".
+    - Node label should be something short like "Goal" or "Statement".
+2.  Create a node for each sublemma. Use "step-N" as the node ID, where N is the 1-based index of the sublemma in the input array. The node's label should be the sublemma's title.
+3.  IMPORTANT: Determine dependencies using ONLY the goal statement and the lemma STATEMENTS.
+    - Do NOT use lemma proofs.
+    - Do NOT infer dependencies based on proof text.
+4.  Add edges for dependencies:
+    - Add an edge A -> B if statement B uses statement A.
+    - Add edges from lemma steps to the goal when the goal uses that lemma.
+    - Edges MUST be oriented from dependency to dependent: set "source" to the step that is used (A) and "target" to the dependent (B).
+    - Use id "edge-S-T" where S and T are node IDs (e.g. "edge-step-1-step-2" or "edge-step-3-goal").
+    - Do not output undirected edges.
 
-**Proof Steps to Analyze:**
+**Goal Statement:**
+{{goalStatement}}
+
+**Lemma Statements to Analyze (ignore proofs):**
 {{#each proofSteps}}
 - Title: {{this.title}}
   Statement: {{this.statement}}
-  Proof: {{this.proof}}
 {{/each}}
 
-Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema. Ensure there is one node for every proof step provided.`,
+Based on your analysis, generate the nodes and edges for the dependency graph. Ensure your output is a valid JSON object matching the required schema. Ensure there is one node for every proof step provided PLUS the fixed goal node.`,
 });
 
 const generateProofGraphFlow = ai.defineFlow(

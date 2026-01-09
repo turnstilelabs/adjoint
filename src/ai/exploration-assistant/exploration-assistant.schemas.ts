@@ -13,10 +13,6 @@ const PerStatementArtifactsSchema = z.object({
         .array(z.string())
         .default([])
         .describe('Counterexamples / failure modes for this statement.'),
-    openQuestions: z
-        .array(z.string())
-        .default([])
-        .describe('Open questions to investigate next for this statement.'),
 });
 
 export const ExploreArtifactsSchema = z.object({
@@ -69,3 +65,4 @@ export const ExplorationAssistantEventSchema = z.discriminatedUnion('type', [
 ]);
 
 export type ExplorationAssistantEvent = z.infer<typeof ExplorationAssistantEventSchema>;
+

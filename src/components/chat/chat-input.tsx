@@ -1,13 +1,34 @@
 import { Textarea } from '@/components/ui/textarea';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { useSendMessage } from '@/components/chat/useSendMessage';
+import { useAppStore } from '@/state/app-store';
 
 function ChatInput() {
   const sendMessage = useSendMessage();
   const [isSendingMessage, startSendMessage] = useTransition();
   const [input, setInput] = useState('');
+  const draft = useAppStore((s) => s.chatDraft);
+  const draftNonce = useAppStore((s) => s.chatDraftNonce);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // When the global selection toolbar requests an "Ask AI", prefill + focus.
+  useEffect(() => {
+    if (!draftNonce) return;
+    const next = String(draft ?? '');
+    setInput(next);
+    try {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        const len = next.length;
+        textareaRef.current?.setSelectionRange(len, len);
+      });
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftNonce]);
 
   const handleSend = () => {
     startSendMessage(() => sendMessage(input.trim()));
@@ -18,6 +39,7 @@ function ChatInput() {
     <div className="p-6 border-t bg-background">
       <div className="relative">
         <Textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

@@ -7,6 +7,14 @@ const UNLOCK_COOKIE_NAME = 'adjoint_unlocked_v2';
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // IMPORTANT: Don't intercept Next.js internal Server Action POSTs.
+    // These requests include a `next-action` header and must reach Next's action handler.
+    // Redirecting them (e.g. to /unlock) results in:
+    // "Failed to find Server Action ... This request might be from an older or newer deployment."
+    if (request.method === 'POST' && request.headers.has('next-action')) {
+        return NextResponse.next();
+    }
+
     // Allow the unlock page and its API endpoint without a cookie
     if (pathname.startsWith('/unlock') || pathname.startsWith('/api/unlock')) {
         return NextResponse.next();

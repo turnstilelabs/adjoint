@@ -83,6 +83,7 @@ function SingleStatementCarousel({
     editorRef?: React.Ref<EditableArtifactItemHandle>;
 }) {
     // Normalize & flatten any multi-statement entries
+    // Display latest statements first.
     const flat = items.flatMap(splitStatements);
     const [index, setIndex] = React.useState(0);
     const count = flat.length;
@@ -156,10 +157,13 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
     const edits = useAppStore((s) => s.exploreArtifactEdits);
     const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
 
-    const a: ExploreArtifacts = artifacts ?? {
+    const a0: ExploreArtifacts = artifacts ?? {
         candidateStatements: [],
         statementArtifacts: {},
     };
+
+    // Candidate statements are already ordered with latest first by the server.
+    const a: ExploreArtifacts = a0;
 
     const [activeStatement, setActiveStatement] = React.useState<string>('');
 
@@ -170,7 +174,6 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
         assumptions: [],
         examples: [],
         counterexamples: [],
-        openQuestions: [],
     };
 
     return (
@@ -310,39 +313,8 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
                     </>
                 )}
 
-                {scoped.openQuestions.length > 0 && (
-                    <>
-                        <Separator />
-                        <Section title="Open Questions">
-                            <ul className="list-disc pl-5 text-sm space-y-1">
-                                {scoped.openQuestions.map((x: string, idx: number) => {
-                                    const original = (x ?? '').replace(/\s*\n\s*/g, ' ').trim();
-                                    const value = (
-                                        edits.perStatement[activeStatement]?.openQuestions?.[original] ??
-                                        original
-                                    ).trim();
-                                    return (
-                                        <li key={idx} className="break-words">
-                                            <EditableArtifactItem
-                                                value={value}
-                                                block={false}
-                                                onCommit={(next) =>
-                                                    setEdit({
-                                                        kind: 'openQuestions',
-                                                        statementKey: activeStatement,
-                                                        original,
-                                                        edited: next,
-                                                    })
-                                                }
-                                            />
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </Section>
-                    </>
-                )}
             </div>
         </div>
     );
 }
+

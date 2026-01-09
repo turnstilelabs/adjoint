@@ -130,6 +130,7 @@ function EditableProblemCard() {
                 }}
                 style={{ cursor: 'pointer' }}
                 className={hasSuggestion ? 'rounded-md p-2' : undefined}
+                data-selection-enabled="1"
               >
                 <KatexRenderer content={problem} />
               </div>
@@ -138,7 +139,7 @@ function EditableProblemCard() {
                   <div className="text-sm mb-2 font-medium">
                     Could not prove the statement as written. It may be false or require stronger assumptions:
                   </div>
-                  <div className="text-sm p-2 rounded-md bg-background border border-muted">
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
                     <KatexRenderer content={pendingRejection.explanation} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -176,7 +177,7 @@ function EditableProblemCard() {
                     The AI was unable to prove this statement and proposed an alternative formulation:
                   </div>
 
-                  <div className="text-sm p-2 rounded-md bg-background border border-muted">
+                  <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
                     <KatexRenderer content={pendingSuggestion.provedStatement} />
                   </div>
                   <div className="flex items-center gap-2 mt-3">

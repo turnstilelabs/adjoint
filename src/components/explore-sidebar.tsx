@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BookOpen, Code2, Sparkles } from 'lucide-react';
+import { ConfirmResetDialog } from '@/components/confirm-reset-dialog';
 
 export function ExploreSidebar() {
     const [openLiterature, setOpenLiterature] = React.useState(false);
     const [openCode, setOpenCode] = React.useState(false);
     const [openProve, setOpenProve] = React.useState(false);
+    const [openResetConfirm, setOpenResetConfirm] = React.useState(false);
     const reset = useAppStore((s) => s.reset);
 
     return (
@@ -21,7 +23,10 @@ export function ExploreSidebar() {
             <aside className="w-14 flex flex-col items-center py-4 border-r bg-card shrink-0">
                 <Link
                     href="/"
-                    onClick={reset}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        setOpenResetConfirm(true);
+                    }}
                     className="mb-6 cursor-pointer"
                     aria-label="Go to homepage"
                 >
@@ -85,6 +90,16 @@ export function ExploreSidebar() {
                     onOpenChange={setOpenProve}
                     title="Prove it"
                     description="Pick a candidate statement, optionally edit it, then attempt a proof."
+                />
+
+                <ConfirmResetDialog
+                    open={openResetConfirm}
+                    onOpenChange={setOpenResetConfirm}
+                    onConfirm={() => {
+                        reset();
+                        // navigate to home after reset
+                        window.location.href = '/';
+                    }}
                 />
             </aside>
         </TooltipProvider>

@@ -946,7 +946,12 @@ export function SublemmaItem({
                 </div>
               </div>
             ) : (
-              <div ref={contentRef} onDoubleClick={handleDoubleClick} className="space-y-4">
+              <div
+                ref={contentRef}
+                data-local-selection="1"
+                onDoubleClick={handleDoubleClick}
+                className="space-y-4"
+              >
                 <div>
                   <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground mb-1">
                     <span>Statement</span>
@@ -967,9 +972,10 @@ export function SublemmaItem({
                   </div>
                   <div
                     ref={statementViewRef}
-                    className="mt-1 rounded-md bg-muted/40 px-3 py-2 text-sm text-primary"
+                    className="mt-1 rounded-md bg-background px-3 py-2 text-base text-foreground border border-border leading-7"
+                    data-selection-enabled="1"
                   >
-                    <KatexRenderer content={statement} />
+                    <KatexRenderer content={statement} className="leading-7" />
                   </div>
                 </div>
                 <div>
@@ -1020,11 +1026,15 @@ export function SublemmaItem({
                   )}
 
                   {!isProofCollapsed && (
-                    <div ref={proofViewRef} className="mt-1 text-sm leading-relaxed">
+                    <div
+                      ref={proofViewRef}
+                      className="mt-2 text-base prose prose-invert max-w-none [&_p]:leading-7 [&_p]:my-4"
+                      data-selection-enabled="1"
+                    >
                       {proof.split(/\n\s*\n/).map((para, idx) => (
-                        <div key={idx} className="mb-3 last:mb-0">
-                          <KatexRenderer content={para} />
-                        </div>
+                        <p key={idx} className="m-0">
+                          <KatexRenderer content={para} className="leading-7" inline />
+                        </p>
                       ))}
                     </div>
                   )}

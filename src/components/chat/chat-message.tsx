@@ -19,6 +19,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
           ? 'bg-primary text-primary-foreground shadow-md'
           : 'bg-card border border-border shadow-sm'
           }`}
+        data-selection-enabled="1"
       >
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>

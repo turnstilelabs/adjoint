@@ -15,6 +15,12 @@ This is EXPLORATION MODE:
 - Stay grounded: only extract artifacts that are explicitly present in the conversation (user or assistant).
 - Prefer short, crisp artifacts. Avoid duplicates.
 
+Candidate statements extraction rule (important):
+- ONLY extract precise mathematical statements written well enough that they could be proved or disproved.
+- Do NOT extract vague speculation or informal goals like "I suspect..." or "I wonder if..." unless it is rewritten in the conversation into a concrete, quantifiable statement.
+- Prefer statements with explicit quantifiers/conditions (e.g. "For all ...", "There exists ...", "If ..., then ...").
+- IMPORTANT: Stay grounded — only extract statements that literally appear in the conversation (user or assistant messages). Do not invent improved formulations.
+
 Assumptions extraction rule (important):
 - Extract assumptions/definitions as standalone, atomic items.
 - If the user writes a compound assumption like "Suppose A and B" or "Assume A, and assume B", extract BOTH A and B as separate assumptions.
@@ -35,11 +41,12 @@ Instructions for this turn:
     - Immediately call the tool "update_artifacts" exactly once.
  2) Otherwise:
     - First, provide a clear, helpful natural-language response to the user's message.
-      - IMPORTANT: Do NOT restate or list any artifacts (candidate statements, assumptions/definitions, examples, counterexamples, open questions) in your text response.
-      - Do NOT include headings like "Candidate statements:", "Assumptions:", "Examples:", "Counterexamples:", or "Open questions:" in your text response.
+      - IMPORTANT: Do NOT restate or list any artifacts (candidate statements, assumptions/definitions, examples, counterexamples) in your text response.
+      - Do NOT include headings like "Candidate statements:", "Assumptions:", "Examples:", or "Counterexamples:" in your text response.
       - Keep the text focused on high-level guidance and intuition; the structured items belong ONLY in the artifact tool call.
       - Do NOT fabricate Examples/Counterexamples/Open questions. Only extract them if they naturally appear in the conversation content (user or assistant text you actually wrote).
       - If no examples/counterexamples were provided, leave those arrays empty.
+      - EXCEPTION (statement-formulation requests): if the user explicitly asks you to *write/formulate/state* the statement (e.g. "now write a full statement", "formulate the theorem precisely"), you MAY include the final formulated statement ONCE in your natural-language response (plain sentence, no artifact headings). Still record it in candidateStatements.
  3) In all cases, call the tool "update_artifacts" exactly once, passing:
     - turnId (copy from input)
     - artifacts (the FULL current set of artifacts after this turn)
@@ -59,7 +66,6 @@ Artifacts so far (if any):
     - Assumptions: {{#each assumptions}}\n      - {{this}}{{/each}}
     - Examples: {{#each examples}}\n      - {{this}}{{/each}}
     - Counterexamples: {{#each counterexamples}}\n      - {{this}}{{/each}}
-    - Open questions: {{#each openQuestions}}\n      - {{this}}{{/each}}
   {{/with}}
 {{/each}}
 {{/if}}
@@ -83,7 +89,7 @@ B) THEN call update_artifacts once with:
      artifacts: {
        candidateStatements: [...],
        statementArtifacts: {
-         "<candidate statement>": { assumptions: [...], examples: [...], counterexamples: [...], openQuestions: [...] },
+         "<candidate statement>": { assumptions: [...], examples: [...], counterexamples: [...] },
          ...
        }
      }
