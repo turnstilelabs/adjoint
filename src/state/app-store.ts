@@ -12,7 +12,7 @@ import {
   generateProofGraphForGoalAction,
 } from '@/app/actions';
 
-export type View = 'home' | 'explore' | 'proof';
+export type View = 'home' | 'explore' | 'workspace' | 'proof';
 
 // Extended ProofVersion to support raw vs structured versions, numbering and metadata
 export type ProofVersion = {
@@ -209,16 +209,35 @@ type StoreData = {
   // Whole-proof analysis UI state
   isAnalyzingProof: boolean;
   analyzeProofRunId: number;
+
+  // Workspace (single-file editor + per-selection threads)
+  workspaceDoc: string;
+  workspaceMessages: Message[];
+  /** Draft text prefilled into the workspace chat input (used by selection toolbar). */
+  workspaceDraft: string;
+  workspaceDraftNonce: number;
+  isWorkspaceChatOpen: boolean;
 };
 
 interface AppState extends StoreData {
   reset: () => void;
+
+  /** Navigate back to homepage without clearing current workspace/proof state. */
+  goHome: () => void;
 
   /** Prefill + focus the proof-mode chat input (and optionally open the chat panel). */
   setChatDraft: (text: string, opts?: { open?: boolean }) => void;
 
   /** Prefill + focus the explore-mode chat input. */
   setExploreDraft: (text: string) => void;
+
+  // Workspace actions
+  startWorkspace: (seed?: string) => void;
+  newWorkspace: () => void;
+  setWorkspaceDoc: (doc: string) => void;
+  setWorkspaceDraft: (text: string, opts?: { open?: boolean }) => void;
+  setWorkspaceMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
+  setIsWorkspaceChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;
@@ -366,10 +385,18 @@ const initialState: StoreData = {
 
   isAnalyzingProof: false,
   analyzeProofRunId: 0,
+
+  workspaceDoc: '',
+  workspaceMessages: [],
+  workspaceDraft: '',
+  workspaceDraftNonce: 0,
+  isWorkspaceChatOpen: true,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
+
+  goHome: () => set({ view: 'home' }),
 
   setChatDraft: (text, opts) => {
     const t = String(text ?? '');
@@ -387,6 +414,56 @@ export const useAppStore = create<AppState>((set, get) => ({
       exploreDraft: t,
       exploreDraftNonce: (s.exploreDraftNonce || 0) + 1,
     }));
+  },
+
+  startWorkspace: (seed?: string) => {
+    const doc = String(seed ?? '').trim();
+    set((s) => ({
+      view: 'workspace',
+      workspaceDoc: doc || s.workspaceDoc || '',
+      // keep conversation by default
+      workspaceMessages: s.workspaceMessages,
+    }));
+  },
+
+  newWorkspace: () => {
+    set({
+      view: 'workspace',
+      workspaceDoc: '',
+      workspaceMessages: [],
+      workspaceDraft: '',
+      workspaceDraftNonce: 0,
+      isWorkspaceChatOpen: true,
+    });
+  },
+
+  setWorkspaceDoc: (doc) => set({ workspaceDoc: String(doc ?? '') }),
+
+  setWorkspaceDraft: (text, opts) => {
+    const t = String(text ?? '');
+    set((s) => ({
+      workspaceDraft: t,
+      workspaceDraftNonce: (s.workspaceDraftNonce || 0) + 1,
+      isWorkspaceChatOpen: opts?.open ? true : s.isWorkspaceChatOpen,
+    }));
+  },
+
+  setWorkspaceMessages: (updater) => {
+    if (typeof updater === 'function') {
+      set((state) => ({
+        workspaceMessages: (updater as (prev: Message[]) => Message[])(state.workspaceMessages),
+      }));
+    } else {
+      set({ workspaceMessages: updater });
+    }
+  },
+
+  setIsWorkspaceChatOpen: (open) => {
+    if (typeof open === 'function') {
+      set((s) => ({ isWorkspaceChatOpen: (open as any)(s.isWorkspaceChatOpen) }));
+    } else {
+      set({ isWorkspaceChatOpen: open });
+    }
   },
 
   ensureGraphForVersion: async (versionId: string) => {
@@ -1157,7 +1234,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (cancelExplore) {
       try { cancelExplore(); } catch { }
     }
-    set((state) => ({ ...initialState, lastProblem: state.lastProblem }));
+    set((state) => ({
+      ...initialState,
+      // Keep lastProblem for convenience.
+      lastProblem: state.lastProblem,
+      // Keep workspace doc + chat so reset doesn't feel destructive.
+      workspaceDoc: state.workspaceDoc,
+      workspaceMessages: state.workspaceMessages,
+      workspaceDraft: state.workspaceDraft,
+      workspaceDraftNonce: state.workspaceDraftNonce,
+      isWorkspaceChatOpen: state.isWorkspaceChatOpen,
+    }));
   },
 
   // Additional actions
@@ -1775,3 +1862,4 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   proof: () => get().proofHistory[get().activeVersionIdx],
 }));
+

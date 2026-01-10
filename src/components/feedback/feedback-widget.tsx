@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Send } from "lucide-react";
+import { useAppStore } from "@/state/app-store";
 
 const emojis = [
     { v: 1, e: "😡", label: "Very unhappy" },
@@ -103,6 +104,13 @@ export function FeedbackWidget() {
         }
     };
 
+    // Hide the floating feedback button when right-side panels are open
+    // to avoid overlap.
+    // NOTE: isWorkspaceChatOpen defaults to true, so we scope it to view==='workspace'.
+    const isPanelOpen = useAppStore(
+        (s) => (s.view === 'workspace' && s.isWorkspaceChatOpen) || (s.view === 'proof' && s.isChatOpen),
+    );
+
     return (
         <>
             <TooltipProvider>
@@ -112,7 +120,10 @@ export function FeedbackWidget() {
                             aria-label="Send feedback"
                             variant="secondary"
                             size="sm"
-                            className="fixed bottom-4 right-4 z-50 rounded-full shadow-lg opacity-80 hover:opacity-100"
+                            className={cn(
+                                "fixed bottom-4 right-4 z-50 rounded-full shadow-lg opacity-80 hover:opacity-100",
+                                isPanelOpen ? 'hidden' : '',
+                            )}
                             onClick={() => setOpen(true)}
                         >
                             <MessageSquare className="h-4 w-4" />

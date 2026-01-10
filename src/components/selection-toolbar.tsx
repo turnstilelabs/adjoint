@@ -73,6 +73,9 @@ interface SelectionToolbarProps {
   showAskAI?: boolean;
   showCheckAgain?: boolean;
   showRevise?: boolean;
+
+  /** Optional override for Ask AI behavior (e.g. Workspace selection -> open chat). */
+  onAskAI?: () => void;
 }
 
 export function SelectionToolbar({
@@ -89,6 +92,7 @@ export function SelectionToolbar({
   showAskAI = true,
   showCheckAgain = true,
   showRevise = true,
+  onAskAI,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -96,6 +100,8 @@ export function SelectionToolbar({
   const view = useAppStore((s) => s.view);
   const setChatDraft = useAppStore((s) => s.setChatDraft);
   const setExploreDraft = useAppStore((s) => s.setExploreDraft);
+  const setWorkspaceDraft = useAppStore((s) => (s as any).setWorkspaceDraft);
+  const setIsWorkspaceChatOpen = useAppStore((s) => (s as any).setIsWorkspaceChatOpen);
   const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
 
@@ -215,6 +221,11 @@ export function SelectionToolbar({
               // Prevent the click from collapsing the current selection before we read it.
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
+                if (typeof onAskAI === 'function') {
+                  onAskAI();
+                  return;
+                }
+
                 const fromSelection = computeCopyTextFromLiveSelection();
                 const text = (fromSelection || selectedText || '').trim();
                 if (!text) return;
@@ -226,6 +237,16 @@ export function SelectionToolbar({
 
                 if (view === 'proof') {
                   setChatDraft(text, { open: true });
+                  return;
+                }
+
+                if (view === 'workspace') {
+                  try {
+                    if (typeof setWorkspaceDraft === 'function') setWorkspaceDraft(text, { open: true });
+                    if (typeof setIsWorkspaceChatOpen === 'function') setIsWorkspaceChatOpen(true);
+                  } catch {
+                    // ignore
+                  }
                   return;
                 }
 
