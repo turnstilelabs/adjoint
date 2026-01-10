@@ -11,9 +11,10 @@ import type { Message } from '@/components/chat/interactive-chat';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { useSendWorkspaceThreadMessage } from '@/components/workspace/useSendWorkspaceThreadMessage';
 import { cn } from '@/lib/utils';
-import { Download, MessageCircle, FileUp, Sparkles, X } from 'lucide-react';
+import { Download, MessageCircle, FileUp, Sparkles, X, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
+import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView, keymap } from '@codemirror/view';
@@ -51,6 +52,12 @@ export default function WorkspaceView() {
     const isChatOpen = useAppStore((s) => s.isWorkspaceChatOpen);
     const setIsChatOpen = useAppStore((s) => s.setIsWorkspaceChatOpen);
 
+    const rightTab = useAppStore((s) => s.workspaceRightPanelTab);
+    const setRightTab = useAppStore((s) => s.setWorkspaceRightPanelTab);
+
+    const rightWidth = useAppStore((s) => s.workspaceRightPanelWidth);
+    const setRightWidth = useAppStore((s) => s.setWorkspaceRightPanelWidth);
+
     const draft = useAppStore((s) => s.workspaceDraft);
     const draftNonce = useAppStore((s) => s.workspaceDraftNonce);
     const setDraft = useAppStore((s) => s.setWorkspaceDraft);
@@ -60,6 +67,36 @@ export default function WorkspaceView() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const chatScrollRef = useRef<HTMLDivElement | null>(null);
     const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+    // Drag-to-resize state (right panel width)
+    const isDraggingRef = useRef(false);
+    const dragStartXRef = useRef(0);
+    const dragStartWidthRef = useRef(0);
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isDraggingRef.current) return;
+            const dx = e.clientX - dragStartXRef.current;
+            // Dragging handle left decreases width; right increases.
+            const next = dragStartWidthRef.current - dx;
+            setRightWidth(next);
+        };
+        const onUp = () => {
+            if (!isDraggingRef.current) return;
+            isDraggingRef.current = false;
+            try {
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            } catch {
+                // ignore
+            }
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, [setRightWidth]);
 
     // Selection state for floating toolbar.
     const [selection, setSelection] = useState<{
@@ -303,6 +340,15 @@ export default function WorkspaceView() {
         downloadTextFile('document.tex', doc ?? '');
     };
 
+    // Small guard: if the right panel is open but its current tab isn't visible on the left rail
+    // (e.g. older state), close it.
+    useEffect(() => {
+        if (!isChatOpen) return;
+        if (rightTab !== 'chat' && rightTab !== 'preview') {
+            setIsChatOpen(false);
+        }
+    }, [isChatOpen, rightTab, setIsChatOpen]);
+
     return (
         <div className="inset-0 absolute overflow-hidden flex">
             {/* Left sidebar (match Proof mode) */}
@@ -341,11 +387,32 @@ export default function WorkspaceView() {
                         variant="ghost"
                         size="icon"
                         title="Chat"
-                        onClick={() => setIsChatOpen((p) => !p)}
+                        onClick={() => {
+                            setIsChatOpen((prev) => (prev && rightTab === 'chat' ? false : true));
+                            setRightTab('chat');
+                        }}
                         className={isChatOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
                     >
                         <MessageCircle />
                         <span className="sr-only">Chat</span>
+                    </Button>
+
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Preview"
+                        onClick={() => {
+                            setIsChatOpen((prev) => (prev && rightTab === 'preview' ? false : true));
+                            setRightTab('preview');
+                        }}
+                        className={
+                            isChatOpen && rightTab === 'preview'
+                                ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
+                                : ''
+                        }
+                    >
+                        <Eye />
+                        <span className="sr-only">Preview</span>
                     </Button>
 
                     <Button
@@ -420,76 +487,120 @@ export default function WorkspaceView() {
                             onAskAI={() => {
                                 // Open chat and prefill with the selected excerpt.
                                 setDraft(selection.text, { open: true });
+                                setRightTab('chat');
                                 setIsChatOpen(true);
                             }}
                         />
                     )}
                 </main>
 
-                <aside
-                    className={cn(
-                        // Keep this as a true right sidebar (not full-screen)
-                        'relative shrink-0 min-h-0 h-full border-l bg-background overflow-hidden transition-all flex flex-col p-3',
-                        isChatOpen ? 'w-[28rem]' : 'w-0',
-                    )}
+                {/* Draggable divider + Right panel */}
+                <div className={cn('relative shrink-0 h-full', isChatOpen ? '' : 'w-0')}
+                    style={{ width: isChatOpen ? rightWidth : 0 }}
                 >
+                    {/* Drag handle */}
                     {isChatOpen && (
-                        <div className="relative h-full rounded-lg border bg-background overflow-hidden flex flex-col">
-                            {/* Close button overlays so we keep full height */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setIsChatOpen(false)}
-                                aria-label="Close chat"
-                                title="Close"
-                                className="absolute right-2 top-2 z-10"
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-
-                            <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any}>
-                                <div className="flex flex-col gap-4 py-6">
-                                    {(messages as Message[]).map((m, idx) => (
-                                        <ChatMessage message={m as any} autoWrapMath key={idx} />
-                                    ))}
-                                </div>
-                            </ScrollArea>
-
-                            <div className="p-6 border-t bg-background">
-                                <form
-                                    className="relative"
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        if (!isSending) handleSend();
-                                    }}
-                                >
-                                    <Textarea
-                                        ref={chatInputRef}
-                                        value={chatInput}
-                                        onChange={(e) => setChatInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                if (!isSending) handleSend();
-                                            }
-                                        }}
-                                        placeholder={selectionContext ? 'Ask about the selected excerpt…' : 'Ask about this draft…'}
-                                        rows={1}
-                                        className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
-                                    />
-                                    <Button
-                                        type="submit"
-                                        size="sm"
-                                        className="absolute right-3 top-1/2 -translate-y-1/2"
-                                        disabled={isSending}
-                                    >
-                                        Send
-                                    </Button>
-                                </form>
-                            </div>
+                        <div
+                            className="absolute left-0 top-0 h-full w-2 -translate-x-1 cursor-col-resize"
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize side panel"
+                            onMouseDown={(e) => {
+                                isDraggingRef.current = true;
+                                dragStartXRef.current = e.clientX;
+                                dragStartWidthRef.current = rightWidth;
+                                try {
+                                    document.body.style.cursor = 'col-resize';
+                                    document.body.style.userSelect = 'none';
+                                } catch {
+                                    // ignore
+                                }
+                            }}
+                        >
+                            {/* subtle visual line */}
+                            <div className="h-full w-px bg-border/60 ml-1" />
                         </div>
                     )}
-                </aside>
+
+                    <aside
+                        className={cn(
+                            // Keep this as a true right sidebar (not full-screen)
+                            'h-full min-h-0 border-l bg-background overflow-hidden transition-all flex flex-col p-3',
+                            isChatOpen ? '' : 'w-0 p-0 border-l-0',
+                        )}
+                    >
+                        {isChatOpen && (
+                            <div className="relative h-full rounded-lg border bg-background overflow-hidden flex flex-col">
+                                {/* Close button overlays so we keep full height */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsChatOpen(false)}
+                                    aria-label="Close chat"
+                                    title="Close"
+                                    className="absolute right-2 top-2 z-10"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+
+                                {rightTab === 'chat' ? (
+                                    <>
+                                        <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any}>
+                                            <div className="flex flex-col gap-4 py-6">
+                                                {(messages as Message[]).map((m, idx) => (
+                                                    <ChatMessage message={m as any} autoWrapMath key={idx} />
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+
+                                        <div className="p-6 border-t bg-background">
+                                            <form
+                                                className="relative"
+                                                onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    if (!isSending) handleSend();
+                                                }}
+                                            >
+                                                <Textarea
+                                                    ref={chatInputRef}
+                                                    value={chatInput}
+                                                    onChange={(e) => setChatInput(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                            e.preventDefault();
+                                                            if (!isSending) handleSend();
+                                                        }
+                                                    }}
+                                                    placeholder={
+                                                        selectionContext
+                                                            ? 'Ask about the selected excerpt…'
+                                                            : 'Ask about this draft…'
+                                                    }
+                                                    rows={1}
+                                                    className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
+                                                />
+                                                <Button
+                                                    type="submit"
+                                                    size="sm"
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                                                    disabled={isSending}
+                                                >
+                                                    Send
+                                                </Button>
+                                            </form>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <ScrollArea className="flex-1 px-3 md:px-6">
+                                        <div className="py-6">
+                                            <WorkspacePreview content={doc || ''} />
+                                        </div>
+                                    </ScrollArea>
+                                )}
+                            </div>
+                        )}
+                    </aside>
+                </div>
             </div>
         </div>
     );

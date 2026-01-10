@@ -217,6 +217,8 @@ type StoreData = {
   workspaceDraft: string;
   workspaceDraftNonce: number;
   isWorkspaceChatOpen: boolean;
+  workspaceRightPanelTab: 'chat' | 'preview';
+  workspaceRightPanelWidth: number; // px
 };
 
 interface AppState extends StoreData {
@@ -238,6 +240,8 @@ interface AppState extends StoreData {
   setWorkspaceDraft: (text: string, opts?: { open?: boolean }) => void;
   setWorkspaceMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setIsWorkspaceChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setWorkspaceRightPanelTab: (tab: 'chat' | 'preview') => void;
+  setWorkspaceRightPanelWidth: (widthPx: number) => void;
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;
@@ -391,6 +395,8 @@ const initialState: StoreData = {
   workspaceDraft: '',
   workspaceDraftNonce: 0,
   isWorkspaceChatOpen: true,
+  workspaceRightPanelTab: 'chat',
+  workspaceRightPanelWidth: 448, // 28rem default
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -434,6 +440,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceDraft: '',
       workspaceDraftNonce: 0,
       isWorkspaceChatOpen: true,
+      workspaceRightPanelTab: 'chat',
+      workspaceRightPanelWidth: 448,
     });
   },
 
@@ -446,6 +454,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceDraftNonce: (s.workspaceDraftNonce || 0) + 1,
       isWorkspaceChatOpen: opts?.open ? true : s.isWorkspaceChatOpen,
     }));
+  },
+
+  setWorkspaceRightPanelTab: (tab) => set({ workspaceRightPanelTab: tab }),
+
+  setWorkspaceRightPanelWidth: (widthPx) => {
+    const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
+    // Keep it within a sensible range.
+    const next = clamp(Number(widthPx) || 0, 280, 720);
+    set({ workspaceRightPanelWidth: next });
   },
 
   setWorkspaceMessages: (updater) => {
