@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
+import { selectionRangeToLatex } from '@/lib/selection-to-latex';
 
 type Anchor = { top: number; left: number };
 
@@ -24,11 +25,13 @@ function getSelectionHtml(range: Range): string {
 export function GlobalSelectionOverlay() {
     const [anchor, setAnchor] = useState<Anchor | null>(null);
     const [selectedText, setSelectedText] = useState('');
+    const [copyText, setCopyText] = useState<string>('');
     const [selectedHtml, setSelectedHtml] = useState<string | undefined>(undefined);
 
     const clear = () => {
         setAnchor(null);
         setSelectedText('');
+        setCopyText('');
         setSelectedHtml(undefined);
     };
 
@@ -81,6 +84,7 @@ export function GlobalSelectionOverlay() {
             }
 
             setSelectedText(text);
+            setCopyText(selectionRangeToLatex(range) || text);
             setSelectedHtml(getSelectionHtml(range));
             setAnchor({ top: rect.top, left: rect.left + rect.width / 2 });
         };
@@ -113,6 +117,7 @@ export function GlobalSelectionOverlay() {
             anchor={anchor}
             onRevise={noOp}
             selectedText={selectedText}
+            copyText={copyText}
             selectedHtml={selectedHtml}
             canCheckAgain={false}
             showCheckAgain={false}

@@ -28,6 +28,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAppStore, type ProofValidationResult } from '@/state/app-store';
 import { validateSublemmaAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
+import AdjointProse from '@/components/adjoint-prose';
+import { selectionRangeToLatex } from '@/lib/selection-to-latex';
 
 interface SublemmaItemProps {
   step: number;
@@ -116,6 +118,8 @@ export function SublemmaItem({
     anchor: { top: number; left: number } | null;
     target: 'statement' | 'proof' | null;
   }>({ text: '', anchor: null, target: null });
+
+  const [copyText, setCopyText] = useState<string>('');
 
   const computeCaretIndexFromSelection = useCallback(
     (containerEl: HTMLElement, source: string, selectedText: string): number => {
@@ -283,6 +287,10 @@ export function SublemmaItem({
     ) {
       const range = currentSelection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
+
+      // Best-effort: extract underlying LaTeX from KaTeX DOM for copy.
+      // Fallback to visible selection if we can't.
+      setCopyText(selectionRangeToLatex(range) || selectedText);
       // Build and store a robust selection snapshot for later (toolbar click)
       const targetNode = currentSelection.anchorNode;
       const inStatement =
@@ -405,6 +413,7 @@ export function SublemmaItem({
     } else {
       setSelection({ text: '', anchor: null, target: null });
       lastSelectionSnapRef.current = null;
+      setCopyText('');
     }
   }, [isEditing, statement, proof, computeCaretIndexFromSelection]);
 
@@ -874,6 +883,7 @@ export function SublemmaItem({
           anchor={selection.anchor}
           onRevise={handleReviseFromToolbar}
           selectedText={selection.text}
+          copyText={copyText || selection.text}
           canCheckAgain={selection.target === 'proof'}
           lemmaStatement={statement}
         />
@@ -1028,14 +1038,10 @@ export function SublemmaItem({
                   {!isProofCollapsed && (
                     <div
                       ref={proofViewRef}
-                      className="mt-2 text-base prose prose-invert max-w-none [&_p]:leading-7 [&_p]:my-4"
+                      className="mt-2"
                       data-selection-enabled="1"
                     >
-                      {proof.split(/\n\s*\n/).map((para, idx) => (
-                        <p key={idx} className="m-0">
-                          <KatexRenderer content={para} className="leading-7" inline />
-                        </p>
-                      ))}
+                      <AdjointProse content={proof} />
                     </div>
                   )}
 

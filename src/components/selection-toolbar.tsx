@@ -8,6 +8,7 @@ import { useTransition } from 'react';
 import { useAppStore } from '@/state/app-store';
 import { showModelError } from '@/lib/model-errors';
 import { useRouter } from 'next/navigation';
+import { selectionRangeToLatex } from '@/lib/selection-to-latex';
 
 async function copyWithFormat(text: string, html?: string) {
   const t = String(text ?? '');
@@ -55,6 +56,8 @@ interface SelectionToolbarProps {
   anchor: { top: number; left: number } | null;
   onRevise: () => void;
   selectedText: string;
+  /** Optional override for Copy (e.g. LaTeX extracted from KaTeX). */
+  copyText?: string;
   canCheckAgain?: boolean;
   lemmaStatement?: string;
   /** Optional HTML for rich copy (used by global selection overlay). */
@@ -76,6 +79,7 @@ export function SelectionToolbar({
   anchor,
   onRevise,
   selectedText,
+  copyText,
   canCheckAgain = true,
   lemmaStatement,
   selectedHtml,
@@ -94,6 +98,17 @@ export function SelectionToolbar({
   const setExploreDraft = useAppStore((s) => s.setExploreDraft);
   const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
+
+  const computeCopyTextFromLiveSelection = () => {
+    try {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return '';
+      const range = sel.getRangeAt(0);
+      return selectionRangeToLatex(range);
+    } catch {
+      return '';
+    }
+  };
 
   const handleCheckAgain = () => {
     const loadingToast = toast({
@@ -179,8 +194,12 @@ export function SelectionToolbar({
             <Button
               variant="ghost"
               size="icon"
+              // Prevent the click from collapsing the current selection before we copy.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
-                await copyWithFormat(selectedText, selectedHtml);
+                const fromSelection = computeCopyTextFromLiveSelection();
+                const effective = (copyText ?? fromSelection ?? selectedText).trim();
+                await copyWithFormat(effective, selectedHtml);
                 toast({ title: 'Copied', description: 'Selection copied to clipboard.' });
               }}
               title="Copy"
@@ -193,8 +212,11 @@ export function SelectionToolbar({
             <Button
               variant="ghost"
               size="icon"
+              // Prevent the click from collapsing the current selection before we read it.
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                const text = (selectedText || '').trim();
+                const fromSelection = computeCopyTextFromLiveSelection();
+                const text = (fromSelection || selectedText || '').trim();
                 if (!text) return;
 
                 if (view === 'explore') {
