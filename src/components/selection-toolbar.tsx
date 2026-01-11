@@ -1,5 +1,5 @@
 "use client";
-import { HelpCircle, Edit, MessageSquareText, Copy } from 'lucide-react';
+import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
@@ -74,6 +74,10 @@ interface SelectionToolbarProps {
   showCheckAgain?: boolean;
   showRevise?: boolean;
 
+  /** Optional "Prove this" action (Workspace selection -> send to prover). */
+  showProveThis?: boolean;
+  onProveThis?: () => void;
+
   /** Optional override for Ask AI behavior (e.g. Workspace selection -> open chat). */
   onAskAI?: () => void;
 }
@@ -92,6 +96,8 @@ export function SelectionToolbar({
   showAskAI = true,
   showCheckAgain = true,
   showRevise = true,
+  showProveThis = false,
+  onProveThis,
   onAskAI,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
@@ -267,6 +273,19 @@ export function SelectionToolbar({
               title="Ask AI"
             >
               <MessageSquareText className="h-4 w-4" />
+            </Button>
+          )}
+
+          {showProveThis && typeof onProveThis === 'function' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              // Prevent the click from collapsing the current selection before we read it.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onProveThis()}
+              title="Prove this"
+            >
+              <Sparkles className="h-4 w-4" />
             </Button>
           )}
 

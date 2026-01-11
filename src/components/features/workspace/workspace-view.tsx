@@ -11,10 +11,20 @@ import type { Message } from '@/components/chat/interactive-chat';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { useSendWorkspaceThreadMessage } from '@/components/workspace/useSendWorkspaceThreadMessage';
 import { cn } from '@/lib/utils';
-import { Download, MessageCircle, FileUp, Sparkles, X, Eye } from 'lucide-react';
+import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
 import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
+import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView, keymap } from '@codemirror/view';
@@ -107,6 +117,14 @@ export default function WorkspaceView() {
     }>({ text: '', anchor: null, start: 0, end: 0 });
 
     const clearSelection = () => setSelection({ text: '', anchor: null, start: 0, end: 0 });
+
+    // "Prove this" modal state
+    const [isProveOpen, setIsProveOpen] = useState(false);
+    const [proveIncludeContext, setProveIncludeContext] = useState(true);
+    const [proveStripMacros, setProveStripMacros] = useState(true);
+    const [proveStatement, setProveStatement] = useState('');
+    const [proveContextPreview, setProveContextPreview] = useState('');
+    const [provePayload, setProvePayload] = useState('');
 
     // Autosave doc to localStorage (debounced)
     useEffect(() => {
@@ -221,6 +239,48 @@ export default function WorkspaceView() {
             contextText: (doc || '').slice(left, right),
         };
     }, [selection, doc]);
+
+    const openProveModalFromSelection = () => {
+        const selected = (selection.text || '').trim();
+        if (!selected) return;
+
+        const body = proveStripMacros ? stripLatexPreambleAndMacros(selected) : selected;
+        const ctx = contextBeforeSelection({
+            doc: doc || '',
+            selectionStart: selection.start,
+            maxChars: 6000,
+            stripMacros: proveStripMacros,
+        });
+
+        setProveStatement(body);
+        setProveContextPreview(ctx);
+
+        // Compute initial payload.
+        const statement = body.trim();
+        const context = ctx.trim();
+        const payload = !statement ? '' : !proveIncludeContext || !context ? statement : `${context}${statement}`;
+        setProvePayload(payload);
+        setIsProveOpen(true);
+    };
+
+    const buildProverPayload = () => {
+        const statement = (proveStatement || '').trim();
+        const ctx = (proveContextPreview || '').trim();
+
+        if (!statement) return '';
+        if (!proveIncludeContext || !ctx) return statement;
+
+        // Keep context above the statement.
+        // We intentionally do not include \documentclass etc.
+        return `${ctx}${statement}`;
+    };
+
+    // Keep the inferred payload in sync with toggles.
+    useEffect(() => {
+        if (!isProveOpen) return;
+        setProvePayload(buildProverPayload());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isProveOpen, proveIncludeContext, proveStripMacros, proveStatement, proveContextPreview]);
 
     const cmExtensions = useMemo<Extension[]>(() => {
         const latex = StreamLanguage.define(stex);
@@ -484,6 +544,8 @@ export default function WorkspaceView() {
                             showRevise={false}
                             showCopy={true}
                             showAskAI={true}
+                            showProveThis={true}
+                            onProveThis={() => openProveModalFromSelection()}
                             onAskAI={() => {
                                 // Open chat and prefill with the selected excerpt.
                                 setDraft(selection.text, { open: true });
@@ -492,6 +554,94 @@ export default function WorkspaceView() {
                             }}
                         />
                     )}
+
+                    <Dialog
+                        open={isProveOpen}
+                        onOpenChange={(open) => {
+                            setIsProveOpen(open);
+                        }}
+                    >
+                        <DialogContent className="sm:max-w-[720px]">
+                            <DialogHeader>
+                                <DialogTitle>Attempt proof with AI?</DialogTitle>
+                            </DialogHeader>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="prove-payload" className="flex items-center gap-2">
+                                            Inferred Statement
+                                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                        </Label>
+                                    </div>
+                                    <Textarea
+                                        id="prove-payload"
+                                        value={provePayload}
+                                        onChange={(e) => setProvePayload(e.target.value)}
+                                        rows={6}
+                                        className="font-mono text-xs"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-3 rounded-md border p-3">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="prove-include-context"
+                                            checked={proveIncludeContext}
+                                            onCheckedChange={(v) => setProveIncludeContext(Boolean(v))}
+                                        />
+                                        <Label htmlFor="prove-include-context">Add preceding context</Label>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="prove-strip-macros"
+                                            checked={proveStripMacros}
+                                            onCheckedChange={(v) => {
+                                                const next = Boolean(v);
+                                                setProveStripMacros(next);
+                                                // Recompute previews with the new mode.
+                                                const selected = (selection.text || '').trim();
+                                                const body = next ? stripLatexPreambleAndMacros(selected) : selected;
+                                                const ctx = contextBeforeSelection({
+                                                    doc: doc || '',
+                                                    selectionStart: selection.start,
+                                                    maxChars: 6000,
+                                                    stripMacros: next,
+                                                });
+                                                setProveStatement(body);
+                                                setProveContextPreview(ctx);
+                                            }}
+                                        />
+                                        <Label htmlFor="prove-strip-macros">Strip macros/preamble from context</Label>
+                                    </div>
+
+                                    {/* Inferred payload is always editable. */}
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsProveOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        const payload = (provePayload || '').trim();
+                                        if (!payload) return;
+                                        setIsProveOpen(false);
+                                        clearSelection();
+                                        // Switch to dedicated prover mode.
+                                        void startProof(payload);
+                                    }}
+                                >
+                                    Continue
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </main>
 
                 {/* Draggable divider + Right panel */}
