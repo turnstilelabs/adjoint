@@ -14,6 +14,25 @@ type Props = {
     onPromote: (statement: string) => void;
     onExtract?: () => void;
     isExtracting?: boolean;
+
+    /** Optional overrides so this panel can be reused outside Explore mode (e.g. Workspace Insights). */
+    edits?: {
+        candidateStatements: Record<string, string>;
+        perStatement: Record<
+            string,
+            {
+                assumptions: Record<string, string>;
+                examples: Record<string, string>;
+                counterexamples: Record<string, string>;
+            }
+        >;
+    };
+    setEdit?: (opts: {
+        kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
+        statementKey?: string;
+        original: string;
+        edited: string;
+    }) => void;
 };
 
 function Section({
@@ -153,9 +172,19 @@ function SingleStatementCarousel({
     );
 }
 
-export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }: Props) {
-    const edits = useAppStore((s) => s.exploreArtifactEdits);
-    const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
+export function ArtifactsPanel({
+    artifacts,
+    onPromote,
+    onExtract,
+    isExtracting,
+    edits: editsOverride,
+    setEdit: setEditOverride,
+}: Props) {
+    const exploreEdits = useAppStore((s) => s.exploreArtifactEdits);
+    const exploreSetEdit = useAppStore((s) => s.setExploreArtifactEdit);
+
+    const edits = editsOverride ?? exploreEdits;
+    const setEdit = setEditOverride ?? exploreSetEdit;
 
     const a0: ExploreArtifacts = artifacts ?? {
         candidateStatements: [],
@@ -317,4 +346,3 @@ export function ArtifactsPanel({ artifacts, onPromote, onExtract, isExtracting }
         </div>
     );
 }
-

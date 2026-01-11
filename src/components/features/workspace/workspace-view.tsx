@@ -15,6 +15,8 @@ import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
 import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
+import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
+import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
 import {
     Dialog,
@@ -58,6 +60,11 @@ export default function WorkspaceView() {
 
     const messages = useAppStore((s) => s.workspaceMessages);
     const setMessages = useAppStore((s) => s.setWorkspaceMessages);
+
+    const workspaceArtifacts = useAppStore((s) => (s as any).workspaceArtifacts);
+    const workspaceArtifactEdits = useAppStore((s) => (s as any).workspaceArtifactEdits);
+    const setWorkspaceArtifactEdit = useAppStore((s) => (s as any).setWorkspaceArtifactEdit);
+    const extractInsights = useExtractWorkspaceInsights();
 
     const isChatOpen = useAppStore((s) => s.isWorkspaceChatOpen);
     const setIsChatOpen = useAppStore((s) => s.setIsWorkspaceChatOpen);
@@ -372,6 +379,20 @@ export default function WorkspaceView() {
                         setMessages((prev) =>
                             prev.map((m, idx) => (idx === prev.length - 1 ? ({ ...m, isTyping: false } as any) : m)),
                         );
+
+                        // Auto-extract insights after the assistant finishes.
+                        try {
+                            const latest = useAppStore.getState().workspaceMessages;
+                            const lastUser = [...latest].reverse().find((m: any) => m.role === 'user')?.content;
+                            const basis = String(lastUser ?? trimmed);
+                            void extractInsights({
+                                request: basis,
+                                history: latest.slice(-10) as any,
+                                seed: (doc || '').slice(0, 2000),
+                            });
+                        } catch {
+                            // ignore
+                        }
                     },
                     onError: (msg) => {
                         setMessages((prev) =>
@@ -404,7 +425,7 @@ export default function WorkspaceView() {
     // (e.g. older state), close it.
     useEffect(() => {
         if (!isChatOpen) return;
-        if (rightTab !== 'chat' && rightTab !== 'preview') {
+        if (rightTab !== 'chat' && rightTab !== 'insights' && rightTab !== 'preview') {
             setIsChatOpen(false);
         }
     }, [isChatOpen, rightTab, setIsChatOpen]);
@@ -478,25 +499,19 @@ export default function WorkspaceView() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        title="Prove"
+                        title="Insights"
                         onClick={() => {
-                            const raw = (doc || '').trim();
-                            if (!raw) {
-                                toast({
-                                    title: 'Nothing to prove yet',
-                                    description: 'Write or import a proof draft first.',
-                                });
-                                return;
-                            }
-
-                            // Best-effort: if the draft starts with \begin{proof}, keep it.
-                            // Otherwise, wrap it to help downstream parsing.
-                            const body = raw.includes('\\begin{proof}') ? raw : `\\begin{proof}\n${raw}\n\\end{proof}`;
-                            void startProof(body);
+                            setIsChatOpen((prev) => (prev && rightTab === 'insights' ? false : true));
+                            setRightTab('insights');
                         }}
+                        className={
+                            isChatOpen && rightTab === 'insights'
+                                ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
+                                : ''
+                        }
                     >
                         <Sparkles />
-                        <span className="sr-only">Prove</span>
+                        <span className="sr-only">Insights</span>
                     </Button>
 
                     <Button variant="ghost" size="icon" title="Export" onClick={onExport}>
@@ -740,6 +755,38 @@ export default function WorkspaceView() {
                                             </form>
                                         </div>
                                     </>
+                                ) : rightTab === 'insights' ? (
+                                    <div className="flex-1 min-h-0 p-3">
+                                        <div className="h-full rounded-lg border bg-background overflow-hidden">
+                                            <ArtifactsPanel
+                                                artifacts={workspaceArtifacts}
+                                                onPromote={(statement: string) => {
+                                                    const s = (statement || '').trim();
+                                                    if (!s) return;
+                                                    void startProof(s);
+                                                }}
+                                                onExtract={() => {
+                                                    try {
+                                                        const latest = useAppStore.getState().workspaceMessages;
+                                                        const lastUser = [...latest]
+                                                            .reverse()
+                                                            .find((m: any) => m.role === 'user')?.content;
+                                                        const basis = String(lastUser ?? '').trim();
+                                                        if (!basis) return;
+                                                        void extractInsights({
+                                                            request: basis,
+                                                            history: latest.slice(-10) as any,
+                                                            seed: (doc || '').slice(0, 2000),
+                                                        });
+                                                    } catch {
+                                                        // ignore
+                                                    }
+                                                }}
+                                                edits={workspaceArtifactEdits}
+                                                setEdit={setWorkspaceArtifactEdit}
+                                            />
+                                        </div>
+                                    </div>
                                 ) : (
                                     <ScrollArea className="flex-1 px-3 md:px-6">
                                         <div className="py-6">

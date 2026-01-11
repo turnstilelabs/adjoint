@@ -217,8 +217,24 @@ type StoreData = {
   workspaceDraft: string;
   workspaceDraftNonce: number;
   isWorkspaceChatOpen: boolean;
-  workspaceRightPanelTab: 'chat' | 'preview';
+  workspaceRightPanelTab: 'chat' | 'insights' | 'preview';
   workspaceRightPanelWidth: number; // px
+
+  // Workspace Insights (Explore-style artifacts)
+  workspaceArtifacts: ExploreArtifacts | null;
+  workspaceArtifactEdits: {
+    candidateStatements: Record<string, string>;
+    perStatement: Record<
+      string,
+      {
+        assumptions: Record<string, string>;
+        examples: Record<string, string>;
+        counterexamples: Record<string, string>;
+      }
+    >;
+  };
+  workspaceTurnId: number;
+  cancelWorkspaceCurrent?: (() => void) | null;
 };
 
 interface AppState extends StoreData {
@@ -240,8 +256,20 @@ interface AppState extends StoreData {
   setWorkspaceDraft: (text: string, opts?: { open?: boolean }) => void;
   setWorkspaceMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setIsWorkspaceChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setWorkspaceRightPanelTab: (tab: 'chat' | 'preview') => void;
+  setWorkspaceRightPanelTab: (tab: 'chat' | 'insights' | 'preview') => void;
   setWorkspaceRightPanelWidth: (widthPx: number) => void;
+
+  // Workspace Insights actions
+  setWorkspaceArtifacts: (artifacts: ExploreArtifacts | null) => void;
+  setWorkspaceArtifactEdit: (opts: {
+    kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
+    statementKey?: string;
+    original: string;
+    edited: string;
+  }) => void;
+  bumpWorkspaceTurnId: () => number;
+  getWorkspaceTurnId: () => number;
+  setWorkspaceCancelCurrent: (cancel: (() => void) | null) => void;
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;
@@ -397,6 +425,14 @@ const initialState: StoreData = {
   isWorkspaceChatOpen: true,
   workspaceRightPanelTab: 'chat',
   workspaceRightPanelWidth: 448, // 28rem default
+
+  workspaceArtifacts: null,
+  workspaceArtifactEdits: {
+    candidateStatements: {},
+    perStatement: {},
+  },
+  workspaceTurnId: 0,
+  cancelWorkspaceCurrent: null,
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -464,6 +500,64 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = clamp(Number(widthPx) || 0, 280, 720);
     set({ workspaceRightPanelWidth: next });
   },
+
+  setWorkspaceArtifacts: (artifacts) => set({ workspaceArtifacts: artifacts }),
+
+  setWorkspaceArtifactEdit: ({ kind, statementKey, original, edited }) => {
+    const o = (original ?? '').trim();
+    if (!o) return;
+    const e = (edited ?? '').trim();
+
+    if (kind === 'candidateStatements') {
+      set((state) => ({
+        workspaceArtifactEdits: {
+          ...state.workspaceArtifactEdits,
+          candidateStatements: {
+            ...state.workspaceArtifactEdits.candidateStatements,
+            [o]: e,
+          },
+        },
+      }));
+      return;
+    }
+
+    const sk = (statementKey ?? '').trim();
+    if (!sk) return;
+
+    set((state) => {
+      const prevForStmt = state.workspaceArtifactEdits.perStatement[sk] ?? {
+        assumptions: {},
+        examples: {},
+        counterexamples: {},
+      };
+
+      return {
+        workspaceArtifactEdits: {
+          ...state.workspaceArtifactEdits,
+          perStatement: {
+            ...state.workspaceArtifactEdits.perStatement,
+            [sk]: {
+              ...prevForStmt,
+              [kind]: {
+                ...prevForStmt[kind],
+                [o]: e,
+              },
+            },
+          },
+        },
+      };
+    });
+  },
+
+  bumpWorkspaceTurnId: () => {
+    const next = get().workspaceTurnId + 1;
+    set({ workspaceTurnId: next });
+    return next;
+  },
+
+  getWorkspaceTurnId: () => get().workspaceTurnId,
+
+  setWorkspaceCancelCurrent: (cancel) => set({ cancelWorkspaceCurrent: cancel }),
 
   setWorkspaceMessages: (updater) => {
     if (typeof updater === 'function') {
@@ -1879,4 +1973,3 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   proof: () => get().proofHistory[get().activeVersionIdx],
 }));
-
