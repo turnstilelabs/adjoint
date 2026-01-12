@@ -1,8 +1,7 @@
 /*
- * A minimal “ChatGPT-like” prose renderer for proof text.
+ * Minimal prose renderer for proof text.
  *
- * We intentionally do NOT parse Markdown here.
- * Instead:
+ * We do not parse Markdown.
  * - Blank lines delimit paragraphs.
  * - Single newlines are preserved via KatexRenderer (it inserts <br/>).
  */

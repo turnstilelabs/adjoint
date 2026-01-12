@@ -1,14 +1,5 @@
-/**
- * Utilities for copying selections containing KaTeX-rendered math.
- *
- * Problem: `window.getSelection().toString()` on KaTeX output returns the *visual* text
- * (often mangled), not the underlying TeX source.
- *
- * Solution: KaTeX includes the TeX source in MathML annotations:
- *   <annotation encoding="application/x-tex">...</annotation>
- * We clone the selected DOM range, replace `.katex` nodes with that annotation text,
- * and then read the resulting textContent.
- */
+// Extract a LaTeX-ish string from a DOM selection that includes KaTeX.
+// KaTeX stores source TeX in MathML annotations; we prefer that over visible text.
 
 function normalizeUnicodeToLatex(text: string): string {
     return (text ?? '')
@@ -77,12 +68,8 @@ function safeIntersectsNode(range: Range, node: Node): boolean {
  */
 export function selectionRangeToLatex(range: Range): string {
     try {
-        // IMPORTANT: using `range.cloneContents()` is not enough for KaTeX.
-        // In practice, the selection often only includes `.katex-html` (visible layer)
-        // and omits `.katex-mathml` (hidden layer) where the TeX annotation lives.
-        //
-        // Instead, traverse the *live* DOM nodes intersecting the range, and when we
-        // encounter anything inside a KaTeX render, replace it with the annotation TeX.
+        // `range.cloneContents()` is often missing KaTeX's hidden MathML layer.
+        // Walk the live DOM and replace KaTeX nodes with their annotation TeX.
 
         const ancestor: Element | null =
             range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE

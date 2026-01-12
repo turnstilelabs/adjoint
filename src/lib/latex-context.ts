@@ -1,15 +1,13 @@
-// Helpers for extracting a "safe" context for LLMs from a LaTeX-like document.
+// Helpers for extracting a context snippet from a LaTeX-like document.
 
 /**
- * Remove (most) preamble and macro definitions.
- * This is intentionally heuristic: the goal is to avoid feeding large macro blocks
- * or package configuration to the model, while keeping meaningful math/prose.
+ * Remove most preamble and macro definitions.
+ * Heuristic: drop bulky setup while keeping the main math/prose.
  */
 export function stripLatexPreambleAndMacros(raw: string): string {
     let s = String(raw ?? '');
 
     // If it's a full document, prefer extracting its body.
-    // We intentionally do this BEFORE stripping markers.
     const begin = s.match(/\\begin\{document\}/);
     const end = s.match(/\\end\{document\}/);
     if (begin && end && begin.index != null && end.index != null && end.index > begin.index) {

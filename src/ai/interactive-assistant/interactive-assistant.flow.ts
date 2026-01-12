@@ -2,6 +2,7 @@ import {
   InteractiveAssistantEventSchema,
   InteractiveAssistantInputSchema,
 } from '@/ai/interactive-assistant/interactive-assistant.schemas';
+import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { proposeChangesTool } from '@/ai/interactive-assistant/interactive-assistant.tools';
 import { interactiveAssistantPrompt } from '@/ai/interactive-assistant/interactive-assistant.prompt';
 import { ai } from '@/ai/genkit';
@@ -19,11 +20,12 @@ export const interactiveAssistantFlow = ai.defineFlow(
     });
 
     for await (const evt of stream) {
-      console.log(JSON.stringify(evt));
       if (evt.role === 'tool' && evt.content[0].toolResponse?.name === 'propose_changes') {
+        const revisedSublemmas = (evt.content[0].toolResponse?.output as { revisedSublemmas?: Sublemma[] })
+          ?.revisedSublemmas;
         sendChunk({
           type: 'proposal',
-          revisedSublemmas: (evt.content[0].toolResponse?.output as any)?.revisedSublemmas,
+          revisedSublemmas: Array.isArray(revisedSublemmas) ? revisedSublemmas : [],
         });
         return { done: true };
       }

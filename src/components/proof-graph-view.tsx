@@ -9,12 +9,6 @@ import { showModelError } from '@/lib/model-errors';
 import { ProofGraph } from './proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
 
-/**
- * ProofGraphView
- * - Connects to global state for sublemmas, graph data, and loading flags.
- * - Generates the graph when the view is switched to `graph` and no data is available yet.
- * - Renders loading, graph, or fallback UI accordingly.
- */
 export function ProofGraphView() {
   const { toast } = useToast();
   const proof = useAppStore((s) => s.proof());
@@ -41,7 +35,6 @@ export function ProofGraphView() {
   }, [rawProof, decomposedRaw]);
 
   // Latest structured version index for the current raw draft's baseMajor.
-  // IMPORTANT: use the same baseMajor resolution logic as the store's runDecomposition.
   const latestStructuredIdxForCurrentRaw = useMemo(() => {
     const baseMajor = getCurrentRawBaseMajor();
     if (!baseMajor) return null;
@@ -71,7 +64,7 @@ export function ProofGraphView() {
     if (latestStructuredIdxForCurrentRaw != null && proofHistory[latestStructuredIdxForCurrentRaw]) {
       const target = proofHistory[latestStructuredIdxForCurrentRaw];
       if (target.type === 'structured' && latestStructuredIdxForCurrentRaw !== activeVersionIdx) {
-        // NOTE: setActiveVersionIndex preserves viewMode==='graph' (store-level behavior).
+        // setActiveVersionIndex preserves viewMode==='graph'.
         setActiveVersionIndex(latestStructuredIdxForCurrentRaw);
       }
     }

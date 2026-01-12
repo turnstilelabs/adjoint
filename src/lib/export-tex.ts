@@ -105,9 +105,7 @@ export const buildRawProofLatexDocument = (problem: string, rawProof: string) =>
   lines.push('');
   lines.push('\\section*{Raw proof}');
   lines.push('\\begin{quote}');
-  // NOTE: We intentionally do NOT escape the raw proof, because it may already
-  // contain LaTeX math ($...$, \\[...\\], etc.). This matches the current
-  // structured export behavior which also leaves statements/proofs unescaped.
+  // Keep raw proof unescaped (may already contain TeX).
   lines.push(rawProof || 'Proof omitted.');
   lines.push('\\end{quote}');
   lines.push('');
