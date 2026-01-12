@@ -6,7 +6,6 @@ import { ExploreChatMessages } from '@/components/explore/explore-chat-messages'
 import { ExploreChatInput } from '@/components/explore/explore-chat-input';
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
-import { useToast } from '@/hooks/use-toast';
 
 function ResizableExploreLayout({ children }: { children: React.ReactNode }) {
     const [width, setWidth] = useState<number>(420); // px
@@ -85,42 +84,45 @@ export default function ExploreView() {
     const exploreSeed = useAppStore((s) => s.exploreSeed);
     const sendExploreMessage = useSendExploreMessage();
     const [isExtracting, setIsExtracting] = useState(false);
-    const { toast } = useToast();
-    const [lastExtractHadNoStatements, setLastExtractHadNoStatements] = useState(false);
 
-    const extractNow = async () => {
-        if (isExtracting) return;
-        setIsExtracting(true);
-        try {
-            // Re-run extraction from the current context.
-            // Prefer the last user message; otherwise fall back to the current seed.
-            const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
-            const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
-
-            setLastExtractHadNoStatements(false);
-
-            await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
-                suppressUser: true,
-                displayAs: '',
-                extractOnly: true,
-            });
-        } finally {
-            setIsExtracting(false);
-        }
-    };
-
+    // Auto-extract artifacts whenever the conversation changes (debounced).
+    // This removes the need for a manual "Extract statements" button.
     useEffect(() => {
-        // After a manual extraction attempt completes, if we still have no candidate statements,
-        // make it explicit to the user.
-        if (!isExtracting && !lastExtractHadNoStatements && artifacts && artifacts.candidateStatements.length === 0) {
-            setLastExtractHadNoStatements(true);
-            toast({
-                title: 'No statements found',
-                description:
-                    'Adjoint could not extract any candidate statement from the current conversation. Try rephrasing or providing a cleaner statement.',
-            });
-        }
-    }, [artifacts, isExtracting, lastExtractHadNoStatements, toast]);
+        // If the user has not started an explore thread yet, don't spam extraction.
+        const hasAnyText = [...exploreMessages].some((m) => (m.content || '').trim().length > 0) || Boolean(exploreSeed?.trim());
+        if (!hasAnyText) return;
+        if (isExtracting) return;
+
+        const t = window.setTimeout(async () => {
+            try {
+                setIsExtracting(true);
+                // Prefer the last user message; otherwise fall back to the seed.
+                const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
+                const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
+                await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
+                    suppressUser: true,
+                    displayAs: '',
+                    extractOnly: true,
+                });
+            } finally {
+                setIsExtracting(false);
+            }
+        }, 700);
+
+        return () => window.clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [exploreMessages.length, exploreSeed]);
+
+    // Allow deleting a single candidate statement from the UI.
+    useEffect(() => {
+        const onDelete = (evt: any) => {
+            const s = String(evt?.detail?.statement ?? '').trim();
+            if (!s) return;
+            useAppStore.getState().deleteExploreCandidateStatement(s);
+        };
+        window.addEventListener('artifacts:delete-candidate-statement', onDelete as any);
+        return () => window.removeEventListener('artifacts:delete-candidate-statement', onDelete as any);
+    }, []);
 
     useEffect(() => {
         const onOpen = () => setOpenAttemptProof(true);
@@ -154,7 +156,6 @@ export default function ExploreView() {
                             <ArtifactsPanel
                                 artifacts={artifacts}
                                 onPromote={(statement: string) => promoteToProof(statement)}
-                                onExtract={extractNow}
                                 isExtracting={isExtracting}
                             />
                         </ResizableAside>

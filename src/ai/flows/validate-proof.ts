@@ -1,11 +1,6 @@
 'use server';
-/**
- * @fileOverview Validates if a tentative proof is a correct proof of a given mathematical problem.
- *
- * - validateProof - A function that handles the validation of a proof.
- * - ValidateProofInput - The input type for the validateProof function.
- * - ValidateProofOutput - The return type for the validateProof function.
- */
+
+/** @fileOverview Validates a structured proof (sequence of sublemmas) against the goal. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

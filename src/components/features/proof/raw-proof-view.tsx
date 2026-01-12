@@ -7,6 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Pencil } from 'lucide-react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
+import AdjointProse from '@/components/adjoint-prose';
+import { selectionRangeToLatex } from '@/lib/selection-to-latex';
 
 export default function RawProofView() {
     const rawProof = useAppStore((s) => s.rawProof);
@@ -21,6 +23,8 @@ export default function RawProofView() {
     const [selection, setSelection] = useState<{ text: string; anchor: { top: number; left: number } | null }>(
         { text: '', anchor: null },
     );
+
+    const [copyText, setCopyText] = useState<string>('');
 
     const computeCaretIndexFromClick = useCallback(
         (click: { x: number; y: number; textSnapshot: string }): number => {
@@ -217,6 +221,7 @@ export default function RawProofView() {
             const text = (sel?.toString() ?? '').trim();
             if (!sel || !text) {
                 setSelection({ text: '', anchor: null });
+                setCopyText('');
                 return;
             }
 
@@ -233,6 +238,7 @@ export default function RawProofView() {
 
             if (!sel.rangeCount) {
                 setSelection({ text: '', anchor: null });
+                setCopyText('');
                 return;
             }
             const range = sel.getRangeAt(0);
@@ -241,6 +247,7 @@ export default function RawProofView() {
                 text,
                 anchor: { top: rect.top, left: rect.left + rect.width / 2 },
             });
+            setCopyText(selectionRangeToLatex(range) || text);
         };
 
         document.addEventListener('mouseup', onMouseUp);
@@ -263,6 +270,7 @@ export default function RawProofView() {
                 <SelectionToolbar
                     anchor={selection.anchor}
                     selectedText={selection.text}
+                    copyText={copyText}
                     onRevise={() => { }}
                     canCheckAgain={false}
                     showCheckAgain={false}
@@ -275,6 +283,7 @@ export default function RawProofView() {
                         pendingCaretRef.current = { index: caret, textSnapshot: rawProof };
                         setIsEditing(true);
                         setSelection({ text: '', anchor: null });
+                        setCopyText('');
                     }}
                 />
             )}
@@ -329,9 +338,9 @@ export default function RawProofView() {
                     {rawProof.trim() ? (
                         <div
                             id="raw-proof-preview"
-                            className="prose max-w-full katex-wrap"
+                            className="katex-wrap"
                         >
-                            <KatexRenderer content={rawProof} />
+                            <AdjointProse content={rawProof} />
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground">Click anywhere to start editing the proof.</p>

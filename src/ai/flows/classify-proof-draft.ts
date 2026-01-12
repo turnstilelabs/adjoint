@@ -1,7 +1,4 @@
-/**
- * @fileOverview Classifies a drafted proof relative to the original statement.
- * Returns AttemptProof-like fields except rawProof (which the caller already has).
- */
+/** @fileOverview Classifies a drafted proof relative to the original statement. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

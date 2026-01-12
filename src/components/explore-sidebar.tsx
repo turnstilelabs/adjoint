@@ -8,15 +8,69 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { BookOpen, Code2, Sparkles } from 'lucide-react';
-import { ConfirmResetDialog } from '@/components/confirm-reset-dialog';
+import { BookOpen, Code2, Sparkles, Plus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { splitStatements } from '@/lib/split-statements';
+import { useRouter } from 'next/navigation';
 
 export function ExploreSidebar() {
+    const router = useRouter();
     const [openLiterature, setOpenLiterature] = React.useState(false);
     const [openCode, setOpenCode] = React.useState(false);
     const [openProve, setOpenProve] = React.useState(false);
-    const [openResetConfirm, setOpenResetConfirm] = React.useState(false);
-    const reset = useAppStore((s) => s.reset);
+    const [openAddToWorkspace, setOpenAddToWorkspace] = React.useState(false);
+
+    const goHome = useAppStore((s) => s.goHome);
+    const goToWorkspace = useAppStore((s) => s.goToWorkspace);
+    const artifacts = useAppStore((s) => s.exploreArtifacts);
+    const edits = useAppStore((s) => s.exploreArtifactEdits);
+
+    const options = React.useMemo(() => {
+        const list = artifacts?.candidateStatements ?? [];
+        const out: { key: string; text: string }[] = [];
+        for (const original of list) {
+            const base = String(original ?? '').trim();
+            if (!base) continue;
+            const edited = String(edits?.candidateStatements?.[base] ?? base).trim();
+            const split = splitStatements(edited);
+            // If splitStatements returns nothing (shouldn't), keep edited.
+            const pieces = split.length ? split : [edited];
+            for (let i = 0; i < pieces.length; i++) {
+                const text = String(pieces[i] ?? '').trim();
+                if (!text) continue;
+                out.push({ key: `${base}::${i}`, text });
+            }
+        }
+        return out;
+    }, [artifacts, edits]);
+
+    const [selected, setSelected] = React.useState<Record<string, boolean>>({});
+
+    // When opening modal, default-select all available options.
+    React.useEffect(() => {
+        if (!openAddToWorkspace) return;
+        const next: Record<string, boolean> = {};
+        for (const o of options) next[o.key] = true;
+        setSelected(next);
+    }, [openAddToWorkspace, options]);
+
+    const onConfirmAddToWorkspace = () => {
+        const chosen = options.filter((o) => selected[o.key]).map((o) => o.text.trim()).filter(Boolean);
+        if (!chosen.length) {
+            setOpenAddToWorkspace(false);
+            return;
+        }
+
+        const snippet = [
+            '% --- Imported from Explore mode ---',
+            ...chosen.flatMap((s) => [s, '']),
+        ].join('\n').trim();
+
+        goToWorkspace({ from: 'explore', append: snippet });
+        setOpenAddToWorkspace(false);
+    };
 
     return (
         <TooltipProvider>
@@ -25,7 +79,9 @@ export function ExploreSidebar() {
                     href="/"
                     onClick={(e) => {
                         e.preventDefault();
-                        setOpenResetConfirm(true);
+                        // Preserve Explore progress. No reset confirmation.
+                        goHome();
+                        router.push('/');
                     }}
                     className="mb-6 cursor-pointer"
                     aria-label="Go to homepage"
@@ -60,6 +116,21 @@ export function ExploreSidebar() {
                         </TooltipTrigger>
                         <TooltipContent side="right">Prove it</TooltipContent>
                     </Tooltip>
+
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setOpenAddToWorkspace(true)}
+                                aria-label="Add to workspace"
+                                disabled={options.length === 0}
+                            >
+                                <Plus className="h-5 w-5" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">Add to Workspace</TooltipContent>
+                    </Tooltip>
                 </div>
 
                 <div className="flex-1" />
@@ -92,15 +163,55 @@ export function ExploreSidebar() {
                     description="Pick a candidate statement, optionally edit it, then attempt a proof."
                 />
 
-                <ConfirmResetDialog
-                    open={openResetConfirm}
-                    onOpenChange={setOpenResetConfirm}
-                    onConfirm={() => {
-                        reset();
-                        // navigate to home after reset
-                        window.location.href = '/';
-                    }}
-                />
+                {/* Add to workspace modal */}
+                <Dialog open={openAddToWorkspace} onOpenChange={setOpenAddToWorkspace}>
+                    <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                            <DialogTitle>Add candidate statements to Workspace</DialogTitle>
+                            <DialogDescription>
+                                Select which statement(s) to append to your workspace draft.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {options.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">No candidate statements available.</div>
+                        ) : (
+                            <ScrollArea className="max-h-[45vh] pr-4">
+                                <div className="space-y-3">
+                                    {options.map((o) => (
+                                        <div key={o.key} className="flex items-start gap-3 rounded-md border p-3">
+                                            <Checkbox
+                                                checked={Boolean(selected[o.key])}
+                                                onCheckedChange={(v) =>
+                                                    setSelected((prev) => ({ ...prev, [o.key]: Boolean(v) }))
+                                                }
+                                                id={`ws-${o.key}`}
+                                            />
+                                            <div className="space-y-1 min-w-0">
+                                                <Label htmlFor={`ws-${o.key}`} className="text-sm font-medium">
+                                                    Candidate statement
+                                                </Label>
+                                                <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                                                    {o.text}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+
+                        <div className="pt-2 flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setOpenAddToWorkspace(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={onConfirmAddToWorkspace} disabled={options.length === 0}>
+                                Add
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
             </aside>
         </TooltipProvider>
     );

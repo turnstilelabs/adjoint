@@ -17,6 +17,11 @@ This is EXPLORATION MODE:
 
 Candidate statements extraction rule (important):
 - ONLY extract precise mathematical statements written well enough that they could be proved or disproved.
+- If the user's message is nonsense, a typo, or does not contain any mathematical content (e.g. random letters like "fgdfg"), then extract NOTHING.
+- A “candidate statement” must contain at least one of:
+  - a clear mathematical relation (e.g. =, <, >, \le, \ge, \in, \subseteq, \to)
+  - a quantifier/condition (e.g. "for all", "there exists", "if ... then")
+  - a named mathematical object/structure with a predicate (e.g. "group", "ring", "topological", "continuous", "prime", "convex")
 - Do NOT extract vague speculation or informal goals like "I suspect..." or "I wonder if..." unless it is rewritten in the conversation into a concrete, quantifiable statement.
 - Prefer statements with explicit quantifiers/conditions (e.g. "For all ...", "There exists ...", "If ..., then ...").
 - IMPORTANT: Stay grounded — only extract statements that literally appear in the conversation (user or assistant messages). Do not invent improved formulations.
@@ -31,9 +36,10 @@ First-turn extraction rule:
 - If this is the first turn (history is empty), extract artifacts ONLY from the user's message (and optional seed). Do not create artifacts based on your own response.
 
 Robustness rule (important):
-- Ensure candidateStatements is NEVER empty if the user's message (or seed) contains a reasonably self-contained statement.
-- If you are unsure what to extract, include the user's (or seed) main statement verbatim as a single candidate statement.
-- HARD REQUIREMENT: If candidateStatements would be empty, set it to an array containing exactly the user's message (or seed) verbatim.
+- Ensure candidateStatements is NEVER empty if the user's message (or seed) contains a reasonably self-contained *mathematical* statement.
+- If you are unsure what to extract but the user/seed clearly contains a mathematical statement, include the user's (or seed) main statement verbatim as a single candidate statement.
+- HARD REQUIREMENT: If candidateStatements would be empty BUT the user/seed clearly contains a mathematical statement, set it to an array containing exactly the user's message (or seed) verbatim.
+- If the user/seed does NOT contain a mathematical statement, candidateStatements MUST be an empty array.
 
 Instructions for this turn:
  1) If extractOnly is true:

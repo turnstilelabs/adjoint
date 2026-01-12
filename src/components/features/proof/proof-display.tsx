@@ -20,7 +20,7 @@ export default function ProofDisplay() {
             <ProofSidebar />
 
             <main className="flex-1 min-w-0 min-h-0 h-full overflow-hidden flex flex-col">
-                {/* Use a ChatGPT-like reading measure for all proof content. */}
+                {/* Keep a comfortable reading width for proof content. */}
                 <div className="mx-auto w-full max-w-4xl p-3 md:p-10 pb-0 gap-10 flex-1 min-h-0 flex flex-col">
                     <div className="pb-2">
                         <EditableProblemCard />

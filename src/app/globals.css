@@ -149,4 +149,22 @@
     overflow-wrap: normal;
     word-break: normal;
   }
+
+  /*
+   * ChatGPT-like readable proof text (plain text + KaTeX).
+   * We avoid Tailwind Typography plugin and instead define minimal, explicit rules.
+   */
+  .adjoint-prose {
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+
+  .adjoint-paragraph {
+    margin: 0;
+  }
+
+  /* KaTeX inline spans sometimes have slightly cramped line height in dense prose. */
+  .adjoint-prose .katex {
+    line-height: 1.75;
+  }
 }

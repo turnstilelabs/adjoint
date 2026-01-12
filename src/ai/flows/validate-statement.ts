@@ -1,11 +1,6 @@
 'use server';
-/**
- * @fileOverview Validates if a given string is a valid mathematical statement.
- *
- * - validateStatement - A function that handles the validation of a mathematical statement.
- * - ValidateStatementInput - The input type for the validateStatement function.
- * - ValidateStatementOutput - The return type for the validateStatement function.
- */
+
+/** @fileOverview Validates whether a string is a well-formed mathematical statement. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

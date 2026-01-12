@@ -38,14 +38,13 @@ export const useSendMessage = () => {
           ),
         );
       } else if (chunk.type === 'proposal') {
-        console.log(chunk.revisedSublemmas);
         setMessages((prev) =>
           prev.map((msg, idx) =>
             idx === prev.length - 1
               ? {
-                  ...msg,
-                  suggestion: { revisedSublemmas: chunk.revisedSublemmas, isHandled: false },
-                }
+                ...msg,
+                suggestion: { revisedSublemmas: chunk.revisedSublemmas, isHandled: false },
+              }
               : msg,
           ),
         );

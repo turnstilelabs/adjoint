@@ -10,6 +10,16 @@ type KatexRendererProps = {
   autoWrap?: boolean; // when false, only explicit $...$ / $$...$$ / \(...\) / \[...\] are rendered as math
   inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
   output?: 'html' | 'htmlAndMathml';
+  /**
+   * When true (default), if KaTeX produces an error node we fall back to rendering
+   * the math segment as plain text (useful for Explore artifacts where partial/invalid
+   * math would otherwise show large red error fragments).
+   *
+   * When false, we keep KaTeX's output even if it contains error nodes. This is
+   * important for streaming UIs where the text is temporarily invalid while tokens
+   * are arriving ("live draft" rendering).
+   */
+  fallbackOnError?: boolean;
 };
 
 /**
@@ -22,8 +32,10 @@ const sanitizeText = (t: string) => t.replace(/\\\$/g, '$');
 // - Convert \(...\) -> $...$
 // - Convert \[...\] -> $$...$$
 // - Convert ```math ...``` / ```latex ...``` fenced blocks -> $$...$$
-const normalizeMathDelimiters = (input: string) => {
-  let s = input;
+const normalizeMathDelimiters = (input: unknown) => {
+  // Defensive: some call sites may pass null/undefined (e.g. while loading / resuming views).
+  // KaTeX rendering should never crash the app.
+  let s = typeof input === 'string' ? input : String(input ?? '');
 
   // Fenced code blocks for math/latex
   // Accepts optional spaces after the language tag and requires a newline before the block body.
@@ -39,6 +51,89 @@ const normalizeMathDelimiters = (input: string) => {
 };
 
 // Helper function to create a React element from a text part, converting newlines to <br>
+function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[] {
+  // Minimal emphasis support (render-side only):
+  //   **bold** -> <strong>
+  //   *italic* -> <em>
+  // Does NOT implement full Markdown; intended to handle common LLM output.
+  // Supports escaping with backslash: \* renders a literal '*'.
+
+  const nodes: React.ReactNode[] = [];
+  let buf = '';
+  let i = 0;
+  let key = 0;
+
+  const flush = () => {
+    if (buf) {
+      nodes.push(buf);
+      buf = '';
+    }
+  };
+
+  const readUntil = (delim: '*' | '**', start: number) => {
+    for (let j = start; j < text.length; j++) {
+      if (text[j] === '\\') {
+        j++; // skip escaped char
+        continue;
+      }
+      if (delim === '**') {
+        if (text[j] === '*' && text[j + 1] === '*') return j;
+      } else {
+        if (text[j] === '*') return j;
+      }
+    }
+    return -1;
+  };
+
+  while (i < text.length) {
+    if (text[i] === '\\' && i + 1 < text.length) {
+      buf += text[i + 1];
+      i += 2;
+      continue;
+    }
+
+    if (text[i] === '*' && text[i + 1] === '*') {
+      const end = readUntil('**', i + 2);
+      if (end !== -1) {
+        flush();
+        const inner = text.slice(i + 2, end);
+        nodes.push(
+          <strong key={`${keyPrefix}-b-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-b-${key}`)}</strong>,
+        );
+        i = end + 2;
+        continue;
+      }
+      // No closing '**' found -> treat literally
+      buf += '**';
+      i += 2;
+      continue;
+    }
+
+    if (text[i] === '*') {
+      const end = readUntil('*', i + 1);
+      if (end !== -1) {
+        flush();
+        const inner = text.slice(i + 1, end);
+        nodes.push(
+          <em key={`${keyPrefix}-i-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-i-${key}`)}</em>,
+        );
+        i = end + 1;
+        continue;
+      }
+      // No closing '*' found -> treat literally
+      buf += '*';
+      i += 1;
+      continue;
+    }
+
+    buf += text[i];
+    i += 1;
+  }
+
+  flush();
+  return nodes;
+}
+
 const renderTextWithLineBreaks = (text: string, key: number) => {
   const safe = sanitizeText(text);
   const lines = safe.split('\n');
@@ -46,7 +141,7 @@ const renderTextWithLineBreaks = (text: string, key: number) => {
     <React.Fragment key={key}>
       {lines.map((line, i) => (
         <React.Fragment key={i}>
-          {line}
+          {renderInlineEmphasis(line, `${key}-${i}`)}
           {i < lines.length - 1 && <br />}
         </React.Fragment>
       ))}
@@ -88,7 +183,10 @@ function autoWrapInlineMathIfNeeded(input: string): string {
   };
 
   const wrapPlain = (seg: string) => {
-    const s = normalizePlain(seg);
+    // If a provider emits spaced emphasis markers like "* *word* *" (common in streaming),
+    // normalize them so we don’t end up with isolated "*" tokens.
+    // We still do NOT render Markdown, but this reduces weird interactions with the math heuristic.
+    const s = normalizePlain(seg).replace(/\*\s+\*/g, '**');
 
     // Split by whitespace (preserve spaces) and group consecutive math-like tokens into a single $...$ run.
     const parts = s.split(/(\s+)/);
@@ -98,9 +196,21 @@ function autoWrapInlineMathIfNeeded(input: string): string {
     // digits mixed with letters, or common punctuation used inside formulas.
     // Avoid false positives for pure words or hyphenated words like "left-hand".
     const isMathToken = (t: string) => {
+      // Markdown emphasis markers should never trigger math rendering.
+      // - "*", "**" etc. are not math
+      // - "*word*" should be treated like "word" for classification
+      // NOTE: we intentionally keep interior '*' (e.g. "a*b") as math.
+      if (/^\*+$/.test(t)) return false;
+
+      // If this token looks like Markdown emphasis, do NOT treat it as math.
+      // Otherwise we'd create invalid segments like `$*a*b*$`.
+      if (/^\*+[^*][\s\S]*\*+$/.test(t)) return false;
+
+      const mdStripped = t.replace(/^\*+|\*+$/g, '');
+
       // Allow bracket-wrapped hyphenated words with optional trailing punctuation to remain plain text
       // Examples that should stay plain: "word,", "word:", "(AM-GM)", "[well-known];"
-      const core = t
+      const core = mdStripped
         // remove one leading/trailing bracket if present
         .replace(/^[({\[]/, '')
         .replace(/[)}\]]$/, '')
@@ -111,15 +221,17 @@ function autoWrapInlineMathIfNeeded(input: string): string {
       if (/^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(core)) return false;
 
       // Any TeX command e.g. \sum, \frac, \sin, ...
-      if (/\\[A-Za-z]+/.test(t)) return true;
+      if (/\\[A-Za-z]+/.test(mdStripped)) return true;
 
       // Strong math operators (exclude brackets so they don't trigger by themselves)
       // Note: hyphen remains to allow "x-1" etc. to be detected as math, but the "core" guard above
       // prevents false positives like "(AM-GM)" or "well-known"
-      if (/[=<>^_+\-*/|]/.test(t)) return true;
+      if (/[=<>^_+\-*/|]/.test(mdStripped)) return true;
 
       // Digits mixed with letters, or standalone numbers
-      if ((/\d/.test(t) && /[A-Za-z]/.test(t)) || /^\d+(\.\d+)?$/.test(t)) return true;
+      if ((/\d/.test(mdStripped) && /[A-Za-z]/.test(mdStripped)) || /^\d+(\.\d+)?$/.test(mdStripped)) {
+        return true;
+      }
 
       return false;
     };
@@ -182,6 +294,7 @@ export function KatexRenderer({
   autoWrap = true,
   inline = false,
   output = 'htmlAndMathml',
+  fallbackOnError = true,
 }: KatexRendererProps) {
   const parts = useMemo(() => {
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
@@ -213,7 +326,7 @@ export function KatexRenderer({
           // If KaTeX could not parse the expression, it emits a "katex-error" span.
           // For Explore artifacts, we prefer to fall back to plain text rather than show
           // a big red error fragment.
-          if (html.includes('katex-error')) {
+          if (fallbackOnError && html.includes('katex-error')) {
             return renderTextWithLineBreaks(latex, index);
           }
 
@@ -232,7 +345,7 @@ export function KatexRenderer({
             output,
           });
 
-          if (html.includes('katex-error')) {
+          if (fallbackOnError && html.includes('katex-error')) {
             return renderTextWithLineBreaks(latex, index);
           }
 
@@ -246,7 +359,7 @@ export function KatexRenderer({
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content, autoWrap, output]);
+  }, [content, autoWrap, output, fallbackOnError]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
   // Ensure math never causes global horizontal overflow.

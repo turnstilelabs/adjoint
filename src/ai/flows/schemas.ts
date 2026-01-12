@@ -1,8 +1,6 @@
-import { z } from 'genkit';
+/** @fileOverview Shared Zod schemas for AI flows. */
 
-/**
- * @fileOverview Shared Zod schemas for AI flows.
- */
+import { z } from 'genkit';
 
 export const SublemmaSchema = z.object({
   title: z

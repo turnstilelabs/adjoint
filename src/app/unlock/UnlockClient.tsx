@@ -81,6 +81,7 @@ export default function UnlockClient() {
 
                         <form onSubmit={onSubmit} className="space-y-4">
                             <div className="space-y-2">
+                                <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1} />
                                 <Input
                                     id="password"
                                     name="password"
@@ -90,6 +91,13 @@ export default function UnlockClient() {
                                     autoComplete="current-password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            // Some environments don't submit forms on Enter without an explicit submit.
+                                            // Ensure Enter submits reliably.
+                                            e.currentTarget.form?.requestSubmit();
+                                        }
+                                    }}
                                     disabled={submitting}
                                     className="h-12 text-base"
                                 />
@@ -101,4 +109,3 @@ export default function UnlockClient() {
         </div>
     );
 }
-

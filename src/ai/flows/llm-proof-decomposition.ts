@@ -1,11 +1,6 @@
 'use server';
-/**
- * @fileOverview Decomposes a mathematical problem into a sequence of sublemmas using an LLM.
- *
- * - decomposeProof - A function that handles the proof decomposition process.
- * - DecomposeProofInput - The input type for the decomposeProof function.
- * - DecomposeProofOutput - The return type for the decomposeProof function.
- */
+
+/** @fileOverview Decomposes a problem into sublemmas using an LLM. */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
