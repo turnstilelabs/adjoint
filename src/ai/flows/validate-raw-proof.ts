@@ -1,7 +1,6 @@
 'use server';
-/**
- * @fileOverview Validates if a raw (unstructured) proof text is a correct proof of a given problem.
- */
+
+/** @fileOverview Validates a raw (unstructured) proof text against the goal statement. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

@@ -1,10 +1,6 @@
 'use server';
-/**
- * @fileOverview Validates a single sublemma/step in context of the whole proof.
- *
- * This is a more local “proof structure” analysis than validate-proof.ts:
- * we ask the model to focus on one step’s statement+proof and how it fits into the chain.
- */
+
+/** @fileOverview Validates a single sublemma/step in context of the whole proof. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

@@ -1,7 +1,4 @@
-
-/**
- * @fileOverview Decomposes a raw proof text into a proved statement and sublemmas.
- */
+/** @fileOverview Decomposes a raw proof into a proved statement + sublemmas. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';
@@ -55,7 +52,7 @@ const decomposeRawProofFlow = ai.defineFlow(
         const system = 'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.';
         const user = `Instructions\nInput: A mathematical proof text (possibly short, counterexample-style, or a full argument)\nOutput: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$. For each sublemma.proof, write 2–6 narrative paragraphs for non-trivial steps with a BLANK LINE between paragraphs. Avoid bullet lists; keep natural prose. For very short/trivial proofs a single compact paragraph is acceptable.\n\nDecomposition Guidelines\n1. Identify Decomposition Candidates\n- Intermediate results used multiple times\n- Sub-arguments (>3–4 logical steps)\n- Conceptually distinct ideas or techniques\n- Standalone facts that simplify the main flow\n\n2. Atomic Statement Principle\nEach sublemma must:\n- Be self-contained with precise hypotheses/conclusions\n- Focus on a single mathematical idea\n- Be useful (reused or simplifies reasoning)\n- Clearly specify inputs/outputs\n\nAdditional constraints (critical)\n- You must return at least one sublemma. Never return an empty array.\n- If the proof is short or a counterexample, return exactly one sublemma:\n  • title: 'Counterexample' (or 'Direct proof' if appropriate)\n  • statement: the exact proved claim (same as provedStatement)\n  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)\n- Prefer 2–6 sublemmas for longer arguments.\n\nRaw proof:\n"""\n${input.rawProof}\n"""\n\nReturn strictly:\n{"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`;
 
-        let lastErr: any = null;
+        let lastErr: ReturnType<typeof normalizeModelError> | null = null;
         for (const cand of candidates) {
             try {
                 const { output } = await ai.generate({
@@ -138,25 +135,25 @@ const decomposeRawProofFlow = ai.defineFlow(
                 };
 
                 // Apply to normalizedProof and each sublemma.proof
-                const out = { ...output } as any;
-                try { if (out.normalizedProof) out.normalizedProof = normalizeProof(String(out.normalizedProof)); } catch { }
-                try {
-                    if (Array.isArray(out.sublemmas)) {
-                        out.sublemmas = out.sublemmas.map((sl: any) => ({
+                const out: DecomposeRawProofOutput = {
+                    ...output,
+                    normalizedProof: output.normalizedProof ? normalizeProof(String(output.normalizedProof)) : output.normalizedProof,
+                    sublemmas: Array.isArray(output.sublemmas)
+                        ? output.sublemmas.map((sl) => ({
                             ...sl,
-                            proof: typeof sl?.proof === 'string' ? normalizeProof(sl.proof) : sl?.proof,
-                        }));
-                    }
-                } catch { }
+                            proof: typeof sl.proof === 'string' ? normalizeProof(sl.proof) : sl.proof,
+                        }))
+                        : output.sublemmas,
+                };
 
-                return out as any;
-            } catch (e: any) {
+                return out;
+            } catch (e: unknown) {
                 const norm = normalizeModelError(e);
                 lastErr = norm;
                 if (norm.code === 'MODEL_RATE_LIMIT') continue;
                 throw new Error(norm.message);
             }
         }
-        throw new Error((lastErr && lastErr.message) || 'The AI failed to decompose the raw proof.');
+        throw new Error(lastErr?.message || 'The AI failed to decompose the raw proof.');
     },
 );

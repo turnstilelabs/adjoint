@@ -1,9 +1,4 @@
-
-/**
- * @fileOverview Attempts to prove a given statement and classifies the result.
- * Folded design: the model both attempts a proof and reports whether it proved
- * the statement as-is, a variant, or failed entirely.
- */
+/** @fileOverview Attempts a proof of a statement and classifies the outcome. */
 
 import { ai, llmId } from '@/ai/genkit';
 import { z } from 'genkit';

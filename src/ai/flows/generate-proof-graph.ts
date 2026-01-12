@@ -1,11 +1,6 @@
 'use server';
-/**
- * @fileOverview Generates a dependency graph from a sequence of sublemmas.
- *
- * - generateProofGraph - A function that creates a graph structure from proof steps.
- * - GenerateProofGraphInput - The input type for the function.
- * - GenerateProofGraphOutput - The return type for the function.
- */
+
+/** @fileOverview Generates a dependency graph from a sequence of proof steps. */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
