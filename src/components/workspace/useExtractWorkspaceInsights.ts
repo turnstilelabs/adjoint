@@ -3,16 +3,24 @@ import { explorationAssistantFlow } from '@/ai/exploration-assistant/exploration
 import { useAppStore } from '@/state/app-store';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import type { Message } from '@/components/chat/interactive-chat';
+import type { ExplorationAssistantEvent } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 
-/**
- * Auto-extract Explore-style artifacts (candidate statements, assumptions, etc)
- * for Workspace chat.
- *
- * This intentionally reuses the same backend flow (/api/explore) and streaming
- * artifacts format as Explore mode; only the state target differs.
- */
+type AnyRecord = Record<string, unknown>;
+
+const isRecord = (v: unknown): v is AnyRecord => typeof v === 'object' && v !== null;
+
+// Unwraps Genkit stream events (sometimes nested under `message`).
+const unwrapStreamEvent = <T extends { type: string }>(raw: unknown): T | null => {
+    if (!isRecord(raw)) return null;
+    if (typeof raw.type === 'string') return raw as T;
+    const msg = raw.message;
+    if (isRecord(msg) && typeof msg.type === 'string') return msg as T;
+    return null;
+};
+
+// Extract Explore-style artifacts for Workspace chat.
 export function useExtractWorkspaceInsights() {
-    // Basic length threshold to avoid streaming hiccups with huge basis
+    // Avoid streaming huge payloads.
     const MAX_BASIS_LEN = 4000;
 
     return async (opts: { request: string; history: Message[]; seed?: string }) => {
@@ -71,18 +79,12 @@ export function useExtractWorkspaceInsights() {
 
         try {
             for await (const raw of runner.stream) {
-                const chunk: any =
-                    raw && (raw as any).type
-                        ? raw
-                        : (raw as any)?.message?.type
-                            ? (raw as any).message
-                            : raw;
+                const chunk = unwrapStreamEvent<ExplorationAssistantEvent>(raw);
 
                 if (chunk?.type === 'artifacts') {
                     // stale-guard
                     if (chunk.turnId === getTurnId()) {
-                        const a = chunk.artifacts as ExploreArtifacts;
-                        useAppStore.getState().setWorkspaceArtifacts(a);
+                        useAppStore.getState().setWorkspaceArtifacts(chunk.artifacts as ExploreArtifacts);
                     }
                 }
             }
