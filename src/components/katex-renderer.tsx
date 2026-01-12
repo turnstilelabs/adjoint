@@ -10,6 +10,16 @@ type KatexRendererProps = {
   autoWrap?: boolean; // when false, only explicit $...$ / $$...$$ / \(...\) / \[...\] are rendered as math
   inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
   output?: 'html' | 'htmlAndMathml';
+  /**
+   * When true (default), if KaTeX produces an error node we fall back to rendering
+   * the math segment as plain text (useful for Explore artifacts where partial/invalid
+   * math would otherwise show large red error fragments).
+   *
+   * When false, we keep KaTeX's output even if it contains error nodes. This is
+   * important for streaming UIs where the text is temporarily invalid while tokens
+   * are arriving ("live draft" rendering).
+   */
+  fallbackOnError?: boolean;
 };
 
 /**
@@ -22,8 +32,10 @@ const sanitizeText = (t: string) => t.replace(/\\\$/g, '$');
 // - Convert \(...\) -> $...$
 // - Convert \[...\] -> $$...$$
 // - Convert ```math ...``` / ```latex ...``` fenced blocks -> $$...$$
-const normalizeMathDelimiters = (input: string) => {
-  let s = input;
+const normalizeMathDelimiters = (input: unknown) => {
+  // Defensive: some call sites may pass null/undefined (e.g. while loading / resuming views).
+  // KaTeX rendering should never crash the app.
+  let s = typeof input === 'string' ? input : String(input ?? '');
 
   // Fenced code blocks for math/latex
   // Accepts optional spaces after the language tag and requires a newline before the block body.
@@ -182,6 +194,7 @@ export function KatexRenderer({
   autoWrap = true,
   inline = false,
   output = 'htmlAndMathml',
+  fallbackOnError = true,
 }: KatexRendererProps) {
   const parts = useMemo(() => {
     // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
@@ -213,7 +226,7 @@ export function KatexRenderer({
           // If KaTeX could not parse the expression, it emits a "katex-error" span.
           // For Explore artifacts, we prefer to fall back to plain text rather than show
           // a big red error fragment.
-          if (html.includes('katex-error')) {
+          if (fallbackOnError && html.includes('katex-error')) {
             return renderTextWithLineBreaks(latex, index);
           }
 
@@ -232,7 +245,7 @@ export function KatexRenderer({
             output,
           });
 
-          if (html.includes('katex-error')) {
+          if (fallbackOnError && html.includes('katex-error')) {
             return renderTextWithLineBreaks(latex, index);
           }
 
@@ -246,7 +259,7 @@ export function KatexRenderer({
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content, autoWrap, output]);
+  }, [content, autoWrap, output, fallbackOnError]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
   // Ensure math never causes global horizontal overflow.

@@ -160,7 +160,7 @@ export function ProofLoading() {
             </div>
             {renderMath ? (
               <div className="prose max-w-full">
-                <KatexRenderer content={deferredLiveDraft || ''} />
+                <KatexRenderer content={deferredLiveDraft || ''} fallbackOnError={false} />
               </div>
             ) : (
               <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">

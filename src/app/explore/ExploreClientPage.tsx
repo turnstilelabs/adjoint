@@ -15,9 +15,10 @@ import { useSendExploreMessage } from '@/components/explore/useSendExploreMessag
  * We keep this separate from `app/explore/page.tsx` so the page itself can be a
  * Server Component (avoids Next.js build-time `useSearchParams()` CSR bailout).
  */
-export default function ExploreClientPage({ q }: { q?: string }) {
+export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: boolean }) {
     const view = useAppStore((s) => s.view);
     const startExplore = useAppStore((s) => s.startExplore);
+    const newExplore = useAppStore((s) => s.newExplore);
     const seed = useAppStore((s) => s.exploreSeed);
     const messagesLen = useAppStore((s) => s.exploreMessages.length);
     const sendMessage = useSendExploreMessage();
@@ -25,20 +26,29 @@ export default function ExploreClientPage({ q }: { q?: string }) {
     // Prevent auto-send from firing multiple times for the same navigation
     const sentOnce = useRef(false);
 
-    // When landing via /explore?q=..., hydrate state with that seed
+    // When landing via /explore?... hydrate state.
     useEffect(() => {
         const trimmed = (q || '').trim();
+
         if (trimmed) {
-            // New navigation with a query string: start a fresh explore session
+            // Navigation with a query string: start a fresh explore session.
             sentOnce.current = false; // allow auto-send for new seed
             startExplore(trimmed);
-        } else {
-            // No query: just ensure we are in explore view and preserve existing state
-            startExplore();
+            return;
         }
+
+        if (isNew) {
+            // Explicit: user requested a fresh empty explore session.
+            sentOnce.current = false;
+            newExplore();
+            return;
+        }
+
+        // No query: preserve existing thread.
+        startExplore();
         // startExplore is stable from Zustand; q is our navigation input
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q]);
+    }, [q, isNew]);
 
     useEffect(() => {
         // Auto-send a first exploration message when we have a seed and no prior messages.

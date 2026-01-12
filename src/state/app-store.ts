@@ -177,6 +177,8 @@ type StoreData = {
   exploreDraftNonce: number;
 
   // Explore mode
+  /** Whether the user has ever entered Explore in this session (used for "Continue exploring" CTA). */
+  exploreHasSession: boolean;
   exploreSeed: string | null;
   exploreMessages: Message[];
   exploreArtifacts: ExploreArtifacts | null;
@@ -311,6 +313,8 @@ interface AppState extends StoreData {
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;
+  /** Reset Explore into a fresh empty session and switch to Explore view. */
+  newExplore: () => void;
   setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
   deleteExploreCandidateStatement: (statement: string) => void;
@@ -329,6 +333,8 @@ interface AppState extends StoreData {
   startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
+  /** Restore the current Proof view without starting a new run. */
+  resumeProof: () => void;
   retry: () => Promise<void>;
   editProblem: () => void;
   setMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
@@ -416,6 +422,7 @@ const initialState: StoreData = {
   exploreDraft: '',
   exploreDraftNonce: 0,
 
+  exploreHasSession: false,
   exploreSeed: null,
   exploreMessages: [],
   exploreArtifacts: null,
@@ -897,6 +904,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (trimmed) {
       set({
         view: 'explore',
+        exploreHasSession: true,
         exploreSeed: trimmed,
         exploreMessages: [],
         exploreArtifacts: null,
@@ -914,9 +922,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Otherwise, preserve any existing thread (direct revisit of /explore).
     set({
       view: 'explore',
+      exploreHasSession: true,
       exploreSeed: get().exploreSeed,
       exploreMessages: get().exploreMessages.length ? get().exploreMessages : [],
       exploreArtifacts: get().exploreArtifacts,
+    });
+
+    pushAppViewToHistory('explore');
+  },
+
+  newExplore: () => {
+    // Cancel any in-flight explore stream
+    const cancel = get().cancelExploreCurrent || null;
+    if (cancel) {
+      try {
+        cancel();
+      } catch {
+        // ignore
+      }
+    }
+
+    set({
+      view: 'explore',
+      exploreHasSession: true,
+      exploreSeed: null,
+      exploreMessages: [],
+      exploreArtifacts: null,
+      exploreArtifactEdits: {
+        candidateStatements: {},
+        perStatement: {},
+      },
+      exploreTurnId: 0,
     });
 
     pushAppViewToHistory('explore');
@@ -1039,6 +1075,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({
       view: 'explore',
+      exploreHasSession: true,
       exploreSeed: userContent || null,
       exploreMessages: seededMessages,
       exploreArtifacts: null,
@@ -1463,6 +1500,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       await runNonStreaming();
     }
+  },
+
+  resumeProof: () => {
+    set({ view: 'proof' });
+    pushAppViewToHistory('proof');
   },
 
   setMessages: (updater) => {

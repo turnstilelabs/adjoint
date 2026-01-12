@@ -9,20 +9,20 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BookOpen, Code2, Sparkles, Plus } from 'lucide-react';
-import { ConfirmResetDialog } from '@/components/confirm-reset-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { splitStatements } from '@/lib/split-statements';
+import { useRouter } from 'next/navigation';
 
 export function ExploreSidebar() {
+    const router = useRouter();
     const [openLiterature, setOpenLiterature] = React.useState(false);
     const [openCode, setOpenCode] = React.useState(false);
     const [openProve, setOpenProve] = React.useState(false);
-    const [openResetConfirm, setOpenResetConfirm] = React.useState(false);
     const [openAddToWorkspace, setOpenAddToWorkspace] = React.useState(false);
 
-    const reset = useAppStore((s) => s.reset);
+    const goHome = useAppStore((s) => s.goHome);
     const goToWorkspace = useAppStore((s) => s.goToWorkspace);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const edits = useAppStore((s) => s.exploreArtifactEdits);
@@ -79,7 +79,9 @@ export function ExploreSidebar() {
                     href="/"
                     onClick={(e) => {
                         e.preventDefault();
-                        setOpenResetConfirm(true);
+                        // Preserve Explore progress. No reset confirmation.
+                        goHome();
+                        router.push('/');
                     }}
                     className="mb-6 cursor-pointer"
                     aria-label="Go to homepage"
@@ -210,15 +212,6 @@ export function ExploreSidebar() {
                     </DialogContent>
                 </Dialog>
 
-                <ConfirmResetDialog
-                    open={openResetConfirm}
-                    onOpenChange={setOpenResetConfirm}
-                    onConfirm={() => {
-                        reset();
-                        // navigate to home after reset
-                        window.location.href = '/';
-                    }}
-                />
             </aside>
         </TooltipProvider>
     );
