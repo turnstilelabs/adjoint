@@ -2,10 +2,10 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, History, MessageCircle, ListTree, Network, Sparkles, Loader2 } from 'lucide-react';
+import { FileDown, History, MessageCircle, ListTree, Network, Sparkles, Loader2, Plus } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
-import { exportProofTex } from '@/lib/export-tex';
+import { exportProofTex, exportRawProofTex } from '@/lib/export-tex';
 import { ProofHistory } from '@/components/proof-history';
 import {
   AlertDialog,
@@ -25,6 +25,7 @@ export function ProofSidebar() {
 
   const [openAnalyzeConfirm, setOpenAnalyzeConfirm] = useState(false);
   const [openResetConfirm, setOpenResetConfirm] = useState(false);
+  const [openAddToWorkspaceConfirm, setOpenAddToWorkspaceConfirm] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
 
@@ -45,6 +46,7 @@ export function ProofSidebar() {
   const runDecomposition = useAppStore((s) => s.runDecomposition);
   const hasUserEditedStructuredForCurrentRaw = useAppStore((s) => s.hasUserEditedStructuredForCurrentRaw);
   const reset = useAppStore((s) => s.reset);
+  const goToWorkspace = useAppStore((s) => s.goToWorkspace);
 
   const onClickLogo = () => {
     setOpenResetConfirm(true);
@@ -125,9 +127,14 @@ export function ProofSidebar() {
   };
 
   const onExportTex = () => {
-    if (!problem || !proof) return;
+    if (!problem) return;
     try {
-      exportProofTex(problem, proof.sublemmas);
+      if (viewMode === 'raw') {
+        exportRawProofTex(problem, rawProof || '');
+      } else {
+        if (!proof) return;
+        exportProofTex(problem, proof.sublemmas);
+      }
       toast({
         title: 'Exported',
         description: 'LaTeX file downloaded as proof.tex',
@@ -136,6 +143,72 @@ export function ProofSidebar() {
       toast({
         title: 'Export Failed',
         description: e?.message || 'Could not export LaTeX.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const buildWorkspaceSnippetFromCurrentProof = () => {
+    const curProblem = (useAppStore.getState().problem || '').trim();
+    const curView = useAppStore.getState().viewMode;
+    const curProof = useAppStore.getState().proof();
+    const curRaw = (useAppStore.getState().rawProof || '').trim();
+
+    const lines: string[] = [];
+    if (curProblem) {
+      lines.push('% --- Imported from Prove mode ---');
+      lines.push('% Statement');
+      lines.push(curProblem);
+      lines.push('');
+    }
+
+    if (curView === 'raw') {
+      lines.push('% Raw proof');
+      lines.push(curRaw || '');
+      return lines.join('\n').trim();
+    }
+
+    // structured/graph -> store structured steps
+    const steps = curProof?.sublemmas ?? [];
+    lines.push('% Structured proof');
+    if (!steps.length) {
+      // fallback: if no steps, still include raw
+      lines.push(curRaw || '');
+      return lines.join('\n').trim();
+    }
+
+    for (const s of steps) {
+      const title = (s.title || '').trim();
+      if (title) lines.push(`% ${title}`);
+      if (s.statement) lines.push(s.statement);
+      if (s.proof) {
+        lines.push(s.proof);
+      }
+      lines.push('');
+    }
+
+    return lines.join('\n').trim();
+  };
+
+  const onConfirmAddToWorkspace = () => {
+    try {
+      const snippet = buildWorkspaceSnippetFromCurrentProof();
+      if (!snippet.trim()) {
+        toast({
+          title: 'Nothing to add',
+          description: 'Generate or edit a proof first.',
+        });
+        return;
+      }
+      goToWorkspace({ from: 'proof', append: snippet });
+      toast({
+        title: 'Added to Workspace',
+        description: 'The current proof was appended to your workspace draft.',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Failed to add to Workspace',
+        description: e?.message || 'Unexpected error.',
         variant: 'destructive',
       });
     }
@@ -161,7 +234,13 @@ export function ProofSidebar() {
     setOpenAnalyzeConfirm(true);
   };
 
-  const exportDisabled = !proof || proof.sublemmas.length === 0;
+  const exportDisabled =
+    viewMode === 'raw' ? !(rawProof || '').trim() : !proof || proof.sublemmas.length === 0;
+
+  // Allow adding to Workspace as long as we have *either* raw proof text or structured steps.
+  // (In some edge states, structured steps might be empty but raw text is available.)
+  const addToWorkspaceDisabled =
+    !((rawProof || '').trim()) && (!proof || (proof.sublemmas?.length ?? 0) === 0);
 
   return (
     <>
@@ -235,6 +314,16 @@ export function ProofSidebar() {
           <Button
             variant="ghost"
             size="icon"
+            title="Add to Workspace"
+            onClick={() => setOpenAddToWorkspaceConfirm(true)}
+            disabled={addToWorkspaceDisabled}
+          >
+            <Plus />
+            <span className="sr-only">Add to Workspace</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             title="Export .tex"
             onClick={onExportTex}
             disabled={exportDisabled}
@@ -276,6 +365,28 @@ export function ProofSidebar() {
               }}
             >
               Analyze
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={openAddToWorkspaceConfirm} onOpenChange={setOpenAddToWorkspaceConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add this proof to Workspace?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will append the current proof ({viewMode === 'raw' ? 'raw' : 'structured'}) to your current workspace draft.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setOpenAddToWorkspaceConfirm(false);
+                onConfirmAddToWorkspace();
+              }}
+            >
+              Add
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

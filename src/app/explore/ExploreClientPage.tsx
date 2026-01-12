@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/state/app-store';
 import ExploreView from '@/components/features/explore/explore-view';
 import ProofView from '@/components/features/proof/proof-view';
+import WorkspaceView from '@/components/features/workspace/workspace-view';
 import HomeView from '@/components/features/home/home-view';
 import { AppViewport } from '@/components/app-viewport';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
@@ -54,7 +55,15 @@ export default function ExploreClientPage({ q }: { q?: string }) {
 
     return (
         <AppViewport>
-            {view === 'proof' ? <ProofView /> : view === 'explore' ? <ExploreView /> : <HomeView />}
+            {view === 'proof' ? (
+                <ProofView />
+            ) : view === 'workspace' ? (
+                <WorkspaceView />
+            ) : view === 'explore' ? (
+                <ExploreView />
+            ) : (
+                <HomeView />
+            )}
         </AppViewport>
     );
 }

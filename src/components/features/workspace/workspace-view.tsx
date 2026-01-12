@@ -11,7 +11,7 @@ import type { Message } from '@/components/chat/interactive-chat';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { useSendWorkspaceThreadMessage } from '@/components/workspace/useSendWorkspaceThreadMessage';
 import { cn } from '@/lib/utils';
-import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil } from 'lucide-react';
+import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil, Maximize2, Minimize2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
 import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
@@ -57,6 +57,8 @@ export default function WorkspaceView() {
 
     const startProof = useAppStore((s) => s.startProof);
     const goHome = useAppStore((s) => s.goHome);
+    const returnFromWorkspace = useAppStore((s) => s.returnFromWorkspace);
+    const lastViewBeforeWorkspace = useAppStore((s) => s.lastViewBeforeWorkspace);
 
     const messages = useAppStore((s) => s.workspaceMessages);
     const setMessages = useAppStore((s) => s.setWorkspaceMessages);
@@ -64,6 +66,7 @@ export default function WorkspaceView() {
     const workspaceArtifacts = useAppStore((s) => (s as any).workspaceArtifacts);
     const workspaceArtifactEdits = useAppStore((s) => (s as any).workspaceArtifactEdits);
     const setWorkspaceArtifactEdit = useAppStore((s) => (s as any).setWorkspaceArtifactEdit);
+    const workspaceInsightsIsExtracting = useAppStore((s) => (s as any).workspaceInsightsIsExtracting);
     const extractInsights = useExtractWorkspaceInsights();
 
     const isChatOpen = useAppStore((s) => s.isWorkspaceChatOpen);
@@ -84,6 +87,22 @@ export default function WorkspaceView() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const chatScrollRef = useRef<HTMLDivElement | null>(null);
     const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+    // "Focus" state for expanding the chat panel into an overlay (match Prove mode UX).
+    const [isChatFocused, setIsChatFocused] = useState(false);
+
+    // Drag/drop state for inserting chat messages into the editor.
+    const [isEditorDragOver, setIsEditorDragOver] = useState(false);
+
+    // Escape closes focused chat overlay.
+    useEffect(() => {
+        if (!isChatFocused) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsChatFocused(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isChatFocused]);
 
     // Drag-to-resize state (right panel width)
     const isDraggingRef = useRef(false);
@@ -355,14 +374,19 @@ export default function WorkspaceView() {
         const selectionText = selectionContext?.selectionText;
         const contextText = selectionContext?.contextText ?? (doc || '').slice(0, 2000);
 
+        // Send a cleaner LaTeX context to the model (strip preamble/macros), similar to the prover pipeline.
+        // This reduces token waste and avoids flooding the model with \newcommand definitions.
+        const cleanedSelectionText = selectionText ? stripLatexPreambleAndMacros(selectionText) : undefined;
+        const cleanedContextText = stripLatexPreambleAndMacros(contextText);
+
         setMessages((prev) => [...prev, userMsg, typing]);
 
         startSending(async () => {
             await send(
                 {
                     request: trimmed,
-                    selectionText,
-                    contextText,
+                    selectionText: cleanedSelectionText,
+                    contextText: cleanedContextText,
                     history,
                 },
                 {
@@ -430,6 +454,162 @@ export default function WorkspaceView() {
         }
     }, [isChatOpen, rightTab, setIsChatOpen]);
 
+    // Allow deleting a candidate statement from Workspace Insights.
+    useEffect(() => {
+        const onDelete = (evt: any) => {
+            const s = String(evt?.detail?.statement ?? '').trim();
+            if (!s) return;
+            try {
+                useAppStore.getState().deleteWorkspaceCandidateStatement(s);
+            } catch {
+                // ignore
+            }
+        };
+        window.addEventListener('artifacts:delete-candidate-statement', onDelete as any);
+        return () => window.removeEventListener('artifacts:delete-candidate-statement', onDelete as any);
+    }, []);
+
+    const ChatPanel = (
+        <div className="relative h-full rounded-lg border bg-background overflow-hidden flex flex-col">
+            {/* Header bar (keeps controls aligned + avoids overlaying messages) */}
+            <div className="h-11 px-3 border-b flex items-center justify-between">
+                <div className="text-xs font-medium text-muted-foreground">
+                    {rightTab === 'insights' ? 'Insights' : rightTab === 'preview' ? 'Preview' : 'Chat'}
+                </div>
+
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            // Toggle: Insights <-> Chat
+                            setRightTab(useAppStore.getState().workspaceRightPanelTab === 'insights' ? 'chat' : 'insights');
+                            setIsChatOpen(true);
+                        }}
+                        aria-label="Insights"
+                        title="Insights"
+                        className={cn(
+                            'h-8 w-8',
+                            rightTab === 'insights' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
+                        )}
+                    >
+                        <Sparkles className="h-4 w-4" />
+                    </Button>
+
+                    {rightTab === 'chat' && (
+                        isChatFocused ? (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsChatFocused(false)}
+                                aria-label="Reduce to panel"
+                                title="Reduce"
+                                className="h-8 w-8"
+                            >
+                                <Minimize2 className="h-4 w-4" />
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsChatFocused(true)}
+                                aria-label="Expand chat"
+                                title="Expand"
+                                className="h-8 w-8"
+                            >
+                                <Maximize2 className="h-4 w-4" />
+                            </Button>
+                        )
+                    )}
+
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            setIsChatOpen(false);
+                            setIsChatFocused(false);
+                        }}
+                        aria-label="Close chat"
+                        title="Close"
+                        className="h-8 w-8"
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+
+            {rightTab === 'chat' ? (
+                <>
+                    <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any}>
+                        <div className="flex flex-col gap-4 py-6 min-w-0 pr-2">
+                            {(messages as Message[]).map((m, idx) => (
+                                <ChatMessage message={m as any} key={idx} />
+                            ))}
+                        </div>
+                    </ScrollArea>
+
+                    <div className="p-6 border-t bg-background">
+                        <form
+                            className="relative"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!isSending) handleSend();
+                            }}
+                        >
+                            <Textarea
+                                ref={chatInputRef}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (!isSending) handleSend();
+                                    }
+                                }}
+                                placeholder={
+                                    selectionContext
+                                        ? 'Ask about the selected excerpt…'
+                                        : 'Ask about this draft…'
+                                }
+                                rows={1}
+                                className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
+                            />
+                            <Button
+                                type="submit"
+                                size="sm"
+                                className="absolute right-3 top-1/2 -translate-y-1/2"
+                                disabled={isSending}
+                            >
+                                Send
+                            </Button>
+                        </form>
+                    </div>
+                </>
+            ) : rightTab === 'insights' ? (
+                <div className="flex-1 min-h-0 p-0">
+                    {/* Avoid extra nested borders; the panel already has a border container. */}
+                    <ArtifactsPanel
+                        artifacts={workspaceArtifacts}
+                        onPromote={(statement: string) => {
+                            const s = (statement || '').trim();
+                            if (!s) return;
+                            void startProof(s);
+                        }}
+                        isExtracting={Boolean(workspaceInsightsIsExtracting)}
+                        edits={workspaceArtifactEdits}
+                        setEdit={setWorkspaceArtifactEdit}
+                    />
+                </div>
+            ) : (
+                <ScrollArea className="flex-1 px-3 md:px-6">
+                    <div className="py-6">
+                        <WorkspacePreview content={doc || ''} />
+                    </div>
+                </ScrollArea>
+            )}
+        </div>
+    );
+
     return (
         <div className="inset-0 absolute overflow-hidden flex">
             {/* Left sidebar (match Proof mode) */}
@@ -454,6 +634,28 @@ export default function WorkspaceView() {
                 </div>
 
                 <div className="flex flex-col items-center space-y-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        title={lastViewBeforeWorkspace === 'proof' ? 'Back to Prove' : lastViewBeforeWorkspace === 'explore' ? 'Back to Explore' : 'Back'}
+                        onClick={() => {
+                            // Prefer browser history navigation so the browser Back button works too.
+                            try {
+                                const st = (window.history.state || {}) as any;
+                                if (st?.adjointInternal) {
+                                    window.history.back();
+                                    return;
+                                }
+                            } catch {
+                                // ignore
+                            }
+                            returnFromWorkspace();
+                        }}
+                    >
+                        <ArrowLeft />
+                        <span className="sr-only">Back</span>
+                    </Button>
+
                     <Button
                         variant="ghost"
                         size="icon"
@@ -496,24 +698,6 @@ export default function WorkspaceView() {
                         <span className="sr-only">Preview</span>
                     </Button>
 
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Insights"
-                        onClick={() => {
-                            setIsChatOpen((prev) => (prev && rightTab === 'insights' ? false : true));
-                            setRightTab('insights');
-                        }}
-                        className={
-                            isChatOpen && rightTab === 'insights'
-                                ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
-                                : ''
-                        }
-                    >
-                        <Sparkles />
-                        <span className="sr-only">Insights</span>
-                    </Button>
-
                     <Button variant="ghost" size="icon" title="Export" onClick={onExport}>
                         <Download />
                         <span className="sr-only">Export</span>
@@ -525,9 +709,46 @@ export default function WorkspaceView() {
             <div className="flex-1 min-h-0 flex overflow-hidden">
                 <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
                     <div
-                        className="h-full rounded-lg border bg-background overflow-hidden"
+                        className={cn(
+                            'h-full rounded-lg border bg-background overflow-hidden',
+                            isEditorDragOver ? 'ring-2 ring-primary/40 border-primary/30' : '',
+                        )}
                         data-local-selection="1"
                         data-selection-enabled="1"
+                        onDragEnter={(e) => {
+                            // Only react to text drags.
+                            if (!e.dataTransfer?.types?.includes('text/plain')) return;
+                            setIsEditorDragOver(true);
+                        }}
+                        onDragOver={(e) => {
+                            if (!e.dataTransfer?.types?.includes('text/plain')) return;
+                            // Required to allow drop.
+                            e.preventDefault();
+                            try {
+                                e.dataTransfer.dropEffect = 'copy';
+                            } catch {
+                                // ignore
+                            }
+                        }}
+                        onDragLeave={() => setIsEditorDragOver(false)}
+                        onDrop={(e) => {
+                            setIsEditorDragOver(false);
+                            const view = cmRef.current?.view;
+                            if (!view) return;
+
+                            e.preventDefault();
+                            const text = String(e.dataTransfer?.getData('text/plain') ?? '');
+                            if (!text) return;
+
+                            // Prefer dropping at mouse location.
+                            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.from;
+
+                            view.dispatch({
+                                changes: { from: pos, to: pos, insert: text },
+                                selection: { anchor: pos + text.length },
+                            });
+                            view.focus();
+                        }}
                     >
                         <CodeMirror
                             ref={cmRef}
@@ -694,111 +915,27 @@ export default function WorkspaceView() {
                             isChatOpen ? '' : 'w-0 p-0 border-l-0',
                         )}
                     >
-                        {isChatOpen && (
-                            <div className="relative h-full rounded-lg border bg-background overflow-hidden flex flex-col">
-                                {/* Close button overlays so we keep full height */}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setIsChatOpen(false)}
-                                    aria-label="Close chat"
-                                    title="Close"
-                                    className="absolute right-2 top-2 z-10"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-
-                                {rightTab === 'chat' ? (
-                                    <>
-                                        <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any}>
-                                            <div className="flex flex-col gap-4 py-6">
-                                                {(messages as Message[]).map((m, idx) => (
-                                                    <ChatMessage message={m as any} autoWrapMath key={idx} />
-                                                ))}
-                                            </div>
-                                        </ScrollArea>
-
-                                        <div className="p-6 border-t bg-background">
-                                            <form
-                                                className="relative"
-                                                onSubmit={(e) => {
-                                                    e.preventDefault();
-                                                    if (!isSending) handleSend();
-                                                }}
-                                            >
-                                                <Textarea
-                                                    ref={chatInputRef}
-                                                    value={chatInput}
-                                                    onChange={(e) => setChatInput(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                                            e.preventDefault();
-                                                            if (!isSending) handleSend();
-                                                        }
-                                                    }}
-                                                    placeholder={
-                                                        selectionContext
-                                                            ? 'Ask about the selected excerpt…'
-                                                            : 'Ask about this draft…'
-                                                    }
-                                                    rows={1}
-                                                    className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
-                                                />
-                                                <Button
-                                                    type="submit"
-                                                    size="sm"
-                                                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                                                    disabled={isSending}
-                                                >
-                                                    Send
-                                                </Button>
-                                            </form>
-                                        </div>
-                                    </>
-                                ) : rightTab === 'insights' ? (
-                                    <div className="flex-1 min-h-0 p-3">
-                                        <div className="h-full rounded-lg border bg-background overflow-hidden">
-                                            <ArtifactsPanel
-                                                artifacts={workspaceArtifacts}
-                                                onPromote={(statement: string) => {
-                                                    const s = (statement || '').trim();
-                                                    if (!s) return;
-                                                    void startProof(s);
-                                                }}
-                                                onExtract={() => {
-                                                    try {
-                                                        const latest = useAppStore.getState().workspaceMessages;
-                                                        const lastUser = [...latest]
-                                                            .reverse()
-                                                            .find((m: any) => m.role === 'user')?.content;
-                                                        const basis = String(lastUser ?? '').trim();
-                                                        if (!basis) return;
-                                                        void extractInsights({
-                                                            request: basis,
-                                                            history: latest.slice(-10) as any,
-                                                            seed: (doc || '').slice(0, 2000),
-                                                        });
-                                                    } catch {
-                                                        // ignore
-                                                    }
-                                                }}
-                                                edits={workspaceArtifactEdits}
-                                                setEdit={setWorkspaceArtifactEdit}
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <ScrollArea className="flex-1 px-3 md:px-6">
-                                        <div className="py-6">
-                                            <WorkspacePreview content={doc || ''} />
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                            </div>
-                        )}
+                        {isChatOpen && !isChatFocused && ChatPanel}
                     </aside>
                 </div>
             </div>
+
+            {/* Focus overlay (chat only) */}
+            {isChatOpen && isChatFocused && rightTab === 'chat' && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+                    role="dialog"
+                    aria-modal={true}
+                    onClick={() => setIsChatFocused(false)}
+                >
+                    <div
+                        className="w-full max-w-[85vw] h-[85vh] bg-background border rounded-lg shadow-lg overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {ChatPanel}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

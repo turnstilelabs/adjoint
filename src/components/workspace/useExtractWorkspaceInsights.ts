@@ -19,6 +19,13 @@ export function useExtractWorkspaceInsights() {
         const request = String(opts.request ?? '').trim();
         if (!request) return;
 
+        // UI hint (Workspace Insights panel will show an "Extracting…" state)
+        try {
+            useAppStore.getState().setWorkspaceInsightsExtracting(true);
+        } catch {
+            // ignore
+        }
+
         // Cancel previous extraction if still running
         const cancel = useAppStore.getState().cancelWorkspaceCurrent;
         if (cancel) {
@@ -85,7 +92,11 @@ export function useExtractWorkspaceInsights() {
             // ignore (AbortError or stream failure); we keep the previous artifacts.
         } finally {
             useAppStore.getState().setWorkspaceCancelCurrent(null);
+            try {
+                useAppStore.getState().setWorkspaceInsightsExtracting(false);
+            } catch {
+                // ignore
+            }
         }
     };
 }
-

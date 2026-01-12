@@ -114,8 +114,7 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
               rows={1}
             />
             <button
-              type="button"
-              onClick={runCurrentMode}
+              type="submit"
               disabled={isPending}
               className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
               aria-label={mode === 'explore' ? 'Explore this problem with Adjoint' : 'Attempt a proof of this statement with Adjoint'}

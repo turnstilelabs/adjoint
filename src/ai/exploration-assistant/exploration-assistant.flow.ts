@@ -386,7 +386,11 @@ export const explorationAssistantFlow = ai.defineFlow(
                             try {
                                 if (typeof out?.turnId === 'number' && out.turnId !== normalizedInput.turnId) {
                                     if (isDev) {
-                                        console.warn('[Explore][Flow] tool returned mismatched turnId; overriding', {
+                                        // This is safe to ignore.
+                                        // Some models occasionally echo a stale/incorrect turnId in the tool output.
+                                        // We always override with the client-provided turnId when emitting the
+                                        // artifacts chunk, so stale updates cannot be applied.
+                                        console.debug('[Explore][Flow] tool turnId mismatch (overridden)', {
                                             debugId,
                                             model: cand,
                                             toolTurnId: out.turnId,
@@ -488,4 +492,3 @@ export const explorationAssistantFlow = ai.defineFlow(
         return { done: true };
     },
 );
-

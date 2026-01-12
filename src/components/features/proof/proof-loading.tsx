@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { X } from 'lucide-react';
@@ -17,7 +17,13 @@ export function ProofLoading() {
   // const editProblem = useAppStore((s) => s.editProblem);
 
   const [elapsedMs, setElapsedMs] = useState(0);
+  // Default to math rendering during streaming (requested UX)
   const [renderMath, setRenderMath] = useState(false);
+
+  // While streaming, force math rendering on.
+  useEffect(() => {
+    if (isDraftStreaming) setRenderMath(true);
+  }, [isDraftStreaming]);
 
   // Trivia: show only after we know the model and before first token arrives.
   const [triviaDeck, setTriviaDeck] = useState<MathTriviaItem[]>([]);
@@ -39,6 +45,9 @@ export function ProofLoading() {
   const hasModelName = !!(progressLog || []).some((l) => typeof l === 'string' && l.startsWith('Using '));
   const hasFirstToken = (liveDraft || '').length > 0;
   const showTrivia = loading && hasModelName && !hasFirstToken;
+
+  // Rendering KaTeX on every token can be expensive; defer updates slightly to keep UI responsive.
+  const deferredLiveDraft = useDeferredValue(liveDraft);
 
   const currentTrivia = triviaDeck.length
     ? triviaDeck[((triviaIndex % triviaDeck.length) + triviaDeck.length) % triviaDeck.length]
@@ -101,7 +110,7 @@ export function ProofLoading() {
 
   return (
     // Keep the same reading measure as the main proof page (`ProofDisplay`): max-w-4xl.
-    <div className="mx-auto w-full max-w-4xl p-3 md:p-10 flex flex-col items-center justify-center min-h-screen">
+    <div className="mx-auto w-full max-w-4xl p-3 md:p-10 flex flex-col items-center justify-start min-h-screen">
       <Card className="w-full text-left">
         <CardContent className="pt-6">
           {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
@@ -142,21 +151,19 @@ export function ProofLoading() {
               <p className="text-xs uppercase tracking-wide text-foreground/60">
                 Live draft {isDraftStreaming ? '(streaming...)' : '(complete)'}
               </p>
-              {!isDraftStreaming && (
-                <button
-                  className="text-xs underline text-primary"
-                  onClick={() => setRenderMath((v) => !v)}
-                >
-                  {renderMath ? 'Show plain text' : 'Render math'}
-                </button>
-              )}
+              <button
+                className="text-xs underline text-primary"
+                onClick={() => setRenderMath((v) => !v)}
+              >
+                {renderMath ? 'Show plain text' : 'Render math'}
+              </button>
             </div>
-            {renderMath && !isDraftStreaming ? (
-              <div className="prose max-w-full max-h-64 overflow-auto">
-                <KatexRenderer content={liveDraft} />
+            {renderMath ? (
+              <div className="prose max-w-full">
+                <KatexRenderer content={deferredLiveDraft || ''} />
               </div>
             ) : (
-              <pre className="max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
+              <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
                 {liveDraft}
               </pre>
             )}

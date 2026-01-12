@@ -88,26 +88,34 @@ export default function ExploreView() {
     const { toast } = useToast();
     const [lastExtractHadNoStatements, setLastExtractHadNoStatements] = useState(false);
 
-    const extractNow = async () => {
+    // Auto-extract artifacts whenever the conversation changes (debounced).
+    // This removes the need for a manual "Extract statements" button.
+    useEffect(() => {
+        // If the user has not started an explore thread yet, don't spam extraction.
+        const hasAnyText = [...exploreMessages].some((m) => (m.content || '').trim().length > 0) || Boolean(exploreSeed?.trim());
+        if (!hasAnyText) return;
         if (isExtracting) return;
-        setIsExtracting(true);
-        try {
-            // Re-run extraction from the current context.
-            // Prefer the last user message; otherwise fall back to the current seed.
-            const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
-            const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
 
-            setLastExtractHadNoStatements(false);
+        const t = window.setTimeout(async () => {
+            try {
+                setIsExtracting(true);
+                // Prefer the last user message; otherwise fall back to the seed.
+                const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
+                const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
+                setLastExtractHadNoStatements(false);
+                await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
+                    suppressUser: true,
+                    displayAs: '',
+                    extractOnly: true,
+                });
+            } finally {
+                setIsExtracting(false);
+            }
+        }, 700);
 
-            await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
-                suppressUser: true,
-                displayAs: '',
-                extractOnly: true,
-            });
-        } finally {
-            setIsExtracting(false);
-        }
-    };
+        return () => window.clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [exploreMessages.length, exploreSeed]);
 
     useEffect(() => {
         // After a manual extraction attempt completes, if we still have no candidate statements,
@@ -121,6 +129,17 @@ export default function ExploreView() {
             });
         }
     }, [artifacts, isExtracting, lastExtractHadNoStatements, toast]);
+
+    // Allow deleting a single candidate statement from the UI.
+    useEffect(() => {
+        const onDelete = (evt: any) => {
+            const s = String(evt?.detail?.statement ?? '').trim();
+            if (!s) return;
+            useAppStore.getState().deleteExploreCandidateStatement(s);
+        };
+        window.addEventListener('artifacts:delete-candidate-statement', onDelete as any);
+        return () => window.removeEventListener('artifacts:delete-candidate-statement', onDelete as any);
+    }, []);
 
     useEffect(() => {
         const onOpen = () => setOpenAttemptProof(true);
@@ -154,7 +173,6 @@ export default function ExploreView() {
                             <ArtifactsPanel
                                 artifacts={artifacts}
                                 onPromote={(statement: string) => promoteToProof(statement)}
-                                onExtract={extractNow}
                                 isExtracting={isExtracting}
                             />
                         </ResizableAside>

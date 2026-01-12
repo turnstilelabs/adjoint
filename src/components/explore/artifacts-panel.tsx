@@ -5,14 +5,14 @@ import { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assista
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Pencil } from 'lucide-react';
+import { Info, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { EditableArtifactItem, type EditableArtifactItemHandle } from '@/components/explore/editable-artifact-item';
+import { splitStatements } from '@/lib/split-statements';
 
 type Props = {
     artifacts: ExploreArtifacts | null;
     onPromote: (statement: string) => void;
-    onExtract?: () => void;
     isExtracting?: boolean;
 
     /** Optional overrides so this panel can be reused outside Explore mode (e.g. Workspace Insights). */
@@ -45,10 +45,34 @@ function Section({
     onEdit?: () => void;
 }) {
     const editable = Boolean(onEdit);
+    const isCandidateStatements = title === 'Candidate Statements';
+    const candidateInfo =
+        'Experimental: Candidate statements are inferred automatically from the current conversation/document. They may be incomplete or incorrect.';
+
     return (
         <div className="p-4">
             <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-2">
                 <span>{title}</span>
+
+                {isCandidateStatements && (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-muted/30 text-muted-foreground">
+                        Experimental
+                    </span>
+                )}
+
+                {isCandidateStatements && (
+                    <button
+                        type="button"
+                        aria-label="How candidate statements are inferred"
+                        title={candidateInfo}
+                        className={
+                            'h-6 w-6 rounded flex items-center justify-center hover:bg-muted/30'
+                        }
+                    >
+                        <Info className="h-3.5 w-3.5" />
+                    </button>
+                )}
+
                 <button
                     type="button"
                     aria-label={editable ? `Edit ${title}` : undefined}
@@ -64,26 +88,6 @@ function Section({
             {children}
         </div>
     );
-}
-
-function splitStatements(input: string): string[] {
-    // Conservative splitter: supports simple bullet/numbered lists and newline-separated items.
-    // Avoid splitting inside LaTeX math by keeping to line-level heuristics only.
-    const normalized = (input ?? '').replace(/\r\n/g, '\n');
-    // First split on newlines
-    const lines = normalized.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-    const out: string[] = [];
-    for (const line of lines) {
-        // Match bullets: -, *, • followed by space; or simple numbered like "1. text"
-        const m = line.match(/^(?:[-*•]\s+|\d+\.\s+)(.*)$/);
-        if (m && m[1]) {
-            out.push(m[1].trim());
-        } else {
-            out.push(line);
-        }
-    }
-    // Deduplicate and remove empties
-    return Array.from(new Set(out.map((s) => s.trim()).filter(Boolean)));
 }
 
 function SingleStatementCarousel({
@@ -109,6 +113,21 @@ function SingleStatementCarousel({
 
     const original = (flat[index] ?? '').trim();
     const current = (edits[original] ?? original).trim();
+
+    const onDelete = () => {
+        try {
+            // Remove statement from the source list by rewriting the special sentinel value.
+            // Upstream UI/state should actually remove it from candidateStatements; edits overlay
+            // is not sufficient because it only maps original->edited.
+            window.dispatchEvent(
+                new CustomEvent('artifacts:delete-candidate-statement', {
+                    detail: { statement: original },
+                }),
+            );
+        } catch {
+            // ignore
+        }
+    };
 
     React.useEffect(() => {
         if (current && onActiveStatementChange) onActiveStatementChange(current);
@@ -136,6 +155,15 @@ function SingleStatementCarousel({
                     <div className="flex gap-2">
                         <Button size="sm" variant="secondary" onClick={() => onPromote(current)}>
                             Start proof attempt
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={onDelete}
+                            title="Delete statement"
+                        >
+                            <Trash2 className="h-4 w-4" />
                         </Button>
                     </div>
                     {/* Dots navigation */}
@@ -175,7 +203,6 @@ function SingleStatementCarousel({
 export function ArtifactsPanel({
     artifacts,
     onPromote,
-    onExtract,
     isExtracting,
     edits: editsOverride,
     setEdit: setEditOverride,
@@ -212,19 +239,22 @@ export function ArtifactsPanel({
                     title="Candidate Statements"
                     onEdit={a.candidateStatements.length > 0 ? () => candidateStatementRef.current?.startEditing() : undefined}
                 >
+                    {isExtracting && a.candidateStatements.length > 0 && (
+                        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Updating extracted statements…</span>
+                        </div>
+                    )}
                     {a.candidateStatements.length === 0 ? (
                         <div className="space-y-3">
-                            <div className="text-sm text-muted-foreground">No statement extracted yet.</div>
-                            {onExtract && (
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={onExtract}
-                                    disabled={Boolean(isExtracting)}
-                                >
-                                    {isExtracting && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    {isExtracting ? 'Extracting…' : 'Extract statements'}
-                                </Button>
+                            <div className="text-sm text-muted-foreground">
+                                {isExtracting ? 'Extracting…' : 'No statement extracted yet.'}
+                            </div>
+                            {isExtracting && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span>Finding candidate statements…</span>
+                                </div>
                             )}
                         </div>
                     ) : (

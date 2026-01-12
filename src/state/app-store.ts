@@ -14,6 +14,35 @@ import {
 
 export type View = 'home' | 'explore' | 'workspace' | 'proof';
 
+/**
+ * Minimal browser history integration for the in-app view state.
+ *
+ * Why: our app uses a single Next.js route and switches modes via Zustand state.
+ * If users use the browser Back/Forward buttons, we still want to restore the
+ * previous in-app view (e.g. Workspace -> Prove) without losing the current
+ * proof/explore session.
+ */
+const pushAppViewToHistory = (view: View, extra?: { lastViewBeforeWorkspace?: View | null }) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const cur = window.history.state as any;
+    // Avoid pushing duplicate entries.
+    if (cur?.adjointInternal === true && cur?.adjointView === view) return;
+    window.history.pushState(
+      {
+        ...(cur || {}),
+        adjointInternal: true,
+        adjointView: view,
+        adjointLastViewBeforeWorkspace: extra?.lastViewBeforeWorkspace ?? null,
+      },
+      '',
+      window.location.href,
+    );
+  } catch {
+    // ignore
+  }
+};
+
 // Extended ProofVersion to support raw vs structured versions, numbering and metadata
 export type ProofVersion = {
   id: string;
@@ -131,6 +160,8 @@ let lastSavedRaw = '';
 
 type StoreData = {
   view: View;
+  /** Where to return when leaving Workspace (so we don't reset Proof/Explore state). */
+  lastViewBeforeWorkspace: View | null;
   problem: string | null;
   lastProblem: string | null;
   messages: Message[];
@@ -222,6 +253,7 @@ type StoreData = {
 
   // Workspace Insights (Explore-style artifacts)
   workspaceArtifacts: ExploreArtifacts | null;
+  workspaceInsightsIsExtracting: boolean;
   workspaceArtifactEdits: {
     candidateStatements: Record<string, string>;
     perStatement: Record<
@@ -252,6 +284,10 @@ interface AppState extends StoreData {
   // Workspace actions
   startWorkspace: (seed?: string) => void;
   newWorkspace: () => void;
+  /** Navigate to Workspace from the current view, optionally appending a snippet to the document. */
+  goToWorkspace: (opts?: { from?: View; append?: string }) => void;
+  /** Return from Workspace to the previously active view (typically Proof/Explore). */
+  returnFromWorkspace: () => void;
   setWorkspaceDoc: (doc: string) => void;
   setWorkspaceDraft: (text: string, opts?: { open?: boolean }) => void;
   setWorkspaceMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
@@ -261,6 +297,8 @@ interface AppState extends StoreData {
 
   // Workspace Insights actions
   setWorkspaceArtifacts: (artifacts: ExploreArtifacts | null) => void;
+  setWorkspaceInsightsExtracting: (extracting: boolean) => void;
+  deleteWorkspaceCandidateStatement: (statement: string) => void;
   setWorkspaceArtifactEdit: (opts: {
     kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
     statementKey?: string;
@@ -275,6 +313,7 @@ interface AppState extends StoreData {
   startExplore: (seed?: string) => void;
   setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
+  deleteExploreCandidateStatement: (statement: string) => void;
   setExploreArtifactEdit: (opts: {
     kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
     /** Candidate statement key for non-candidate edits. */
@@ -366,6 +405,7 @@ let decomposeRunId = 0;
 
 const initialState: StoreData = {
   view: 'home',
+  lastViewBeforeWorkspace: null,
   problem: null,
   lastProblem: null,
   messages: [],
@@ -427,6 +467,7 @@ const initialState: StoreData = {
   workspaceRightPanelWidth: 448, // 28rem default
 
   workspaceArtifacts: null,
+  workspaceInsightsIsExtracting: false,
   workspaceArtifactEdits: {
     candidateStatements: {},
     perStatement: {},
@@ -438,7 +479,10 @@ const initialState: StoreData = {
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
 
-  goHome: () => set({ view: 'home' }),
+  goHome: () => {
+    set({ view: 'home' });
+    pushAppViewToHistory('home');
+  },
 
   setChatDraft: (text, opts) => {
     const t = String(text ?? '');
@@ -459,18 +503,55 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   startWorkspace: (seed?: string) => {
+    const prevView = get().view;
     const doc = String(seed ?? '').trim();
     set((s) => ({
       view: 'workspace',
+      lastViewBeforeWorkspace: s.view,
       workspaceDoc: doc || s.workspaceDoc || '',
       // keep conversation by default
       workspaceMessages: s.workspaceMessages,
     }));
+
+    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: prevView });
+  },
+
+  goToWorkspace: (opts) => {
+    const from = (opts?.from ?? get().view) as View;
+    const append = String(opts?.append ?? '').trim();
+
+    set((s) => {
+      const prevDoc = String(s.workspaceDoc ?? '');
+      const nextDoc = append
+        ? (prevDoc.trim().length > 0
+          ? `${prevDoc.replace(/\s*$/, '')}\n\n${append}\n`
+          : `${append}\n`)
+        : prevDoc;
+
+      return {
+        view: 'workspace',
+        lastViewBeforeWorkspace: from,
+        workspaceDoc: nextDoc,
+      };
+    });
+
+    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: from });
+  },
+
+  returnFromWorkspace: () => {
+    const last = get().lastViewBeforeWorkspace;
+    // If we don't know where to return, go home.
+    set({ view: last || 'home' });
+    // Note: we intentionally do NOT push a new history entry here.
+    // - If user clicked the in-UI back button, we prefer `history.back()`.
+    // - If caller falls back to this function, they can still use browser back/forward.
   },
 
   newWorkspace: () => {
+    const prevView = get().view;
     set({
       view: 'workspace',
+      lastViewBeforeWorkspace: get().view,
       workspaceDoc: '',
       workspaceMessages: [],
       workspaceDraft: '',
@@ -479,6 +560,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceRightPanelTab: 'chat',
       workspaceRightPanelWidth: 448,
     });
+
+    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: prevView });
   },
 
   setWorkspaceDoc: (doc) => set({ workspaceDoc: String(doc ?? '') }),
@@ -502,6 +585,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setWorkspaceArtifacts: (artifacts) => set({ workspaceArtifacts: artifacts }),
+
+  setWorkspaceInsightsExtracting: (extracting) =>
+    set({ workspaceInsightsIsExtracting: Boolean(extracting) }),
+
+  deleteWorkspaceCandidateStatement: (statement: string) => {
+    const s = String(statement ?? '').trim();
+    if (!s) return;
+    set((state) => {
+      const cur = state.workspaceArtifacts;
+      if (!cur) return state;
+      const nextCandidates = (cur.candidateStatements || []).filter((x) => x !== s);
+      const nextArtifacts: ExploreArtifacts = {
+        ...cur,
+        candidateStatements: nextCandidates,
+        statementArtifacts: { ...(cur.statementArtifacts || {}) },
+      };
+      delete (nextArtifacts.statementArtifacts as any)[s];
+      return { workspaceArtifacts: nextArtifacts } as any;
+    });
+  },
 
   setWorkspaceArtifactEdit: ({ kind, statementKey, original, edited }) => {
     const o = (original ?? '').trim();
@@ -803,6 +906,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
         exploreTurnId: 0,
       });
+
+      pushAppViewToHistory('explore');
       return;
     }
 
@@ -813,6 +918,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       exploreMessages: get().exploreMessages.length ? get().exploreMessages : [],
       exploreArtifacts: get().exploreArtifacts,
     });
+
+    pushAppViewToHistory('explore');
   },
 
   setExploreMessages: (updater) => {
@@ -826,6 +933,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setExploreArtifacts: (artifacts) => set({ exploreArtifacts: artifacts }),
+
+  deleteExploreCandidateStatement: (statement: string) => {
+    const s = String(statement ?? '').trim();
+    if (!s) return;
+    set((state) => {
+      const cur = state.exploreArtifacts;
+      if (!cur) return state;
+      const nextCandidates = (cur.candidateStatements || []).filter((x) => x !== s);
+      const nextArtifacts: ExploreArtifacts = {
+        ...cur,
+        candidateStatements: nextCandidates,
+        statementArtifacts: { ...(cur.statementArtifacts || {}) },
+      };
+      delete (nextArtifacts.statementArtifacts as any)[s];
+      return { exploreArtifacts: nextArtifacts } as any;
+    });
+  },
 
   setExploreArtifactEdit: ({ kind, statementKey, original, edited }) => {
     const o = (original ?? '').trim();
@@ -963,6 +1087,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       liveDraft: '',
       isDraftStreaming: false,
     });
+
+    pushAppViewToHistory('proof');
 
     const appendLog = (line: string) => set((s) => ({ progressLog: [...s.progressLog, line] }));
 
@@ -1294,6 +1420,19 @@ export const useAppStore = create<AppState>((set, get) => ({
                     : null,
               }));
               lastSavedRaw = raw;
+
+              // Token-streaming path: auto-decompose once the raw proof is revealed.
+              // Keep UX on Raw Proof (background structuring) and avoid duplicating work.
+              // NOTE: PROVED_VARIANT is handled above (suggestion gate) and will decompose on Accept.
+              try {
+                const alreadyDecomposed = ((get().decomposedRaw || '').trim() === raw);
+                if (!alreadyDecomposed && raw.length >= 10) {
+                  // Fire-and-forget; runDecomposition internally guards against stale runs.
+                  void get().runDecomposition();
+                }
+              } catch {
+                // Ignore: decomposition is best-effort here.
+              }
             } else {
               set({
                 loading: false,
@@ -1355,6 +1494,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceDraft: state.workspaceDraft,
       workspaceDraftNonce: state.workspaceDraftNonce,
       isWorkspaceChatOpen: state.isWorkspaceChatOpen,
+      lastViewBeforeWorkspace: state.lastViewBeforeWorkspace,
     }));
   },
 
@@ -1375,6 +1515,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       errorCode: null,
       pendingSuggestion: null,
     }));
+
+    pushAppViewToHistory('home');
   },
 
   // UI actions

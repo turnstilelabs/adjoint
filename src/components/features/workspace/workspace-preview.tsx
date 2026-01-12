@@ -145,6 +145,38 @@ export function WorkspacePreview({ content, className }: { content: string; clas
     const normalized = useMemo(() => normalizeLatexStructureForPreview(body), [body]);
     const segments = useMemo(() => splitLatexIntoSegments(normalized), [normalized]);
 
+    // Rendering strategy:
+    // - Inline math ($...$ and \(...\)) must stay inline with surrounding text.
+    // - Display math ($$...$$ and \[...\]) should be its own block.
+    // We therefore render segments as a sequence of “runs”:
+    //   [inline run]* (display block) [inline run]* ...
+    // Where an inline run is a mix of text + inline-math rendered inside a single
+    // inline-flow container (so KaTeX doesn't get forced onto its own line).
+    const runs = useMemo(() => {
+        const out: Array<
+            | { type: 'inlineRun'; items: Segment[] }
+            | { type: 'displayMath'; item: Extract<Segment, { type: 'math' }> }
+        > = [];
+
+        let cur: Segment[] = [];
+        const flush = () => {
+            if (!cur.length) return;
+            out.push({ type: 'inlineRun', items: cur });
+            cur = [];
+        };
+
+        for (const seg of segments) {
+            if (seg.type === 'math' && seg.displayMode) {
+                flush();
+                out.push({ type: 'displayMath', item: seg });
+            } else {
+                cur.push(seg);
+            }
+        }
+        flush();
+        return out;
+    }, [segments]);
+
     return (
         <div className={cn('text-sm leading-relaxed', className)}>
             {hasPreamble && (
@@ -153,30 +185,47 @@ export function WorkspacePreview({ content, className }: { content: string; clas
                     (packages/macros) isn’t executed in KaTeX preview.
                 </div>
             )}
-            {segments.map((seg, i) => {
-                if (seg.type === 'text') {
-                    // Preserve whitespace/newlines; let KaTeX blocks break naturally.
+            {runs.map((run, i) => {
+                if (run.type === 'displayMath') {
+                    const seg = run.item;
+                    const wrapped = `$$${seg.content}$$`;
                     return (
-                        <pre
-                            key={i}
-                            className="whitespace-pre-wrap font-sans text-foreground/90"
-                        >
-                            {seg.content}
-                        </pre>
+                        <KatexRenderer
+                            key={`dm-${i}`}
+                            content={wrapped}
+                            autoWrap={false}
+                            className="my-3"
+                            inline={false}
+                        />
                     );
                 }
 
-                // For math segments, rely on the existing KatexRenderer.
-                // We pass explicit delimiters so it doesn't auto-wrap prose.
-                const wrapped = seg.displayMode ? `$$${seg.content}$$` : `$${seg.content}$`;
+                // Inline run: mix of text + inline math in the same flow.
+                // Use a single block container (div) so newlines are preserved via CSS,
+                // but inline math remains inline.
                 return (
-                    <KatexRenderer
-                        key={i}
-                        content={wrapped}
-                        autoWrap={false}
-                        className={seg.displayMode ? 'my-3' : 'inline'}
-                        inline={!seg.displayMode}
-                    />
+                    <div
+                        key={`ir-${i}`}
+                        className="whitespace-pre-wrap font-sans text-foreground/90"
+                    >
+                        {run.items.map((seg, j) => {
+                            if (seg.type === 'text') {
+                                return <span key={`t-${j}`}>{seg.content}</span>;
+                            }
+
+                            // Inline math
+                            const wrapped = `$${seg.content}$`;
+                            return (
+                                <KatexRenderer
+                                    key={`m-${j}`}
+                                    content={wrapped}
+                                    autoWrap={false}
+                                    className="inline"
+                                    inline={true}
+                                />
+                            );
+                        })}
+                    </div>
                 );
             })}
         </div>
