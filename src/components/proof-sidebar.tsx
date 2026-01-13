@@ -17,11 +17,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConfirmResetDialog } from '@/components/confirm-reset-dialog';
 
 export function ProofSidebar() {
   const { toast } = useToast();
+
+  // Hover hint coming from the “Where to go from here” callout.
+  // Kept as local UI state (no global store changes).
+  const [hoverHint, setHoverHint] = useState<
+    'structured' | 'graph' | 'chat' | 'analyze' | 'workspace' | null
+  >(null);
+
+  useEffect(() => {
+    const onHover = (evt: any) => {
+      const id = (evt?.detail?.id ?? null) as any;
+      setHoverHint(id || null);
+    };
+    try {
+      window.addEventListener('adjoint:proofSidebarHover', onHover as any);
+      return () => window.removeEventListener('adjoint:proofSidebarHover', onHover as any);
+    } catch {
+      return;
+    }
+  }, []);
 
   const [openAnalyzeConfirm, setOpenAnalyzeConfirm] = useState(false);
   const [openResetConfirm, setOpenResetConfirm] = useState(false);
@@ -250,6 +269,7 @@ export function ProofSidebar() {
         </div>
         <div className="flex flex-col items-center space-y-2">
           <Button
+            data-proof-action="history"
             variant="ghost"
             size="icon"
             title="History"
@@ -260,6 +280,7 @@ export function ProofSidebar() {
             <span className="sr-only">History</span>
           </Button>
           <Button
+            data-proof-action="structured"
             variant="ghost"
             size="icon"
             title={
@@ -273,55 +294,81 @@ export function ProofSidebar() {
             className={
               viewMode === 'structured' || viewMode === 'graph'
                 ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
-                : ''
+                : hoverHint === 'structured'
+                  ? 'ring-1 ring-primary/25'
+                  : ''
             }
           >
             <ListTree />
             <span className="sr-only">{viewMode === 'structured' ? 'Raw proof' : 'Structured proof'}</span>
           </Button>
           <Button
+            data-proof-action="graph"
             variant="ghost"
             size="icon"
             title="Graph"
             onClick={onGoGraph}
-            className={viewMode === 'graph' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
+            className={
+              viewMode === 'graph'
+                ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
+                : hoverHint === 'graph'
+                  ? 'ring-1 ring-primary/25'
+                  : ''
+            }
           >
             <Network />
             <span className="sr-only">Graph</span>
           </Button>
           <Button
+            data-proof-action="chat"
             variant="ghost"
             size="icon"
             title="Chat"
             onClick={onToggleChat}
-            className={isChatOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
+            className={
+              isChatOpen
+                ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
+                : hoverHint === 'chat'
+                  ? 'ring-1 ring-primary/25'
+                  : ''
+            }
           >
             {isChatOpen ? <MessageCircle /> : <MessageCircle />}
             <span className="sr-only">Chat</span>
           </Button>
           {viewMode !== 'graph' && (
             <Button
+              data-proof-action="analyze"
               variant="ghost"
               size="icon"
               title={isAnalyzingProof ? 'Cancel analysis' : 'Analyze'}
               onClick={onClickAnalyze}
-              className={isAnalyzingProof ? 'text-primary' : undefined}
+              className={
+                isAnalyzingProof
+                  ? 'text-primary'
+                  : hoverHint === 'analyze'
+                    ? 'ring-1 ring-primary/25'
+                    : undefined
+              }
             >
               {isAnalyzingProof ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles />}
               <span className="sr-only">{isAnalyzingProof ? 'Cancel analysis' : 'Analyze'}</span>
             </Button>
           )}
           <Button
+            data-proof-action="workspace"
             variant="ghost"
             size="icon"
             title="Add to Workspace"
             onClick={() => setOpenAddToWorkspaceConfirm(true)}
             disabled={addToWorkspaceDisabled}
+            className={hoverHint === 'workspace' ? 'ring-1 ring-primary/25' : undefined}
           >
             <Plus />
             <span className="sr-only">Add to Workspace</span>
           </Button>
           <Button
+            data-proof-action="export"
             variant="ghost"
             size="icon"
             title="Export .tex"

@@ -140,7 +140,15 @@ function EditableProblemCard() {
                     Could not prove the statement as written. It may be false or require stronger assumptions:
                   </div>
                   <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
-                    <KatexRenderer content={pendingRejection.explanation} />
+                    {/*
+                      IMPORTANT:
+                      Rejection explanations are predominantly prose. Using the global math auto-wrap heuristic here
+                      can accidentally wrap long English runs into math mode, which causes:
+                      - spaces to be ignored (words become glued)
+                      - math italics applied to letters
+                      We therefore render only explicitly-delimited math ($...$, $$...$$, \(\), \[\], fenced ```math).
+                    */}
+                    <KatexRenderer content={pendingRejection.explanation} autoWrap={false} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <Button size="sm" onClick={() => setIsEditing(true)}>

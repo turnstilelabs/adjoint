@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import katex from 'katex';
 import { cn } from '@/lib/utils';
+import { normalizeLatexForKatex } from '@/lib/latex-normalize';
 
 type KatexRendererProps = {
   content: string;
@@ -28,27 +29,8 @@ type KatexRendererProps = {
  */
 const sanitizeText = (t: string) => t.replace(/\\\$/g, '$');
 
-// Normalize common math delimiters to $...$ and $$...$$ so KaTeX can parse consistently.
-// - Convert \(...\) -> $...$
-// - Convert \[...\] -> $$...$$
-// - Convert ```math ...``` / ```latex ...``` fenced blocks -> $$...$$
-const normalizeMathDelimiters = (input: unknown) => {
-  // Defensive: some call sites may pass null/undefined (e.g. while loading / resuming views).
-  // KaTeX rendering should never crash the app.
-  let s = typeof input === 'string' ? input : String(input ?? '');
-
-  // Fenced code blocks for math/latex
-  // Accepts optional spaces after the language tag and requires a newline before the block body.
-  s = s.replace(/```(?:math|latex)[\t ]*\r?\n([\s\S]*?)```/g, (_m, g1) => `$$${g1}$$`);
-
-  // \[ ... \] -> $$ ... $$
-  s = s.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, g1) => `$$${g1}$$`);
-
-  // \( ... \) -> $ ... $
-  s = s.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_m, g1) => `$${g1}$`);
-
-  return s;
-};
+// NOTE: Delimiter/environment normalization is shared across the app.
+// See `normalizeLatexForKatex` for supported forms (\[\], \(\), fenced blocks, align*, etc.)
 
 // Helper function to create a React element from a text part, converting newlines to <br>
 function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[] {
@@ -297,8 +279,9 @@ export function KatexRenderer({
   fallbackOnError = true,
 }: KatexRendererProps) {
   const parts = useMemo(() => {
-    // Normalize alternate math delimiter forms first so KaTeX parsing is robust across providers.
-    const normalized = normalizeMathDelimiters(content);
+    // Normalize alternate math delimiter/env forms first so KaTeX parsing is robust across providers.
+    // This includes rewriting \begin{align*}...\end{align*} into $$\begin{aligned}...\end{aligned}$$.
+    const normalized = normalizeLatexForKatex(content);
 
     // After normalizing, auto-wrap only outside existing $...$/$$...$$ segments (autoWrap helper preserves them).
     const hinted = autoWrap ? autoWrapInlineMathIfNeeded(normalized) : normalized;
@@ -330,7 +313,9 @@ export function KatexRenderer({
             return renderTextWithLineBreaks(latex, index);
           }
 
-          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+          // Wrapper ensures long/unbreakable formulas never spill outside their container.
+          // See `.katex-fragment` styles in globals.css.
+          return <span key={index} className="katex-fragment" dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
           return renderTextWithLineBreaks(latex, index);
@@ -349,7 +334,9 @@ export function KatexRenderer({
             return renderTextWithLineBreaks(latex, index);
           }
 
-          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+          // Wrapper ensures long/unbreakable formulas never spill outside their container.
+          // See `.katex-fragment` styles in globals.css.
+          return <span key={index} className="katex-fragment" dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
           return renderTextWithLineBreaks(latex, index);
