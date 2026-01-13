@@ -3,7 +3,6 @@
 
 import { useMemo } from 'react';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { normalizeLatexForKatex } from '@/lib/latex-normalize';
 import { cn } from '@/lib/utils';
 
 type Segment =
@@ -144,8 +143,7 @@ function normalizeLatexStructureForPreview(input: string): string {
 export function WorkspacePreview({ content, className }: { content: string; className?: string }) {
     const { body, hasPreamble } = useMemo(() => extractDocumentBody(content), [content]);
     const normalized = useMemo(() => normalizeLatexStructureForPreview(body), [body]);
-    const katexReady = useMemo(() => normalizeLatexForKatex(normalized), [normalized]);
-    const segments = useMemo(() => splitLatexIntoSegments(katexReady), [katexReady]);
+    const segments = useMemo(() => splitLatexIntoSegments(normalized), [normalized]);
 
     // Rendering strategy:
     // - Inline math ($...$ and \(...\)) must stay inline with surrounding text.

@@ -122,23 +122,9 @@
   /* Wrapper to ensure math never spills out of its container */
   .katex-wrap {
     max-width: 100%;
-    min-width: 0; /* important in flex layouts so children can shrink */
     overflow-wrap: anywhere;
     /* allow breaks in long tokens */
     word-break: break-word;
-  }
-
-  /*
-   * Each KaTeX fragment (inline or display) is wrapped by our renderer.
-   * This ensures unbreakable formulas never overflow a card.
-   */
-  .katex-wrap .katex-fragment {
-    display: inline-block;
-    max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    vertical-align: baseline;
   }
 
   /* Allow inline KaTeX to wrap on lines */
