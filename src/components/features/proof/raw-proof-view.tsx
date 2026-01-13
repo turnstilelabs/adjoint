@@ -25,6 +25,7 @@ export default function RawProofView() {
     );
 
     const [copyText, setCopyText] = useState<string>('');
+    const didPlaceCaretForEditSessionRef = useRef(false);
 
     const computeCaretIndexFromClick = useCallback(
         (click: { x: number; y: number; textSnapshot: string }): number => {
@@ -191,8 +192,12 @@ export default function RawProofView() {
     );
 
     useEffect(() => {
+        // Important: do NOT depend on `rawProof` here. `rawProof` updates on every keystroke,
+        // and re-running this effect would reset the caret to the end while typing.
         if (!isEditing || !textareaRef.current) return;
+        if (didPlaceCaretForEditSessionRef.current) return;
 
+        didPlaceCaretForEditSessionRef.current = true;
         textareaRef.current.focus();
 
         // If we have a pending caret index (from a click in preview), place caret there.
@@ -206,7 +211,13 @@ export default function RawProofView() {
             const length = textareaRef.current.value.length;
             textareaRef.current.setSelectionRange(length, length);
         }
-    }, [isEditing, rawProof, computeCaretIndexFromClick]);
+    }, [isEditing, rawProof]);
+
+    useEffect(() => {
+        if (isEditing) return;
+        // Reset per-edit-session guard when leaving edit mode.
+        didPlaceCaretForEditSessionRef.current = false;
+    }, [isEditing]);
 
     // Selection toolbar for raw proof preview: Copy + Ask AI + Edit (jump caret)
     useEffect(() => {
@@ -357,4 +368,3 @@ export default function RawProofView() {
         </div>
     );
 }
-
