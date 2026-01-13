@@ -9,6 +9,7 @@ import { Pencil } from 'lucide-react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import AdjointProse from '@/components/adjoint-prose';
 import { selectionRangeToLatex } from '@/lib/selection-to-latex';
+import { ProofNextStepsCallout } from '@/components/features/proof/proof-next-steps-callout';
 
 export default function RawProofView() {
     const rawProof = useAppStore((s) => s.rawProof);
@@ -277,6 +278,7 @@ export default function RawProofView() {
 
     return (
         <div className="space-y-3" data-local-selection="1" data-selection-enabled="1">
+            <ProofNextStepsCallout />
             {selection.anchor && (
                 <SelectionToolbar
                     anchor={selection.anchor}

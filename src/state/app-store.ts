@@ -1289,10 +1289,16 @@ export const useAppStore = create<AppState>((set, get) => ({
               const data = JSON.parse(ev.data || '{}');
               const attempt = data?.attempt; const decomp = data?.decompose;
               if (!attempt) { set({ loading: false, error: 'Malformed SSE response.' }); return; }
+
+              // IMPORTANT: in the SSE fallback path, always populate rawProof when we have it.
+              // Otherwise the UI can end up on Raw Proof view with an empty editor.
+              const rawContent = String(attempt.rawProof || '').trim();
               if (attempt.status === 'FAILED') {
-                const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
+                const rawVersion = makeRawVersion(get().proofHistory, rawContent);
                 set({
                   loading: false,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
                   error: null,
                   pendingRejection: { explanation: attempt.explanation || 'No details provided.' },
                   proofHistory: [rawVersion],
@@ -1300,23 +1306,41 @@ export const useAppStore = create<AppState>((set, get) => ({
                 });
               } else if (!decomp) {
                 // Decomposition failure is not fatal; allow the user to view/edit Raw Proof.
-                const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
-                set({ loading: false, decomposeError: 'Failed to decompose the drafted proof.', proofHistory: [rawVersion], activeVersionIdx: 0 });
+                const rawVersion = makeRawVersion(get().proofHistory, rawContent);
+                set({
+                  loading: false,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
+                  decomposeError: 'Failed to decompose the drafted proof.',
+                  proofHistory: [rawVersion],
+                  activeVersionIdx: 0,
+                });
               } else if (attempt.status === 'PROVED_AS_IS') {
                 const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
                 const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'), };
 
-                const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
+                const rawVersion = makeRawVersion(get().proofHistory, rawContent);
                 const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, { provedStatement: decomp.provedStatement, normalizedProof: (decomp as any).normalizedProof || '' }, { userEdited: false, derived: true });
 
-                set({ messages: [assistantMessage], loading: false, error: null, proofHistory: [rawVersion, structuredVersion], activeVersionIdx: 1, decomposedRaw: attempt.rawProof || '' });
+                // Match the streaming UX: reveal Raw Proof first, but keep Structured available.
+                // Users can jump to structured/graph via the sidebar.
+                set({
+                  messages: [assistantMessage],
+                  loading: false,
+                  error: null,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
+                  proofHistory: [rawVersion, structuredVersion],
+                  activeVersionIdx: 0,
+                  decomposedRaw: rawContent,
+                });
 
                 // Silent: compute dependency graph for the new structured version.
                 setTimeout(() => {
                   void get().ensureGraphForVersion(structuredVersion.id);
                 }, 0);
               } else {
-                const rawVersion = makeRawVersion(get().proofHistory, attempt.rawProof || '');
+                const rawVersion = makeRawVersion(get().proofHistory, rawContent);
                 set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [rawVersion], activeVersionIdx: 0 });
               }
             } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
