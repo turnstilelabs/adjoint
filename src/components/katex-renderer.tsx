@@ -313,7 +313,9 @@ export function KatexRenderer({
             return renderTextWithLineBreaks(latex, index);
           }
 
-          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+          // Wrapper ensures long/unbreakable formulas never spill outside their container.
+          // See `.katex-fragment` styles in globals.css.
+          return <span key={index} className="katex-fragment" dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
           return renderTextWithLineBreaks(latex, index);
@@ -332,7 +334,9 @@ export function KatexRenderer({
             return renderTextWithLineBreaks(latex, index);
           }
 
-          return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
+          // Wrapper ensures long/unbreakable formulas never spill outside their container.
+          // See `.katex-fragment` styles in globals.css.
+          return <span key={index} className="katex-fragment" dangerouslySetInnerHTML={{ __html: html }} />;
         } catch (error) {
           console.error('KaTeX rendering error:', error);
           return renderTextWithLineBreaks(latex, index);
