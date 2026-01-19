@@ -15,6 +15,7 @@ import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil, Maximize2, M
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
 import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
+import { WorkspaceNextStepsCallout } from '@/components/features/workspace/workspace-next-steps-callout';
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
@@ -90,6 +91,43 @@ export default function WorkspaceView() {
 
     // "Focus" state for expanding the chat panel into an overlay (match Prove mode UX).
     const [isChatFocused, setIsChatFocused] = useState(false);
+
+    // Hover hint coming from the “Getting started in Workspace” callout.
+    // Kept as local UI state (no global store changes).
+    const [hoverHint, setHoverHint] = useState<'import' | 'chat' | 'preview' | 'export' | null>(null);
+
+    useEffect(() => {
+        const onHover = (evt: any) => {
+            const id = (evt?.detail?.id ?? null) as any;
+            setHoverHint(id || null);
+        };
+        try {
+            window.addEventListener('adjoint:workspaceSidebarHover', onHover as any);
+            return () => window.removeEventListener('adjoint:workspaceSidebarHover', onHover as any);
+        } catch {
+            return;
+        }
+    }, []);
+
+    // UX: when a user first arrives in Workspace for the current browser session,
+    // keep the right panel closed so they see the editor first.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const key = 'adjoint.workspace.firstEntryClosePanel.v1';
+        try {
+            const seen = window.sessionStorage.getItem(key) === '1';
+            if (!seen) {
+                setIsChatOpen(false);
+                setIsChatFocused(false);
+                window.sessionStorage.setItem(key, '1');
+            }
+        } catch {
+            // Best-effort: if sessionStorage is unavailable, still prefer closed.
+            setIsChatOpen(false);
+            setIsChatFocused(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Drag/drop state for inserting chat messages into the editor.
     const [isEditorDragOver, setIsEditorDragOver] = useState(false);
@@ -478,23 +516,25 @@ export default function WorkspaceView() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                            // Toggle: Insights <-> Chat
-                            setRightTab(useAppStore.getState().workspaceRightPanelTab === 'insights' ? 'chat' : 'insights');
-                            setIsChatOpen(true);
-                        }}
-                        aria-label="Insights"
-                        title="Insights"
-                        className={cn(
-                            'h-8 w-8',
-                            rightTab === 'insights' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
-                        )}
-                    >
-                        <Sparkles className="h-4 w-4" />
-                    </Button>
+                    {rightTab !== 'preview' && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                                // Toggle: Insights <-> Chat
+                                setRightTab(useAppStore.getState().workspaceRightPanelTab === 'insights' ? 'chat' : 'insights');
+                                setIsChatOpen(true);
+                            }}
+                            aria-label="Insights"
+                            title="Insights"
+                            className={cn(
+                                'h-8 w-8',
+                                rightTab === 'insights' ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
+                            )}
+                        >
+                            <Sparkles className="h-4 w-4" />
+                        </Button>
+                    )}
 
                     {rightTab === 'chat' && (
                         isChatFocused ? (
@@ -657,16 +697,19 @@ export default function WorkspaceView() {
                     </Button>
 
                     <Button
+                        data-workspace-action="import"
                         variant="ghost"
                         size="icon"
                         title="Import"
                         onClick={() => fileInputRef.current?.click()}
+                        className={hoverHint === 'import' ? 'ring-1 ring-primary/25' : undefined}
                     >
                         <FileUp />
                         <span className="sr-only">Import</span>
                     </Button>
 
                     <Button
+                        data-workspace-action="chat"
                         variant="ghost"
                         size="icon"
                         title="Chat"
@@ -674,13 +717,17 @@ export default function WorkspaceView() {
                             setIsChatOpen((prev) => (prev && rightTab === 'chat' ? false : true));
                             setRightTab('chat');
                         }}
-                        className={isChatOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : ''}
+                        className={cn(
+                            isChatOpen ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
+                            hoverHint === 'chat' ? 'ring-1 ring-primary/25' : '',
+                        )}
                     >
                         <MessageCircle />
                         <span className="sr-only">Chat</span>
                     </Button>
 
                     <Button
+                        data-workspace-action="preview"
                         variant="ghost"
                         size="icon"
                         title="Preview"
@@ -688,17 +735,25 @@ export default function WorkspaceView() {
                             setIsChatOpen((prev) => (prev && rightTab === 'preview' ? false : true));
                             setRightTab('preview');
                         }}
-                        className={
+                        className={cn(
                             isChatOpen && rightTab === 'preview'
                                 ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
-                                : ''
-                        }
+                                : '',
+                            hoverHint === 'preview' ? 'ring-1 ring-primary/25' : '',
+                        )}
                     >
                         <Eye />
                         <span className="sr-only">Preview</span>
                     </Button>
 
-                    <Button variant="ghost" size="icon" title="Export" onClick={onExport}>
+                    <Button
+                        data-workspace-action="export"
+                        variant="ghost"
+                        size="icon"
+                        title="Export"
+                        onClick={onExport}
+                        className={hoverHint === 'export' ? 'ring-1 ring-primary/25' : undefined}
+                    >
                         <Download />
                         <span className="sr-only">Export</span>
                     </Button>
@@ -708,6 +763,9 @@ export default function WorkspaceView() {
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
                 <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
+                    <div className="mb-3">
+                        <WorkspaceNextStepsCallout />
+                    </div>
                     <div
                         className={cn(
                             'h-full rounded-lg border bg-background overflow-hidden',

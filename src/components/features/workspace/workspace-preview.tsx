@@ -178,7 +178,15 @@ export function WorkspacePreview({ content, className }: { content: string; clas
     }, [segments]);
 
     return (
-        <div className={cn('text-sm leading-relaxed', className)}>
+        <div
+            className={cn(
+                // Allow horizontal scrolling for long unbroken LaTeX tokens that would otherwise
+                // look visually truncated inside the Radix ScrollArea (which uses overflow-hidden).
+                'text-sm leading-relaxed max-w-full overflow-x-auto overflow-y-hidden',
+                className,
+            )}
+            style={{ WebkitOverflowScrolling: 'touch' }}
+        >
             {hasPreamble && (
                 <div className="mb-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                     Preview is showing the document body (everything after <code>{'\\begin{document}'}</code>). The preamble
