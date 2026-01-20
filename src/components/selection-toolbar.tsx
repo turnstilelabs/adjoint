@@ -1,4 +1,4 @@
-"use client";
+'use client';
 import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles, CheckSquare } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
@@ -16,14 +16,18 @@ async function copyWithFormat(text: string, html?: string) {
 
   // Prefer writing HTML + plain text (keeps math formatting when pasted into rich editors).
   try {
-    if (navigator.clipboard && 'write' in navigator.clipboard && typeof (window as any).ClipboardItem === 'function') {
+    if (
+      navigator.clipboard &&
+      'write' in navigator.clipboard &&
+      typeof (window as any).ClipboardItem === 'function'
+    ) {
       const safeHtml =
         typeof html === 'string' && html.trim().length > 0
           ? html
           : `<pre style="white-space:pre-wrap">${t
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')}</pre>`;
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')}</pre>`;
       const item = new (window as any).ClipboardItem({
         'text/plain': new Blob([t], { type: 'text/plain' }),
         'text/html': new Blob([safeHtml], { type: 'text/html' }),
@@ -92,13 +96,7 @@ interface SelectionToolbarProps {
    * Workspace can pass e.g. ['copy','addToReview','proveThis','askAI'].
    */
   buttonOrder?: Array<
-    | 'addToReview'
-    | 'copy'
-    | 'askAI'
-    | 'proveThis'
-    | 'checkAgain'
-    | 'editSelection'
-    | 'revise'
+    'addToReview' | 'copy' | 'askAI' | 'proveThis' | 'checkAgain' | 'editSelection' | 'revise'
   >;
 }
 
@@ -320,8 +318,10 @@ export function SelectionToolbar({
 
                     if (view === 'workspace') {
                       try {
-                        if (typeof setWorkspaceDraft === 'function') setWorkspaceDraft(text, { open: true });
-                        if (typeof setIsWorkspaceChatOpen === 'function') setIsWorkspaceChatOpen(true);
+                        if (typeof setWorkspaceDraft === 'function')
+                          setWorkspaceDraft(text, { open: true });
+                        if (typeof setIsWorkspaceChatOpen === 'function')
+                          setIsWorkspaceChatOpen(true);
                       } catch {
                         // ignore
                       }
@@ -394,7 +394,13 @@ export function SelectionToolbar({
             if (k === 'revise') {
               if (!showRevise) return null;
               return (
-                <Button key={k} variant="ghost" size="icon" onClick={onRevise} title="Revise statement">
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  onClick={onRevise}
+                  title="Revise statement"
+                >
                   <Edit className="h-4 w-4" />
                 </Button>
               );

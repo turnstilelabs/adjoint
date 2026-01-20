@@ -111,7 +111,9 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
         flush();
         const inner = text.slice(i + 2, end);
         nodes.push(
-          <strong key={`${keyPrefix}-b-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-b-${key}`)}</strong>,
+          <strong key={`${keyPrefix}-b-${key++}`}>
+            {renderInlineEmphasis(inner, `${keyPrefix}-b-${key}`)}
+          </strong>,
         );
         i = end + 2;
         continue;
@@ -128,7 +130,9 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
         flush();
         const inner = text.slice(i + 1, end);
         nodes.push(
-          <em key={`${keyPrefix}-i-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-i-${key}`)}</em>,
+          <em key={`${keyPrefix}-i-${key++}`}>
+            {renderInlineEmphasis(inner, `${keyPrefix}-i-${key}`)}
+          </em>,
         );
         i = end + 1;
         continue;
@@ -252,7 +256,10 @@ function autoWrapInlineMathIfNeeded(input: string): string {
       if (/[=<>^_+\-*/|]/.test(mdStripped)) return true;
 
       // Digits mixed with letters, or standalone numbers
-      if ((/\d/.test(mdStripped) && /[A-Za-z]/.test(mdStripped)) || /^\d+(\.\d+)?$/.test(mdStripped)) {
+      if (
+        (/\d/.test(mdStripped) && /[A-Za-z]/.test(mdStripped)) ||
+        /^\d+(\.\d+)?$/.test(mdStripped)
+      ) {
         return true;
       }
 

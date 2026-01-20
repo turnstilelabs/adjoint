@@ -306,10 +306,14 @@ interface AppState extends StoreData {
 
   // Workspace Review actions
   setWorkspaceReviewArtifacts: (items: ExtractedArtifact[]) => void;
-  setWorkspaceReviewEdit: (key: string, edits: { statement: string; proof?: string | null }) => void;
+  setWorkspaceReviewEdit: (
+    key: string,
+    edits: { statement: string; proof?: string | null },
+  ) => void;
   resetWorkspaceReviewEdits: (key?: string) => void;
   applyWorkspaceReviewEditsToDoc: (key: string) => void;
-  setWorkspaceReviewResult: (key: string, result: ArtifactReviewResult) => void;
+  /** Set to null to clear the stored result for this key. */
+  setWorkspaceReviewResult: (key: string, result: ArtifactReviewResult | null) => void;
 
   // Workspace Insights actions
   setWorkspaceArtifacts: (artifacts: ExploreArtifacts | null) => void;
@@ -549,9 +553,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => {
       const prevDoc = String(s.workspaceDoc ?? '');
       const nextDoc = append
-        ? (prevDoc.trim().length > 0
+        ? prevDoc.trim().length > 0
           ? `${prevDoc.replace(/\s*$/, '')}\n\n${append}\n`
-          : `${append}\n`)
+          : `${append}\n`
         : prevDoc;
 
       return {
@@ -646,7 +650,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const edits = state.workspaceReviewEdits[k];
     if (!edits) return;
     const art = state.workspaceReviewArtifacts.find((a) => {
-      const kk = (a.label && a.label.trim()) ? a.label.trim() : `${a.type}@${a.artifactStartChar}`;
+      const kk = a.label && a.label.trim() ? a.label.trim() : `${a.type}@${a.artifactStartChar}`;
       return kk === k;
     });
     if (!art) return;
@@ -669,7 +673,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (art.label && !/\\label\s*\{[^}]+\}/.test(statement)) {
         statement = `\\label{${art.label}}\n${statement}`;
       }
-      replacements.push({ from: art.bodyStartChar, to: art.bodyEndChar, insert: `\n${statement}\n` });
+      replacements.push({
+        from: art.bodyStartChar,
+        to: art.bodyEndChar,
+        insert: `\n${statement}\n`,
+      });
     }
 
     // Proof edit (proof body only)
@@ -871,10 +879,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           proofHistory: s.proofHistory.map((x) =>
             x.id === versionId
               ? {
-                ...x,
-                graphData: { nodes: normalizedNodes, edges },
-                graphHash,
-              }
+                  ...x,
+                  graphData: { nodes: normalizedNodes, edges },
+                  graphHash,
+                }
               : x,
           ),
         };
@@ -942,13 +950,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const computeSourceHash = () => {
       if (isRawMode) return hashString((state.rawProof || '').trim());
-      const steps = (proof.sublemmas || []).map((s) => ({ title: s.title, statement: s.statement, proof: s.proof }));
+      const steps = (proof.sublemmas || []).map((s) => ({
+        title: s.title,
+        statement: s.statement,
+        proof: s.proof,
+      }));
       return hashString(JSON.stringify(steps));
     };
 
     const sourceHash = computeSourceHash();
     const last = proof.validationResult;
-    if (last?.sourceType === (isRawMode ? 'raw' : 'structured') && last?.sourceHash === sourceHash) {
+    if (
+      last?.sourceType === (isRawMode ? 'raw' : 'structured') &&
+      last?.sourceHash === sourceHash
+    ) {
       set((s) => (s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any)));
       return;
     }
@@ -993,7 +1008,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (e: any) {
       if (get().analyzeProofRunId !== myRun) return;
-      const friendly = e?.message || 'Adjoint’s connection to the model was interrupted, please go back and retry.';
+      const friendly =
+        e?.message ||
+        'Adjoint’s connection to the model was interrupted, please go back and retry.';
       get().updateCurrentProofMeta({
         validationResult: {
           isError: true,
@@ -1013,7 +1030,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Cancel any in-flight explore stream
     const cancel = get().cancelExploreCurrent || null;
     if (cancel) {
-      try { cancel(); } catch { }
+      try {
+        cancel();
+      } catch {}
     }
 
     const trimmed = seed?.trim() ? seed.trim() : null;
@@ -1250,13 +1269,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Fallback non-streaming implementation (existing behavior)
     const runNonStreaming = async () => {
       await new Promise((r) => setTimeout(r, 50));
-      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const t0 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
       const attempt = opts?.force
         ? await attemptProofActionForce(trimmed)
         : await attemptProofAction(trimmed);
-      const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] attemptProof done ms=', t1 - t0, 'success=', (attempt as any)?.success);
+      const t1 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      console.debug(
+        '[UI][AppStore] attemptProof done ms=',
+        t1 - t0,
+        'success=',
+        (attempt as any)?.success,
+      );
 
       if (!attempt.success) {
         set({ loading: false, error: attempt.error || 'Failed to attempt proof.' });
@@ -1276,10 +1302,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      const d0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      const d0 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       const decomp = await decomposeRawProofAction(attempt.rawProof || '');
-      const d1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] decomposeRawProof done ms=', d1 - d0, 'success=', (decomp as any)?.success);
+      const d1 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      console.debug(
+        '[UI][AppStore] decomposeRawProof done ms=',
+        d1 - d0,
+        'success=',
+        (decomp as any)?.success,
+      );
 
       if (!decomp.success) {
         // Decomposition is not fatal in the new split-phase UX.
@@ -1296,13 +1329,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (attempt.status === 'PROVED_AS_IS') {
-        const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0)
-          ? (decomp.sublemmas as Sublemma[])
-          : ([{
-            title: 'Proof',
-            statement: decomp.provedStatement,
-            proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
-          }] as Sublemma[]);
+        const steps: Sublemma[] =
+          decomp.sublemmas && decomp.sublemmas.length > 0
+            ? (decomp.sublemmas as Sublemma[])
+            : ([
+                {
+                  title: 'Proof',
+                  statement: decomp.provedStatement,
+                  proof:
+                    (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.',
+                },
+              ] as Sublemma[]);
         console.debug('[UI][AppStore] provedAsIs steps', steps.length);
         const assistantMessage: Message = {
           role: 'assistant',
@@ -1313,10 +1350,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         const rawContent = attempt.rawProof || '';
         const rawVersion = makeRawVersion(get().proofHistory, rawContent);
-        const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, {
-          provedStatement: decomp.provedStatement,
-          normalizedProof: (decomp as any).normalizedProof || '',
-        }, { userEdited: false, derived: true });
+        const structuredVersion = makeStructuredVersion(
+          get().proofHistory,
+          rawVersion.baseMajor,
+          steps,
+          {
+            provedStatement: decomp.provedStatement,
+            normalizedProof: (decomp as any).normalizedProof || '',
+          },
+          { userEdited: false, derived: true },
+        );
 
         set({
           messages: [assistantMessage],
@@ -1361,14 +1404,20 @@ export const useAppStore = create<AppState>((set, get) => ({
           const url2 = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
           const es2 = new EventSource(url2);
           let finished2 = false;
-          set({ cancelCurrent: () => { try { es2.close(); } catch { } } });
+          set({
+            cancelCurrent: () => {
+              try {
+                es2.close();
+              } catch {}
+            },
+          });
 
           es2.addEventListener('progress', (ev: MessageEvent) => {
             try {
               const data = JSON.parse(ev.data || '{}');
               if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
               if (data?.phase === 'decompose.start') appendLog('Decomposing proof....');
-            } catch { }
+            } catch {}
           });
           es2.addEventListener('attempt', (ev: MessageEvent) => {
             try {
@@ -1380,13 +1429,17 @@ export const useAppStore = create<AppState>((set, get) => ({
               } else {
                 appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
               }
-            } catch { }
+            } catch {}
           });
           es2.addEventListener('decompose', (ev: MessageEvent) => {
-            try { const data = JSON.parse(ev.data || '{}'); appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`); } catch { }
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`);
+            } catch {}
           });
           es2.addEventListener('server-error', (ev: MessageEvent) => {
-            if (finished2) return; finished2 = true;
+            if (finished2) return;
+            finished2 = true;
             try {
               const data = JSON.parse(ev.data || '{}');
               set({
@@ -1396,17 +1449,29 @@ export const useAppStore = create<AppState>((set, get) => ({
                 errorCode: data?.code ?? null,
               });
             } catch {
-              set({ loading: false, error: 'Unexpected server error.', errorDetails: null, errorCode: null });
+              set({
+                loading: false,
+                error: 'Unexpected server error.',
+                errorDetails: null,
+                errorCode: null,
+              });
             }
-            try { es2.close(); } catch { }
+            try {
+              es2.close();
+            } catch {}
             set({ cancelCurrent: null });
           });
           es2.addEventListener('done', (ev: MessageEvent) => {
-            if (finished2) return; finished2 = true;
+            if (finished2) return;
+            finished2 = true;
             try {
               const data = JSON.parse(ev.data || '{}');
-              const attempt = data?.attempt; const decomp = data?.decompose;
-              if (!attempt) { set({ loading: false, error: 'Malformed SSE response.' }); return; }
+              const attempt = data?.attempt;
+              const decomp = data?.decompose;
+              if (!attempt) {
+                set({ loading: false, error: 'Malformed SSE response.' });
+                return;
+              }
 
               // IMPORTANT: in the SSE fallback path, always populate rawProof when we have it.
               // Otherwise the UI can end up on Raw Proof view with an empty editor.
@@ -1434,11 +1499,37 @@ export const useAppStore = create<AppState>((set, get) => ({
                   activeVersionIdx: 0,
                 });
               } else if (attempt.status === 'PROVED_AS_IS') {
-                const steps: Sublemma[] = (decomp.sublemmas && decomp.sublemmas.length > 0) ? (decomp.sublemmas as Sublemma[]) : ([{ title: 'Proof', statement: decomp.provedStatement, proof: (decomp as any).normalizedProof || attempt.rawProof || 'Proof unavailable.', }] as Sublemma[]);
-                const assistantMessage: Message = { role: 'assistant', content: `I've broken down the proof into the following steps:\n\n` + steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'), };
+                const steps: Sublemma[] =
+                  decomp.sublemmas && decomp.sublemmas.length > 0
+                    ? (decomp.sublemmas as Sublemma[])
+                    : ([
+                        {
+                          title: 'Proof',
+                          statement: decomp.provedStatement,
+                          proof:
+                            (decomp as any).normalizedProof ||
+                            attempt.rawProof ||
+                            'Proof unavailable.',
+                        },
+                      ] as Sublemma[]);
+                const assistantMessage: Message = {
+                  role: 'assistant',
+                  content:
+                    `I've broken down the proof into the following steps:\n\n` +
+                    steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+                };
 
                 const rawVersion = makeRawVersion(get().proofHistory, rawContent);
-                const structuredVersion = makeStructuredVersion(get().proofHistory, rawVersion.baseMajor, steps, { provedStatement: decomp.provedStatement, normalizedProof: (decomp as any).normalizedProof || '' }, { userEdited: false, derived: true });
+                const structuredVersion = makeStructuredVersion(
+                  get().proofHistory,
+                  rawVersion.baseMajor,
+                  steps,
+                  {
+                    provedStatement: decomp.provedStatement,
+                    normalizedProof: (decomp as any).normalizedProof || '',
+                  },
+                  { userEdited: false, derived: true },
+                );
 
                 // Match the streaming UX: reveal Raw Proof first, but keep Structured available.
                 // Users can jump to structured/graph via the sidebar.
@@ -1459,13 +1550,42 @@ export const useAppStore = create<AppState>((set, get) => ({
                 }, 0);
               } else {
                 const rawVersion = makeRawVersion(get().proofHistory, rawContent);
-                set({ loading: false, error: null, pendingSuggestion: { suggested: attempt.finalStatement || decomp.provedStatement, variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING', provedStatement: decomp.provedStatement, sublemmas: decomp.sublemmas as Sublemma[], explanation: attempt.explanation, normalizedProof: (decomp as any).normalizedProof, rawProof: attempt.rawProof || undefined, }, proofHistory: [rawVersion], activeVersionIdx: 0 });
+                set({
+                  loading: false,
+                  error: null,
+                  pendingSuggestion: {
+                    suggested: attempt.finalStatement || decomp.provedStatement,
+                    variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                    provedStatement: decomp.provedStatement,
+                    sublemmas: decomp.sublemmas as Sublemma[],
+                    explanation: attempt.explanation,
+                    normalizedProof: (decomp as any).normalizedProof,
+                    rawProof: attempt.rawProof || undefined,
+                  },
+                  proofHistory: [rawVersion],
+                  activeVersionIdx: 0,
+                });
               }
-            } catch (e) { set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' }); }
-            finally { try { es2.close(); } catch { } set({ cancelCurrent: null }); }
+            } catch (e) {
+              set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
+            } finally {
+              try {
+                es2.close();
+              } catch {}
+              set({ cancelCurrent: null });
+            }
           });
-          es2.onerror = () => { try { es2.close(); } catch { } set({ cancelCurrent: null }); appendLog('Metadata stream lost. Falling back to non-streaming...'); runNonStreaming(); };
-        } catch { await runNonStreaming(); }
+          es2.onerror = () => {
+            try {
+              es2.close();
+            } catch {}
+            set({ cancelCurrent: null });
+            appendLog('Metadata stream lost. Falling back to non-streaming...');
+            runNonStreaming();
+          };
+        } catch {
+          await runNonStreaming();
+        }
       };
 
       try {
@@ -1473,17 +1593,39 @@ export const useAppStore = create<AppState>((set, get) => ({
         const es = new EventSource(url);
         let finished = false;
         let gotDelta = false;
-        set({ cancelCurrent: () => { try { es.close(); } catch { } } });
+        set({
+          cancelCurrent: () => {
+            try {
+              es.close();
+            } catch {}
+          },
+        });
         set({ isDraftStreaming: true, liveDraft: '' });
 
         es.addEventListener('model.start', (ev: MessageEvent) => {
-          try { const data = JSON.parse(ev.data || '{}'); appendLog(`Using ${data?.provider}/${data?.model}...`); } catch { }
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            appendLog(`Using ${data?.provider}/${data?.model}...`);
+          } catch {}
         });
         es.addEventListener('model.switch', (ev: MessageEvent) => {
-          try { const d = JSON.parse(ev.data || '{}'); if (d?.to) appendLog(`Switched model to ${d.to}...`); } catch { }
+          try {
+            const d = JSON.parse(ev.data || '{}');
+            if (d?.to) appendLog(`Switched model to ${d.to}...`);
+          } catch {}
         });
         es.addEventListener('model.delta', (ev: MessageEvent) => {
-          try { const data = JSON.parse(ev.data || '{}'); const t = data?.text || ''; if (t) { if (!gotDelta) { appendLog('Receiving model output...'); gotDelta = true; } set((s) => ({ liveDraft: s.liveDraft + t })); } } catch { }
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            const t = data?.text || '';
+            if (t) {
+              if (!gotDelta) {
+                appendLog('Receiving model output...');
+                gotDelta = true;
+              }
+              set((s) => ({ liveDraft: s.liveDraft + t }));
+            }
+          } catch {}
         });
         es.addEventListener('model.end', () => {
           // Draft complete, but we intentionally do NOT reveal it yet.
@@ -1502,14 +1644,15 @@ export const useAppStore = create<AppState>((set, get) => ({
             } else if (st === 'FAILED') {
               appendLog("Draft doesn't prove the statement as written. Showing explanation...");
             }
-          } catch { }
+          } catch {}
         });
 
         // attempt-stream no longer performs decomposition server-side.
         // We do client-side decomposition only on explicit user request.
 
         es.addEventListener('server-error', (ev: MessageEvent) => {
-          if (finished) return; finished = true;
+          if (finished) return;
+          finished = true;
           let friendly = 'Token stream failed.';
           let detail: string | null = null;
           let code: string | null = null;
@@ -1518,15 +1661,23 @@ export const useAppStore = create<AppState>((set, get) => ({
             if (data?.error) friendly = data.error; // already friendly from server
             if (data?.detail) detail = data.detail;
             if (data?.code) code = data.code;
-          } catch { }
-          try { es.close(); } catch { }
-          set({ cancelCurrent: null, isDraftStreaming: false, errorDetails: detail, errorCode: code });
+          } catch {}
+          try {
+            es.close();
+          } catch {}
+          set({
+            cancelCurrent: null,
+            isDraftStreaming: false,
+            errorDetails: detail,
+            errorCode: code,
+          });
           appendLog(friendly + ' Falling back to metadata stream...');
           runMetadataSSE();
         });
 
         es.addEventListener('done', (ev: MessageEvent) => {
-          if (finished) return; finished = true;
+          if (finished) return;
+          finished = true;
           try {
             const data = JSON.parse(ev.data || '{}');
             const attempt = data?.attempt;
@@ -1604,7 +1755,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               // Keep UX on Raw Proof (background structuring) and avoid duplicating work.
               // NOTE: PROVED_VARIANT is handled above (suggestion gate) and will decompose on Accept.
               try {
-                const alreadyDecomposed = ((get().decomposedRaw || '').trim() === raw);
+                const alreadyDecomposed = (get().decomposedRaw || '').trim() === raw;
                 if (!alreadyDecomposed && raw.length >= 10) {
                   // Fire-and-forget; runDecomposition internally guards against stale runs.
                   void get().runDecomposition();
@@ -1624,13 +1775,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           } catch (e) {
             set({ loading: false, error: e instanceof Error ? e.message : 'Unexpected error.' });
           } finally {
-            try { es.close(); } catch { }
+            try {
+              es.close();
+            } catch {}
             set({ cancelCurrent: null, isDraftStreaming: false });
           }
         });
 
         es.onerror = () => {
-          if (finished) return; finished = true; try { es.close(); } catch { }
+          if (finished) return;
+          finished = true;
+          try {
+            es.close();
+          } catch {}
           set({ cancelCurrent: null, isDraftStreaming: false });
           appendLog('Token stream connection lost. Falling back to metadata stream...');
           runMetadataSSE();
@@ -1662,11 +1819,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   reset: () => {
     const cancel = get().cancelCurrent || null;
     if (cancel) {
-      try { cancel(); } catch { }
+      try {
+        cancel();
+      } catch {}
     }
     const cancelExplore = get().cancelExploreCurrent || null;
     if (cancelExplore) {
-      try { cancelExplore(); } catch { }
+      try {
+        cancelExplore();
+      } catch {}
     }
     set((state) => ({
       ...initialState,
@@ -1747,10 +1908,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         nextIdx =
           (baseMajor != null
             ? pickLast((v) => v.type === 'structured' && v.baseMajor === baseMajor)
-            : null) ?? pickLast((v) => v.type === 'structured') ?? state.activeVersionIdx;
+            : null) ??
+          pickLast((v) => v.type === 'structured') ??
+          state.activeVersionIdx;
       } else if (mode === 'raw') {
         nextIdx =
-          (baseMajor != null ? pickLast((v) => v.type === 'raw' && v.baseMajor === baseMajor) : null) ??
+          (baseMajor != null
+            ? pickLast((v) => v.type === 'raw' && v.baseMajor === baseMajor)
+            : null) ??
           pickLast((v) => v.type === 'raw') ??
           state.activeVersionIdx;
       }
@@ -1851,13 +2016,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const steps: Sublemma[] =
-        (result.sublemmas && result.sublemmas.length > 0)
+        result.sublemmas && result.sublemmas.length > 0
           ? (result.sublemmas as Sublemma[])
-          : ([{
-            title: 'Proof',
-            statement: result.provedStatement,
-            proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
-          }] as Sublemma[]);
+          : ([
+              {
+                title: 'Proof',
+                statement: result.provedStatement,
+                proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
+              },
+            ] as Sublemma[]);
 
       // Update decompose meta (used for toasts / context).
       // IMPORTANT: do NOT mutate existing versions here. Decomposition results are persisted
@@ -1918,7 +2085,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ isDecomposing: false, decomposeError: e?.message || 'Failed to decompose proof.' });
     }
   },
-
 
   getCurrentRawBaseMajor: () => {
     const raw = (get().rawProof || '').trim();
@@ -2133,7 +2299,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const next = { ...version, timestamp: new Date() } as any;
       const nextIdx = state.proofHistory.length;
       // Schedule silent auto-graph generation for structured versions.
-      if (next.type === 'structured' && Array.isArray(next.sublemmas) && next.sublemmas.length > 0) {
+      if (
+        next.type === 'structured' &&
+        Array.isArray(next.sublemmas) &&
+        next.sublemmas.length > 0
+      ) {
         setTimeout(() => {
           void get().ensureGraphForVersion(next.id);
         }, 0);
@@ -2231,8 +2401,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
 
       const deleteWholeGroup =
-        target.type === 'raw' ||
-        (target.type === 'structured' && structuredForMajor.length <= 1);
+        target.type === 'raw' || (target.type === 'structured' && structuredForMajor.length <= 1);
 
       const nextHistory = deleteWholeGroup
         ? history.filter((v) => v.baseMajor !== baseMajor)
@@ -2283,8 +2452,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
 
       const shouldClearDecomposition =
-        deleteWholeGroup ||
-        (target.type === 'structured' && !stillHasStructuredForMajor);
+        deleteWholeGroup || (target.type === 'structured' && !stillHasStructuredForMajor);
 
       return {
         ...state,
