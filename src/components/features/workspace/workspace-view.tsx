@@ -922,6 +922,7 @@ export default function WorkspaceView() {
                                     showAskAI={true}
                                     showProveThis={true}
                                     showAddToReview={true}
+                                    buttonOrder={['copy', 'addToReview', 'proveThis', 'askAI']}
                                     onProveThis={() => openProveModalFromSelection()}
                                     onAddToReview={({ selectionLatex }) => {
                                         const view = cmRef.current?.view;
