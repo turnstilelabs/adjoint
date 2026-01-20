@@ -21,7 +21,6 @@ import {
   Pencil,
   Maximize2,
   Minimize2,
-  ArrowLeft,
   CheckSquare,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -103,8 +102,6 @@ export default function WorkspaceView() {
 
   const startProof = useAppStore((s) => s.startProof);
   const goHome = useAppStore((s) => s.goHome);
-  const returnFromWorkspace = useAppStore((s) => s.returnFromWorkspace);
-  const lastViewBeforeWorkspace = useAppStore((s) => s.lastViewBeforeWorkspace);
 
   const messages = useAppStore((s) => s.workspaceMessages);
   const setMessages = useAppStore((s) => s.setWorkspaceMessages);
@@ -732,7 +729,7 @@ export default function WorkspaceView() {
           />
         </div>
       ) : (
-        <ScrollArea className="flex-1 px-3 md:px-6">
+        <ScrollArea className="flex-1 px-3 md:px-6" scrollbar="both">
           <div className="py-6">
             <WorkspacePreview content={doc || ''} />
           </div>
@@ -765,34 +762,6 @@ export default function WorkspaceView() {
         </div>
 
         <div className="flex flex-col items-center space-y-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            title={
-              lastViewBeforeWorkspace === 'proof'
-                ? 'Back to Prove'
-                : lastViewBeforeWorkspace === 'explore'
-                  ? 'Back to Explore'
-                  : 'Back'
-            }
-            onClick={() => {
-              // Prefer browser history navigation so the browser Back button works too.
-              try {
-                const st = (window.history.state || {}) as any;
-                if (st?.adjointInternal) {
-                  window.history.back();
-                  return;
-                }
-              } catch {
-                // ignore
-              }
-              returnFromWorkspace();
-            }}
-          >
-            <ArrowLeft />
-            <span className="sr-only">Back</span>
-          </Button>
-
           <Button
             data-workspace-action="import"
             variant="ghost"

@@ -189,11 +189,12 @@ export function WorkspacePreview({ content, className }: { content: string; clas
     >
       {hasPreamble && (
         <div className="mb-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Preview is showing the document body (everything after <code>{'\\begin{document}'}</code>
-          ). Packages/other preamble code isn’t executed, but simple 0‑argument macros (
-          <code>\\newcommand</code>/<code>\\renewcommand</code>) are supported.
+          This is a lightweight preview to help you read your draft as you write it.
+          <br />
+          It doesn’t run a full LaTeX compiler, so some commands may not render exactly.
         </div>
       )}
+
       {runs.map((run, i) => {
         if (run.type === 'displayMath') {
           const seg = run.item;
