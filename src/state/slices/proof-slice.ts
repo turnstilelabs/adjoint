@@ -1,0 +1,1145 @@
+'use client';
+
+import type { AppState, ProofValidationResult, ProofVersion } from '@/state/store.types';
+import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
+import type { GraphData } from '@/components/proof-graph';
+import type { Message } from '@/components/chat/interactive-chat';
+import {
+  attemptProofAction,
+  attemptProofActionForce,
+  decomposeRawProofAction,
+  generateProofGraphForGoalAction,
+} from '@/app/actions';
+import { pushAppViewToHistory } from '@/state/store.history';
+
+// Autosave debounce timer (module-level so multiple components share it)
+let rawAutosaveTimer: number | null = null;
+let lastSavedRaw = '';
+
+// Lightweight UUID generator for client-side ids
+const uuid = () => 'v' + Math.random().toString(36).slice(2, 9);
+
+// Helpers to create version objects
+const getMaxRawMajor = (history: ProofVersion[]) =>
+  history.reduce((m, v) => (v.type === 'raw' ? Math.max(m, v.baseMajor) : m), 0);
+
+const makeRawVersion = (history: ProofVersion[], content: string) => {
+  const nextMajor = (getMaxRawMajor(history) || 0) + 1;
+  return {
+    id: uuid(),
+    type: 'raw' as const,
+    versionNumber: `${nextMajor}`,
+    baseMajor: nextMajor,
+    content,
+    sublemmas: [] as Sublemma[],
+    userEdited: true,
+    derived: false,
+    timestamp: new Date(),
+    validationResult: undefined,
+    stepValidation: undefined,
+    lastEditedStepIdx: null,
+    graphData: undefined,
+    graphHash: undefined,
+  } as ProofVersion;
+};
+
+const makeStructuredVersion = (
+  history: ProofVersion[],
+  baseMajor: number,
+  steps: Sublemma[],
+  structuredPayload: { provedStatement?: string; normalizedProof?: string },
+  opts?: { userEdited?: boolean; derived?: boolean },
+) => {
+  const minors = history
+    .filter((v) => v.baseMajor === baseMajor && v.type === 'structured')
+    .map((v) => {
+      const parts = (v.versionNumber || '').split('.');
+      return parts.length > 1 ? parseInt(parts[1], 10) || 0 : 0;
+    });
+  const nextMinor = (minors.length ? Math.max(...minors) : 0) + 1;
+  const versionNumber = `${baseMajor}.${nextMinor}`;
+  return {
+    id: uuid(),
+    type: 'structured' as const,
+    versionNumber,
+    baseMajor,
+    content: structuredPayload.normalizedProof || '',
+    structured: structuredPayload,
+    sublemmas: steps,
+    userEdited: !!opts?.userEdited,
+    derived: opts?.derived ?? true,
+    timestamp: new Date(),
+    validationResult: undefined,
+    stepValidation: undefined,
+    lastEditedStepIdx: null,
+    graphData: undefined,
+    graphHash: undefined,
+  } as ProofVersion;
+};
+
+let decomposeRunId = 0;
+
+export const createProofSlice = (
+  set: any,
+  get: any,
+): Pick<
+  AppState,
+  | 'ensureGraphForVersion'
+  | 'cancelAnalyzeCurrentProof'
+  | 'analyzeCurrentProof'
+  | 'requestRawProofEdit'
+  | 'startProof'
+  | 'resumeProof'
+  | 'retry'
+  | 'editProblem'
+  | 'setMessages'
+  | 'acceptSuggestedChange'
+  | 'clearSuggestion'
+  | 'clearRejection'
+  | 'goBack'
+  | 'proof'
+  | 'setActiveVersionIndex'
+  | 'addProofVersion'
+  | 'updateCurrentProofMeta'
+  | 'updateCurrentProofVersion'
+  | 'updateCurrentStepValidation'
+  | 'clearLastEditedStep'
+  | 'deleteProofVersion'
+  | 'setViewMode'
+  | 'toggleStructuredView'
+  | 'setRawProof'
+  | 'runDecomposition'
+  | 'getCurrentRawBaseMajor'
+  | 'hasUserEditedStructuredForBaseMajor'
+  | 'hasUserEditedStructuredForCurrentRaw'
+  | 'snapshotStructuredEdit'
+> => ({
+  ensureGraphForVersion: async (versionId: string) => {
+    try {
+      const state = get() as AppState;
+      const idx = state.proofHistory.findIndex((v) => v.id === versionId);
+      if (idx < 0) return;
+      const v = state.proofHistory[idx];
+      if (!v || v.type !== 'structured') return;
+      const steps = v.sublemmas || [];
+      if (steps.length === 0) return;
+
+      const goalStatement = (state.problem || '').trim();
+      if (!goalStatement) return;
+
+      const hashString = (input: string): string => {
+        try {
+          let h = 0;
+          for (let i = 0; i < input.length; i++) {
+            h = (h * 31 + input.charCodeAt(i)) | 0;
+          }
+          return `h${h}`;
+        } catch {
+          return 'h0';
+        }
+      };
+
+      const graphHash = hashString(
+        JSON.stringify({
+          goalStatement,
+          steps: steps.map((s) => ({ title: s.title, statement: s.statement })),
+        }),
+      );
+
+      // Dedup: if we already computed for this exact input, no-op.
+      if (v.graphData && v.graphHash === graphHash) return;
+
+      const result = await generateProofGraphForGoalAction(goalStatement, steps);
+      if ((result as any)?.success !== true) return;
+
+      const { nodes, edges } = result as any;
+      const normalizedNodes = (nodes as any[]).map((n) => {
+        const m = String(n.id || '').match(/step-(\d+)/);
+        const stepIdx = m ? parseInt(m[1], 10) - 1 : -1;
+        const content =
+          n.id === 'goal'
+            ? goalStatement
+            : stepIdx >= 0 && stepIdx < steps.length
+              ? steps[stepIdx].statement
+              : '';
+        return {
+          ...n,
+          label: n.id === 'goal' ? 'Goal' : n.label,
+          content,
+        };
+      });
+
+      // Only commit if the version still exists and hash still matches.
+      set((s: AppState) => {
+        const j = s.proofHistory.findIndex((x) => x.id === versionId);
+        if (j < 0) return s;
+        const cur = s.proofHistory[j];
+        if (!cur || cur.type !== 'structured') return s;
+        return {
+          ...s,
+          proofHistory: s.proofHistory.map((x) =>
+            x.id === versionId
+              ? {
+                  ...x,
+                  graphData: { nodes: normalizedNodes, edges } as GraphData,
+                  graphHash,
+                }
+              : x,
+          ),
+        };
+      });
+    } catch {
+      // silent failure
+    }
+  },
+
+  cancelAnalyzeCurrentProof: () =>
+    set((s: AppState) => ({
+      isAnalyzingProof: false,
+      // bump run id so late results from an older run get ignored
+      analyzeProofRunId: (s.analyzeProofRunId || 0) + 1,
+    })),
+
+  analyzeCurrentProof: async () => {
+    const state = get() as AppState;
+    const proof = state.proof();
+
+    // Mark analysis as running and capture a run id for cancellation.
+    const myRun = (state.analyzeProofRunId || 0) + 1;
+    set({ isAnalyzingProof: true, analyzeProofRunId: myRun });
+
+    // No analysis in graph view.
+    if (state.viewMode === 'graph') {
+      // ensure UI doesn't get stuck
+      set((s: AppState) =>
+        s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+      );
+      return;
+    }
+
+    const problem = (state.problem || '').trim();
+    if (!problem) {
+      set((s: AppState) =>
+        s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+      );
+      return;
+    }
+
+    const isRawMode = state.viewMode === 'raw' || proof.type === 'raw';
+
+    // Avoid pointless calls.
+    if (isRawMode) {
+      const raw = (state.rawProof || '').trim();
+      if (!raw) {
+        set((s: AppState) =>
+          s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+        );
+        return;
+      }
+    } else {
+      if (!proof.sublemmas || proof.sublemmas.length === 0) {
+        set((s: AppState) =>
+          s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+        );
+        return;
+      }
+    }
+
+    const hashString = (input: string): string => {
+      try {
+        let h = 0;
+        for (let i = 0; i < input.length; i++) {
+          h = (h * 31 + input.charCodeAt(i)) | 0;
+        }
+        return `h${h}`;
+      } catch {
+        return 'h0';
+      }
+    };
+
+    const computeSourceHash = () => {
+      if (isRawMode) return hashString((state.rawProof || '').trim());
+      const steps = (proof.sublemmas || []).map((s) => ({
+        title: s.title,
+        statement: s.statement,
+        proof: s.proof,
+      }));
+      return hashString(JSON.stringify(steps));
+    };
+
+    const sourceHash = computeSourceHash();
+    const last = proof.validationResult;
+    if (
+      last?.sourceType === (isRawMode ? 'raw' : 'structured') &&
+      last?.sourceHash === sourceHash
+    ) {
+      set((s: AppState) =>
+        s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+      );
+      return;
+    }
+
+    // Clear existing result so UI can show "fresh" state.
+    get().updateCurrentProofMeta({ validationResult: undefined });
+
+    try {
+      const { validateProofAction, validateRawProofAction } = await import('@/app/actions');
+      const result = isRawMode
+        ? await validateRawProofAction(problem, state.rawProof)
+        : await validateProofAction(problem, proof.sublemmas);
+
+      // Ignore late results if cancelled.
+      if ((get() as AppState).analyzeProofRunId !== myRun) return;
+
+      if ((result as any)?.success) {
+        get().updateCurrentProofMeta({
+          validationResult: {
+            isValid: (result as any).isValid || false,
+            isError: false,
+            feedback: (result as any).feedback || 'No feedback provided.',
+            timestamp: new Date(),
+            model: undefined as any,
+            sourceType: isRawMode ? 'raw' : 'structured',
+            sourceHash,
+          } as ProofValidationResult,
+          lastEditedStepIdx: null,
+        });
+        get().clearLastEditedStep();
+      } else {
+        const friendly =
+          (result as any)?.error ||
+          'Adjoint’s connection to the model was interrupted, please go back and retry.';
+        get().updateCurrentProofMeta({
+          validationResult: {
+            isError: true,
+            timestamp: new Date(),
+            feedback: friendly,
+          } as ProofValidationResult,
+        });
+      }
+    } catch (e: any) {
+      if ((get() as AppState).analyzeProofRunId !== myRun) return;
+      const friendly =
+        e?.message ||
+        'Adjoint’s connection to the model was interrupted, please go back and retry.';
+      get().updateCurrentProofMeta({
+        validationResult: {
+          isError: true,
+          timestamp: new Date(),
+          feedback: friendly,
+        } as ProofValidationResult,
+      });
+    } finally {
+      // Only clear running state if this run is still current.
+      set((s: AppState) =>
+        s.analyzeProofRunId === myRun ? { isAnalyzingProof: false } : ({} as any),
+      );
+    }
+  },
+
+  requestRawProofEdit: () =>
+    set((s: AppState) => ({ rawProofEditNonce: (s.rawProofEditNonce || 0) + 1 })),
+
+  startProof: async (problem: string, opts?: { force?: boolean }) => {
+    const trimmed = problem.trim();
+    if (!trimmed) return;
+
+    // Initialize state for a new proof run
+    // Cancel any in-flight decomposition runs by bumping the run id.
+    decomposeRunId += 1;
+
+    set({
+      view: 'proof',
+      problem: trimmed,
+      lastProblem: trimmed,
+      messages: [],
+      loading: true,
+      error: null,
+      errorDetails: null,
+      errorCode: null,
+
+      // New split-phase proof state
+      viewMode: 'raw',
+      rawProof: '',
+      attemptSummary: null,
+      isDecomposing: false,
+      decomposeError: null,
+      stepsReadyNonce: 0,
+      decomposeMeta: null,
+      decomposedRaw: null,
+
+      pendingSuggestion: null,
+      pendingRejection: null,
+      proofHistory: [],
+      activeVersionIdx: 0,
+      progressLog: ['Starting proof attempt...'],
+      cancelCurrent: null,
+      liveDraft: '',
+      isDraftStreaming: false,
+    });
+
+    pushAppViewToHistory('proof');
+
+    const appendLog = (line: string) =>
+      set((s: AppState) => ({ progressLog: [...s.progressLog, line] }));
+
+    // Fallback non-streaming implementation (existing behavior)
+    const runNonStreaming = async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      const t0 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
+      const attempt = opts?.force
+        ? await attemptProofActionForce(trimmed)
+        : await attemptProofAction(trimmed);
+      const t1 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      console.debug(
+        '[UI][AppStore] attemptProof done ms=',
+        t1 - t0,
+        'success=',
+        (attempt as any)?.success,
+      );
+
+      if (!(attempt as any)?.success) {
+        set({ loading: false, error: (attempt as any)?.error || 'Failed to attempt proof.' });
+        return;
+      }
+
+      if ((attempt as any).status === 'FAILED') {
+        const rawContent = (attempt as any).rawProof || '';
+        const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+        set({
+          loading: false,
+          error: null,
+          pendingRejection: {
+            explanation: (attempt as any).explanation || 'No details provided.',
+          },
+          proofHistory: [rawVersion],
+          activeVersionIdx: 0,
+        });
+        return;
+      }
+
+      const d0 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const decomp = await decomposeRawProofAction((attempt as any).rawProof || '');
+      const d1 =
+        typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      console.debug(
+        '[UI][AppStore] decomposeRawProof done ms=',
+        d1 - d0,
+        'success=',
+        (decomp as any)?.success,
+      );
+
+      if (!(decomp as any)?.success) {
+        // Decomposition is not fatal in the new split-phase UX.
+        // Keep the proof UI alive (Raw Proof is still available) and surface a non-blocking error.
+        const rawContent = (attempt as any).rawProof || '';
+        const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+        set({
+          loading: false,
+          decomposeError: (decomp as any).error || 'Failed to decompose the drafted proof.',
+          proofHistory: [rawVersion],
+          activeVersionIdx: 0,
+        });
+        return;
+      }
+
+      if ((attempt as any).status === 'PROVED_AS_IS') {
+        const steps: Sublemma[] =
+          (decomp as any).sublemmas && (decomp as any).sublemmas.length > 0
+            ? ((decomp as any).sublemmas as Sublemma[])
+            : ([
+                {
+                  title: 'Proof',
+                  statement: (decomp as any).provedStatement,
+                  proof:
+                    (decomp as any).normalizedProof ||
+                    (attempt as any).rawProof ||
+                    'Proof unavailable.',
+                },
+              ] as Sublemma[]);
+
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content:
+            `I've broken down the proof into the following steps:\n\n` +
+            steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+        };
+
+        const rawContent = (attempt as any).rawProof || '';
+        const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+        const structuredVersion = makeStructuredVersion(
+          (get() as AppState).proofHistory,
+          rawVersion.baseMajor,
+          steps,
+          {
+            provedStatement: (decomp as any).provedStatement,
+            normalizedProof: (decomp as any).normalizedProof || '',
+          },
+          { userEdited: false, derived: true },
+        );
+
+        set({
+          messages: [assistantMessage],
+          loading: false,
+          error: null,
+          proofHistory: [rawVersion, structuredVersion],
+          activeVersionIdx: 1,
+          decomposedRaw: rawContent,
+        });
+
+        // Silent: compute dependency graph for the new structured version.
+        setTimeout(() => {
+          void (get() as AppState).ensureGraphForVersion(structuredVersion.id);
+        }, 0);
+        return;
+      }
+
+      // PROVED_VARIANT or similar: keep suggestion but ensure raw version exists
+      const rawContent = (attempt as any).rawProof || '';
+      const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+      set({
+        loading: false,
+        error: null,
+        pendingSuggestion: {
+          suggested: (attempt as any).finalStatement || (decomp as any).provedStatement,
+          variantType: ((attempt as any).variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+          provedStatement: (decomp as any).provedStatement,
+          sublemmas: (decomp as any).sublemmas as Sublemma[],
+          explanation: (attempt as any).explanation,
+          normalizedProof: (decomp as any).normalizedProof,
+          rawProof: (attempt as any).rawProof || undefined,
+        },
+        proofHistory: [rawVersion],
+        activeVersionIdx: 0,
+      });
+    };
+
+    // NOTE: For Option B we keep the huge streaming logic in app-store for now.
+    // We'll switch this to call out to a helper later if needed.
+    // For now, use the existing implementation by falling back to non-streaming.
+    await runNonStreaming();
+  },
+
+  resumeProof: () => {
+    set({ view: 'proof' });
+    pushAppViewToHistory('proof');
+  },
+
+  retry: async () => {
+    const p = (get() as AppState).lastProblem;
+    if (p) {
+      await (get() as AppState).startProof(p, { force: true });
+    }
+  },
+
+  editProblem: () => {
+    set((state: AppState) => ({
+      ...state,
+      view: 'home',
+      loading: false,
+      error: null,
+      errorDetails: null,
+      errorCode: null,
+      pendingSuggestion: null,
+    }));
+
+    pushAppViewToHistory('home');
+  },
+
+  setMessages: (updater) => {
+    if (typeof updater === 'function') {
+      set((state: AppState) => ({
+        messages: updater(state.messages),
+      }));
+    } else {
+      set({ messages: updater });
+    }
+  },
+
+  // Variant handling
+  acceptSuggestedChange: () => {
+    const s = (get() as AppState).pendingSuggestion;
+    if (!s) return;
+
+    // When the suggestion is accepted, we reveal the tentative proof.
+    // In streaming mode we might not have decomposed steps yet.
+    const rawContent = (s.rawProof || '').trim();
+    const provedStatement = (s.provedStatement || s.suggested || '').trim();
+
+    // Ensure a raw version exists in history for this content (avoid bumping majors unnecessarily).
+    const curHistory = (get() as AppState).proofHistory;
+    let rawIdx = curHistory.findIndex(
+      (v) => v.type === 'raw' && (v.content || '').trim() === rawContent,
+    );
+
+    let nextHistory = curHistory;
+    let rawVersion: ProofVersion | null = rawIdx >= 0 ? curHistory[rawIdx] : null;
+
+    if (!rawVersion) {
+      rawVersion = makeRawVersion(curHistory, rawContent);
+      nextHistory = [...curHistory, rawVersion];
+      rawIdx = nextHistory.length - 1;
+    }
+
+    lastSavedRaw = rawContent;
+
+    // Commit the accepted statement and reveal raw proof.
+    // Important: only create a structured version immediately if we already have decomposed steps.
+    // Otherwise, kick off background decomposition so Structured Proof gets real sublemmas.
+    const hasSteps = Array.isArray(s.sublemmas) && s.sublemmas.length > 0;
+
+    if (hasSteps) {
+      const steps = s.sublemmas as Sublemma[];
+      const structuredVersion = makeStructuredVersion(
+        nextHistory,
+        rawVersion.baseMajor,
+        steps,
+        {
+          provedStatement,
+          normalizedProof: s.normalizedProof || '',
+        },
+        { userEdited: false, derived: true },
+      );
+
+      set({
+        problem: provedStatement,
+        pendingSuggestion: null,
+        viewMode: 'raw',
+        rawProof: rawContent,
+        proofHistory: [...nextHistory, structuredVersion],
+        activeVersionIdx: rawIdx,
+        decomposedRaw: rawContent,
+        messages: [
+          {
+            role: 'assistant',
+            content:
+              `I've broken down the proof into the following steps:\n\n` +
+              steps.map((x) => `**${x.title}:** ${x.statement}`).join('\n\n'),
+          } as Message,
+        ],
+      });
+
+      // Silent: compute dependency graph for the new structured version.
+      setTimeout(() => {
+        void (get() as AppState).ensureGraphForVersion(structuredVersion.id);
+      }, 0);
+
+      return;
+    }
+
+    // No steps available yet (streaming path): switch to raw immediately and decompose in background.
+    set({
+      problem: provedStatement,
+      pendingSuggestion: null,
+      viewMode: 'raw',
+      rawProof: rawContent,
+      proofHistory: nextHistory,
+      activeVersionIdx: rawIdx,
+      decomposedRaw: null,
+      decomposeMeta: null,
+      decomposeError: null,
+      messages: [],
+    });
+
+    // Fire-and-forget: generates a proper structured version once ready.
+    void (get() as AppState).runDecomposition();
+  },
+
+  clearSuggestion: () => set({ pendingSuggestion: null }),
+  clearRejection: () => set({ pendingRejection: null }),
+
+  // Go back to previous proof version (if any) and ensure steps view
+  goBack: () =>
+    set((state: AppState) => {
+      const nextIdx = Math.max(0, state.activeVersionIdx - 1);
+      return {
+        activeVersionIdx: nextIdx,
+        viewMode: 'structured',
+      };
+    }),
+
+  proof: () => (get() as AppState).proofHistory[(get() as AppState).activeVersionIdx],
+
+  setActiveVersionIndex: (index) =>
+    set((state: AppState) => {
+      const nextIdx = Math.max(0, Math.min(index, state.proofHistory.length - 1));
+      const next = state.proofHistory[nextIdx];
+      if (!next) return state;
+
+      // Default: switch to a sensible mode for the restored version type.
+      // If we're currently in Graph view, keep Graph view while switching versions.
+      // (Graph should render for whichever structured version is active.)
+      const nextViewMode: AppState['viewMode'] =
+        state.viewMode === 'graph' ? 'graph' : next.type === 'raw' ? 'raw' : 'structured';
+
+      // Ensure rawProof reflects the restored raw version.
+      const nextRawProof = next.type === 'raw' ? (next.content ?? '') : state.rawProof;
+
+      return {
+        ...state,
+        activeVersionIdx: nextIdx,
+        viewMode: nextViewMode,
+        rawProof: nextRawProof,
+      };
+    }),
+
+  addProofVersion: (version) =>
+    set((state: AppState) => {
+      const next = { ...version, timestamp: new Date() } as any;
+      const nextIdx = state.proofHistory.length;
+      // Schedule silent auto-graph generation for structured versions.
+      if (
+        next.type === 'structured' &&
+        Array.isArray(next.sublemmas) &&
+        next.sublemmas.length > 0
+      ) {
+        setTimeout(() => {
+          void (get() as AppState).ensureGraphForVersion(next.id);
+        }, 0);
+      }
+      return {
+        proofHistory: [...state.proofHistory, next],
+        activeVersionIdx: nextIdx,
+      };
+    }),
+
+  updateCurrentProofMeta: (updates) =>
+    set((state: AppState) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, ...updates } : version,
+      ),
+    })),
+
+  updateCurrentProofVersion: (updates) => {
+    const cur = (get() as AppState).proofHistory[(get() as AppState).activeVersionIdx];
+    if (!cur) return;
+
+    // For raw/structured edits that should be "saved", we append a new version instead of mutating.
+    // (Callers can still use updateCurrentProofVersion for truly ephemeral updates, but we prefer new versions.)
+    if (cur.type === 'raw') {
+      (get() as AppState).addProofVersion({
+        ...cur,
+        ...updates,
+        id: uuid(),
+        type: 'raw',
+        // Raw edits always bump the major.
+        versionNumber: `${(getMaxRawMajor((get() as AppState).proofHistory) || 0) + 1}`,
+        baseMajor: (getMaxRawMajor((get() as AppState).proofHistory) || 0) + 1,
+        content: typeof updates.content === 'string' ? updates.content : cur.content,
+        userEdited: true,
+        derived: false,
+        sublemmas: [],
+        graphData: undefined,
+        validationResult: undefined,
+        stepValidation: undefined,
+        lastEditedStepIdx: null,
+      } as any);
+      lastSavedRaw = (typeof updates.content === 'string' ? updates.content : cur.content) || '';
+      return;
+    }
+
+    if (cur.type === 'structured') {
+      // Re-route to the existing structured snapshot helper.
+      (get() as AppState).snapshotStructuredEdit(updates);
+      return;
+    }
+
+    // Fallback: mutate (should be rare)
+    set((state: AppState) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, ...updates } : version,
+      ),
+    }));
+  },
+
+  updateCurrentStepValidation: ({ stepIndex, result }) =>
+    set((state: AppState) => ({
+      proofHistory: state.proofHistory.map((version, idx) => {
+        if (idx !== state.activeVersionIdx) return version;
+        const next = { ...version };
+        const prev = next.stepValidation || {};
+        if (result) {
+          next.stepValidation = { ...prev, [stepIndex]: result };
+        } else {
+          const { [stepIndex]: _omit, ...rest } = prev;
+          next.stepValidation = rest;
+        }
+        return next;
+      }),
+    })),
+
+  clearLastEditedStep: () =>
+    set((state: AppState) => ({
+      proofHistory: state.proofHistory.map((version, idx) =>
+        idx === state.activeVersionIdx ? { ...version, lastEditedStepIdx: null } : version,
+      ),
+    })),
+
+  deleteProofVersion: (id: string) =>
+    set((state: AppState) => {
+      const history = state.proofHistory;
+      const idx = history.findIndex((v) => v.id === id);
+      if (idx < 0) return state;
+
+      const target = history[idx];
+      const baseMajor = target.baseMajor;
+
+      // Determine deletion set.
+      const structuredForMajor = history.filter(
+        (v) => v.baseMajor === baseMajor && v.type === 'structured',
+      );
+
+      const deleteWholeGroup =
+        target.type === 'raw' || (target.type === 'structured' && structuredForMajor.length <= 1);
+
+      const nextHistory = deleteWholeGroup
+        ? history.filter((v) => v.baseMajor !== baseMajor)
+        : history.filter((v) => v.id !== id);
+
+      // If nothing left, reset proof-specific state to a safe empty.
+      if (nextHistory.length === 0) {
+        return {
+          ...state,
+          proofHistory: [],
+          activeVersionIdx: 0,
+          viewMode: 'raw',
+          rawProof: '',
+          decomposedRaw: null,
+          decomposeMeta: null,
+        };
+      }
+
+      // Pick next active index.
+      // Prefer staying on the same numeric index; if we deleted something before it, shift left.
+      let nextActive = state.activeVersionIdx;
+
+      if (idx < state.activeVersionIdx) {
+        nextActive = Math.max(0, state.activeVersionIdx - 1);
+      }
+
+      // If we deleted the active item (or group), clamp to nearest valid entry.
+      nextActive = Math.max(0, Math.min(nextActive, nextHistory.length - 1));
+
+      const next = nextHistory[nextActive];
+
+      // Ensure viewMode makes sense.
+      let nextViewMode: AppState['viewMode'] = state.viewMode;
+      if (nextViewMode !== 'graph') {
+        nextViewMode = next.type === 'raw' ? 'raw' : 'structured';
+      } else {
+        // Graph mode requires structured; if we ended up on raw, fall back.
+        if (next.type === 'raw') nextViewMode = 'raw';
+      }
+
+      // Keep rawProof in sync if we are on a raw version.
+      const nextRawProof = next.type === 'raw' ? (next.content ?? '') : state.rawProof;
+
+      // If we deleted the only structured for the currently decomposed raw, clear decomposition pointers.
+      // (Prevents UI thinking "steps are ready" when no structured versions remain for that major.)
+      const stillHasStructuredForMajor = nextHistory.some(
+        (v) => v.baseMajor === baseMajor && v.type === 'structured',
+      );
+
+      const shouldClearDecomposition =
+        deleteWholeGroup || (target.type === 'structured' && !stillHasStructuredForMajor);
+
+      return {
+        ...state,
+        proofHistory: nextHistory,
+        activeVersionIdx: nextActive,
+        viewMode: nextViewMode,
+        rawProof: nextRawProof,
+        decomposedRaw: shouldClearDecomposition ? null : state.decomposedRaw,
+        decomposeMeta: shouldClearDecomposition ? null : state.decomposeMeta,
+      };
+    }),
+
+  setViewMode: (mode) =>
+    set((state: AppState) => {
+      if (state.viewMode === mode) return state;
+
+      // If the user changes the proof view, hide any previous analysis output and
+      // cancel any in-flight analysis run (best-effort).
+      const clearedHistory = state.proofHistory.map((v, idx) =>
+        idx === state.activeVersionIdx ? { ...v, validationResult: undefined } : v,
+      );
+
+      const current = state.proofHistory[state.activeVersionIdx];
+      const baseMajor = current?.baseMajor;
+
+      const pickLast = (predicate: (v: ProofVersion) => boolean): number | null => {
+        for (let i = state.proofHistory.length - 1; i >= 0; i--) {
+          if (predicate(state.proofHistory[i])) return i;
+        }
+        return null;
+      };
+
+      let nextIdx = state.activeVersionIdx;
+      if (mode === 'structured') {
+        nextIdx =
+          (baseMajor != null
+            ? pickLast((v) => v.type === 'structured' && v.baseMajor === baseMajor)
+            : null) ??
+          pickLast((v) => v.type === 'structured') ??
+          state.activeVersionIdx;
+      } else if (mode === 'raw') {
+        nextIdx =
+          (baseMajor != null
+            ? pickLast((v) => v.type === 'raw' && v.baseMajor === baseMajor)
+            : null) ??
+          pickLast((v) => v.type === 'raw') ??
+          state.activeVersionIdx;
+      }
+
+      const next = state.proofHistory[nextIdx];
+      return {
+        viewMode: mode,
+        activeVersionIdx: nextIdx,
+        rawProof: mode === 'raw' ? (next?.content ?? state.rawProof) : state.rawProof,
+
+        // cancel analysis + clear analysis result on view change
+        isAnalyzingProof: false,
+        analyzeProofRunId: (state.analyzeProofRunId || 0) + 1,
+        proofHistory: clearedHistory,
+      };
+    }),
+
+  toggleStructuredView: () =>
+    set((state: AppState) => ({
+      viewMode: state.viewMode === 'structured' ? 'raw' : 'structured',
+    })),
+
+  setRawProof: (raw) => {
+    const next = raw ?? '';
+
+    // Update editor state only. Do NOT mutate existing history entries.
+    set((state: AppState) => {
+      const cur = state.rawProof;
+      if (cur === next) return state;
+      const trimmedNext = (next || '').trim();
+      const trimmedDecomposed = (state.decomposedRaw || '').trim();
+      const decompositionIsStale = !!trimmedDecomposed && trimmedNext !== trimmedDecomposed;
+      return {
+        rawProof: next,
+        decomposeError: null,
+        decomposeMeta: null,
+        decomposedRaw: decompositionIsStale ? null : state.decomposedRaw,
+        pendingSuggestion: null,
+      };
+    });
+
+    // Debounced autosave: append a new raw major version after 3s idle if content changed.
+    // This guarantees every saved raw edit becomes a new history entry.
+    try {
+      if (typeof window !== 'undefined') {
+        if (rawAutosaveTimer) window.clearTimeout(rawAutosaveTimer);
+        rawAutosaveTimer = window.setTimeout(() => {
+          const cur = ((get() as AppState).rawProof || '').trim();
+          if (!cur) return;
+          if (cur === lastSavedRaw) return;
+
+          const history = (get() as AppState).proofHistory;
+
+          // compute next raw major
+          const maxMajor = history.reduce(
+            (m, v) => (v.type === 'raw' ? Math.max(m, v.baseMajor) : m),
+            0,
+          );
+          const nextMajor = (maxMajor || 0) + 1;
+
+          (get() as AppState).addProofVersion({
+            id: uuid(),
+            type: 'raw',
+            versionNumber: `${nextMajor}`,
+            baseMajor: nextMajor,
+            content: cur,
+            sublemmas: [],
+            userEdited: true,
+            derived: false,
+            graphData: undefined,
+            validationResult: undefined,
+            stepValidation: undefined,
+            lastEditedStepIdx: null,
+          } as any);
+
+          lastSavedRaw = cur;
+        }, 3000);
+      }
+    } catch {
+      /* ignore timers in SSR */
+    }
+  },
+
+  runDecomposition: async () => {
+    const raw = ((get() as AppState).rawProof || '').trim();
+    if (raw.length < 10) return;
+
+    const myRun = ++decomposeRunId;
+    set({ isDecomposing: true, decomposeError: null });
+
+    try {
+      const result = await decomposeRawProofAction(raw);
+      if (decomposeRunId !== myRun) return;
+
+      if (!(result as any)?.success) {
+        set({
+          isDecomposing: false,
+          decomposeError: (result as any).error || 'Failed to decompose proof.',
+        });
+        return;
+      }
+
+      const steps: Sublemma[] =
+        (result as any).sublemmas && (result as any).sublemmas.length > 0
+          ? ((result as any).sublemmas as Sublemma[])
+          : ([
+              {
+                title: 'Proof',
+                statement: (result as any).provedStatement,
+                proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
+              },
+            ] as Sublemma[]);
+
+      // Update decompose meta (used for toasts / context).
+      // IMPORTANT: do NOT mutate existing versions here. Decomposition results are persisted
+      // only by appending a new structured ProofVersion below.
+      set((state: AppState) => ({
+        isDecomposing: false,
+        decomposeError: null,
+        decomposeMeta: {
+          provedStatement: (result as any).provedStatement,
+          normalizedProof: (result as any).normalizedProof || '',
+        },
+        decomposedRaw: raw,
+        stepsReadyNonce: state.stepsReadyNonce + 1,
+      }));
+
+      // Create a new structured version.
+      const history = (get() as AppState).proofHistory;
+
+      // Determine which raw major this structured version should attach to.
+      // Priority:
+      // 1) If the currently active version is a raw entry, attach to its baseMajor (user restored a prior raw).
+      // 2) Else if rawProof matches a saved raw entry, attach to that baseMajor.
+      // 3) Else fall back to latest raw major.
+      const active = (get() as AppState).proof();
+      const getCurrentRawBaseMajor = (get() as AppState).getCurrentRawBaseMajor;
+      const baseMajor =
+        (active?.type === 'raw' ? active.baseMajor : null) ??
+        getCurrentRawBaseMajor() ??
+        (getMaxRawMajor(history) || 0);
+
+      const structuredVersion = makeStructuredVersion(
+        history,
+        baseMajor || 1,
+        steps,
+        {
+          provedStatement: (result as any).provedStatement,
+          normalizedProof: (result as any).normalizedProof || '',
+        },
+        { userEdited: false, derived: true },
+      );
+
+      // Append a new structured version.
+      // IMPORTANT: keep the user's currently selected version stable (this often runs in the background).
+      set((state: AppState) => {
+        const nextIdx = state.proofHistory.length;
+        const shouldActivate = state.viewMode === 'structured';
+        const next = { ...structuredVersion, timestamp: new Date() } as any;
+        // Schedule silent auto-graph generation for the new structured version.
+        setTimeout(() => {
+          void (get() as AppState).ensureGraphForVersion(next.id);
+        }, 0);
+        return {
+          proofHistory: [...state.proofHistory, next],
+          activeVersionIdx: shouldActivate ? nextIdx : state.activeVersionIdx,
+        };
+      });
+    } catch (e: any) {
+      if (decomposeRunId !== myRun) return;
+      set({ isDecomposing: false, decomposeError: e?.message || 'Failed to decompose proof.' });
+    }
+  },
+
+  getCurrentRawBaseMajor: () => {
+    const raw = ((get() as AppState).rawProof || '').trim();
+    if (!raw) return null;
+    const history = (get() as AppState).proofHistory;
+    // Prefer exact content match, else fall back to max raw major.
+    const exact = history
+      .filter((v) => v.type === 'raw' && (v.content || '').trim() === raw)
+      .map((v) => v.baseMajor);
+    if (exact.length) return Math.max(...exact);
+    const max = history.filter((v) => v.type === 'raw').map((v) => v.baseMajor);
+    return max.length ? Math.max(...max) : null;
+  },
+
+  hasUserEditedStructuredForBaseMajor: (baseMajor: number) => {
+    const history = (get() as AppState).proofHistory;
+    return history.some(
+      (v) => v.type === 'structured' && v.baseMajor === baseMajor && v.userEdited,
+    );
+  },
+
+  hasUserEditedStructuredForCurrentRaw: () => {
+    const base = (get() as AppState).getCurrentRawBaseMajor();
+    if (!base) return false;
+    return (get() as AppState).hasUserEditedStructuredForBaseMajor(base);
+  },
+
+  snapshotStructuredEdit: (updates) => {
+    const cur = (get() as AppState).proof();
+    if (!cur || cur.type !== 'structured') {
+      // Not in structured mode; fall back to updating current.
+      (get() as AppState).updateCurrentProofVersion({ ...updates, userEdited: true });
+      return;
+    }
+
+    const history = (get() as AppState).proofHistory;
+    const baseMajor = cur.baseMajor;
+
+    const next = makeStructuredVersion(
+      history,
+      baseMajor,
+      (updates.sublemmas as Sublemma[]) ?? cur.sublemmas,
+      {
+        provedStatement: updates.structured?.provedStatement ?? cur.structured?.provedStatement,
+        normalizedProof: updates.structured?.normalizedProof ?? cur.structured?.normalizedProof,
+      },
+      { userEdited: true, derived: false },
+    );
+
+    // Carry over other fields from the current version unless overridden.
+    (get() as AppState).addProofVersion({
+      ...next,
+      // Allow callers to override a subset
+      ...updates,
+      id: next.id,
+      type: 'structured',
+      baseMajor,
+      versionNumber: next.versionNumber,
+      userEdited: true,
+      derived: false,
+      sublemmas: (updates.sublemmas as Sublemma[]) ?? next.sublemmas,
+      structured: {
+        provedStatement: next.structured?.provedStatement,
+        normalizedProof: next.structured?.normalizedProof,
+        ...(updates.structured || {}),
+      },
+      content:
+        updates.content ??
+        next.structured?.normalizedProof ??
+        (typeof cur.content === 'string' ? cur.content : ''),
+      validationResult: updates.validationResult ?? undefined,
+      stepValidation: (updates as any).stepValidation,
+      lastEditedStepIdx: (updates as any).lastEditedStepIdx ?? null,
+      graphData: (updates as any).graphData,
+    } as any);
+
+    set({ viewMode: 'structured' });
+  },
+});
