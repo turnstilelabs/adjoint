@@ -574,6 +574,13 @@ export function WorkspaceReviewPanel() {
                                     )}
                                 </div>
 
+                                {isReviewingThis && (
+                                    <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                                        <div className="font-medium text-foreground">Sending for review…</div>
+                                        <div className="mt-1">We send the artifact together with the document context before the artifact.</div>
+                                    </div>
+                                )}
+
                                 {results[artifactKey(active)] && (
                                     <>
                                         <Separator />
