@@ -407,10 +407,12 @@ export const createProofSlice = (
       }
 
       if ((attempt as any).status === 'FAILED') {
-        const rawContent = (attempt as any).rawProof || '';
+        const rawContent = String((attempt as any).rawProof || '').trim();
         const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
         set({
           loading: false,
+          viewMode: 'raw',
+          rawProof: rawContent,
           error: null,
           pendingRejection: {
             explanation: (attempt as any).explanation || 'No details provided.',
@@ -418,6 +420,7 @@ export const createProofSlice = (
           proofHistory: [rawVersion],
           activeVersionIdx: 0,
         });
+        lastSavedRaw = rawContent;
         return;
       }
 
@@ -436,14 +439,17 @@ export const createProofSlice = (
       if (!(decomp as any)?.success) {
         // Decomposition is not fatal in the new split-phase UX.
         // Keep the proof UI alive (Raw Proof is still available) and surface a non-blocking error.
-        const rawContent = (attempt as any).rawProof || '';
+        const rawContent = String((attempt as any).rawProof || '').trim();
         const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
         set({
           loading: false,
+          viewMode: 'raw',
+          rawProof: rawContent,
           decomposeError: (decomp as any).error || 'Failed to decompose the drafted proof.',
           proofHistory: [rawVersion],
           activeVersionIdx: 0,
         });
+        lastSavedRaw = rawContent;
         return;
       }
 
@@ -482,14 +488,19 @@ export const createProofSlice = (
           { userEdited: false, derived: true },
         );
 
+        // Match the streaming UX: reveal Raw Proof first, but keep Structured available.
         set({
           messages: [assistantMessage],
           loading: false,
           error: null,
+          viewMode: 'raw',
+          rawProof: rawContent,
           proofHistory: [rawVersion, structuredVersion],
-          activeVersionIdx: 1,
+          activeVersionIdx: 0,
           decomposedRaw: rawContent,
         });
+
+        lastSavedRaw = rawContent;
 
         // Silent: compute dependency graph for the new structured version.
         setTimeout(() => {
@@ -518,10 +529,460 @@ export const createProofSlice = (
       });
     };
 
-    // NOTE: For Option B we keep the huge streaming logic in app-store for now.
-    // We'll switch this to call out to a helper later if needed.
-    // For now, use the existing implementation by falling back to non-streaming.
-    await runNonStreaming();
+    // Try token streaming first; fallback to metadata-only SSE, then non-streaming
+    if (typeof window !== 'undefined' && 'EventSource' in window) {
+      const runMetadataSSE = async () => {
+        try {
+          const url2 = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
+          const es2 = new EventSource(url2);
+          let finished2 = false;
+          set({
+            cancelCurrent: () => {
+              try {
+                es2.close();
+              } catch {}
+            },
+          });
+
+          es2.addEventListener('progress', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
+              if (data?.phase === 'decompose.start') appendLog('Decomposing proof....');
+            } catch {}
+          });
+          es2.addEventListener('attempt', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              if (data?.status === 'FAILED') {
+                appendLog("Couldn't prove the statement as written. Showing explanation...");
+              } else if (data?.status === 'PROVED_VARIANT') {
+                appendLog('Proof generated for a revised statement....');
+              } else {
+                appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
+              }
+            } catch {}
+          });
+          es2.addEventListener('decompose', (ev: MessageEvent) => {
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`);
+            } catch {}
+          });
+          es2.addEventListener('server-error', (ev: MessageEvent) => {
+            if (finished2) return;
+            finished2 = true;
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              set({
+                loading: false,
+                error: data?.error || 'Unexpected server error.',
+                errorDetails: data?.detail ?? null,
+                errorCode: data?.code ?? null,
+              });
+            } catch {
+              set({
+                loading: false,
+                error: 'Unexpected server error.',
+                errorDetails: null,
+                errorCode: null,
+              });
+            }
+            try {
+              es2.close();
+            } catch {}
+            set({ cancelCurrent: null });
+          });
+          es2.addEventListener('done', (ev: MessageEvent) => {
+            if (finished2) return;
+            finished2 = true;
+            try {
+              const data = JSON.parse(ev.data || '{}');
+              const attempt = data?.attempt;
+              const decomp = data?.decompose;
+              if (!attempt) {
+                set({ loading: false, error: 'Malformed SSE response.' });
+                return;
+              }
+
+              // IMPORTANT: in the SSE fallback path, always populate rawProof when we have it.
+              // Otherwise the UI can end up on Raw Proof view with an empty editor.
+              const rawContent = String(attempt.rawProof || '').trim();
+              if (attempt.status === 'FAILED') {
+                const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+                set({
+                  loading: false,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
+                  error: null,
+                  pendingRejection: {
+                    explanation: attempt.explanation || 'No details provided.',
+                  },
+                  proofHistory: [rawVersion],
+                  activeVersionIdx: 0,
+                });
+                lastSavedRaw = rawContent;
+              } else if (!decomp) {
+                // Decomposition failure is not fatal; allow the user to view/edit Raw Proof.
+                const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+                set({
+                  loading: false,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
+                  decomposeError: 'Failed to decompose the drafted proof.',
+                  proofHistory: [rawVersion],
+                  activeVersionIdx: 0,
+                });
+                lastSavedRaw = rawContent;
+              } else if (attempt.status === 'PROVED_AS_IS') {
+                const steps: Sublemma[] =
+                  decomp.sublemmas && decomp.sublemmas.length > 0
+                    ? (decomp.sublemmas as Sublemma[])
+                    : ([
+                        {
+                          title: 'Proof',
+                          statement: decomp.provedStatement,
+                          proof:
+                            (decomp as any).normalizedProof ||
+                            attempt.rawProof ||
+                            'Proof unavailable.',
+                        },
+                      ] as Sublemma[]);
+                const assistantMessage: Message = {
+                  role: 'assistant',
+                  content:
+                    `I've broken down the proof into the following steps:\n\n` +
+                    steps.map((s: Sublemma) => `**${s.title}:** ${s.statement}`).join('\n\n'),
+                };
+
+                const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+                const structuredVersion = makeStructuredVersion(
+                  (get() as AppState).proofHistory,
+                  rawVersion.baseMajor,
+                  steps,
+                  {
+                    provedStatement: decomp.provedStatement,
+                    normalizedProof: (decomp as any).normalizedProof || '',
+                  },
+                  { userEdited: false, derived: true },
+                );
+
+                // Match the streaming UX: reveal Raw Proof first, but keep Structured available.
+                // Users can jump to structured/graph via the sidebar.
+                set({
+                  messages: [assistantMessage],
+                  loading: false,
+                  error: null,
+                  viewMode: 'raw',
+                  rawProof: rawContent,
+                  proofHistory: [rawVersion, structuredVersion],
+                  activeVersionIdx: 0,
+                  decomposedRaw: rawContent,
+                });
+
+                lastSavedRaw = rawContent;
+
+                // Silent: compute dependency graph for the new structured version.
+                setTimeout(() => {
+                  void (get() as AppState).ensureGraphForVersion(structuredVersion.id);
+                }, 0);
+              } else {
+                const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
+                set({
+                  loading: false,
+                  error: null,
+                  pendingSuggestion: {
+                    suggested: attempt.finalStatement || decomp.provedStatement,
+                    variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                    provedStatement: decomp.provedStatement,
+                    sublemmas: decomp.sublemmas as Sublemma[],
+                    explanation: attempt.explanation,
+                    normalizedProof: (decomp as any).normalizedProof,
+                    rawProof: attempt.rawProof || undefined,
+                  },
+                  proofHistory: [rawVersion],
+                  activeVersionIdx: 0,
+                });
+              }
+            } catch (e) {
+              set({
+                loading: false,
+                error: e instanceof Error ? e.message : 'Unexpected error.',
+              });
+            } finally {
+              try {
+                es2.close();
+              } catch {}
+              set({ cancelCurrent: null });
+            }
+          });
+          es2.onerror = () => {
+            try {
+              es2.close();
+            } catch {}
+            set({ cancelCurrent: null });
+            appendLog('Metadata stream lost. Falling back to non-streaming...');
+            runNonStreaming();
+          };
+        } catch {
+          await runNonStreaming();
+        }
+      };
+
+      try {
+        const url = `/api/proof/attempt-stream?problem=${encodeURIComponent(trimmed)}`;
+        const es = new EventSource(url);
+        let finished = false;
+        let gotDelta = false;
+        let gotModelStart = false;
+
+        // Some browsers/environments can leave EventSource "hanging" without firing `error`.
+        // Add a small watchdog: if we don't see any meaningful event quickly, fall back.
+        let watchdog: number | null = null;
+        const clearWatchdog = () => {
+          try {
+            if (watchdog != null) window.clearTimeout(watchdog);
+          } catch {}
+          watchdog = null;
+        };
+        const armWatchdog = () => {
+          clearWatchdog();
+          watchdog = window.setTimeout(() => {
+            if (finished) return;
+            // If we never received model identity or any token, assume stream is stuck.
+            if (!gotModelStart && !gotDelta) {
+              finished = true;
+              try {
+                es.close();
+              } catch {}
+              set({ cancelCurrent: null, isDraftStreaming: false });
+              appendLog('Token stream stalled. Falling back to metadata stream...');
+              runMetadataSSE();
+            }
+          }, 4000);
+        };
+        armWatchdog();
+
+        set({
+          cancelCurrent: () => {
+            try {
+              es.close();
+            } catch {}
+            clearWatchdog();
+          },
+        });
+        set({ isDraftStreaming: true, liveDraft: '' });
+
+        es.addEventListener('model.start', (ev: MessageEvent) => {
+          clearWatchdog();
+          gotModelStart = true;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            appendLog(`Using ${data?.provider}/${data?.model}...`);
+          } catch {}
+        });
+        es.addEventListener('model.switch', (ev: MessageEvent) => {
+          clearWatchdog();
+          try {
+            const d = JSON.parse(ev.data || '{}');
+            if (d?.to) appendLog(`Switched model to ${d.to}...`);
+          } catch {}
+        });
+        es.addEventListener('model.delta', (ev: MessageEvent) => {
+          clearWatchdog();
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            const t = data?.text || '';
+            if (t) {
+              if (!gotDelta) {
+                appendLog('Receiving model output...');
+                gotDelta = true;
+              }
+              set((s: AppState) => ({ liveDraft: s.liveDraft + t }));
+            }
+          } catch {}
+        });
+        es.addEventListener('model.end', () => {
+          clearWatchdog();
+          // Draft complete, but we intentionally do NOT reveal it yet.
+          // We first wait for classification (event: done) so we can show
+          // PROVED_VARIANT suggestions *before* showing a tentative proof.
+          set({ isDraftStreaming: false });
+          appendLog('Proof draft completed....');
+          appendLog('Classifying draft...');
+        });
+        es.addEventListener('classify.result', (ev: MessageEvent) => {
+          clearWatchdog();
+          try {
+            const d = JSON.parse(ev.data || '{}');
+            const st = d?.status;
+            if (st === 'PROVED_VARIANT') {
+              appendLog('Proof generated for a revised statement....');
+            } else if (st === 'FAILED') {
+              appendLog("Draft doesn't prove the statement as written. Showing explanation...");
+            }
+          } catch {}
+        });
+
+        // attempt-stream no longer performs decomposition server-side.
+        // We do client-side decomposition only on explicit user request.
+
+        es.addEventListener('server-error', (ev: MessageEvent) => {
+          if (finished) return;
+          finished = true;
+          clearWatchdog();
+          let friendly = 'Token stream failed.';
+          let detail: string | null = null;
+          let code: string | null = null;
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            if (data?.error) friendly = data.error; // already friendly from server
+            if (data?.detail) detail = data.detail;
+            if (data?.code) code = data.code;
+          } catch {}
+          try {
+            es.close();
+          } catch {}
+          set({
+            cancelCurrent: null,
+            isDraftStreaming: false,
+            errorDetails: detail,
+            errorCode: code,
+          });
+          appendLog(friendly + ' Falling back to metadata stream...');
+          runMetadataSSE();
+        });
+
+        es.addEventListener('done', (ev: MessageEvent) => {
+          if (finished) return;
+          finished = true;
+          clearWatchdog();
+          try {
+            const data = JSON.parse(ev.data || '{}');
+            const attempt = data?.attempt;
+            if (!attempt) {
+              set({ loading: false, error: 'Malformed stream response.' });
+              return;
+            }
+
+            // Cache classification outcome.
+            set({
+              attemptSummary: {
+                status: attempt.status,
+                finalStatement: attempt.finalStatement ?? null,
+                variantType: attempt.variantType ?? null,
+                explanation: attempt.explanation || '',
+              },
+            });
+
+            // IMPORTANT UX RULE:
+            // - If PROVED_VARIANT, show the suggestion FIRST and only show the tentative proof after Accept.
+            // - Otherwise, reveal the tentative proof immediately.
+            const raw = ((attempt.rawProof || (get() as AppState).liveDraft) ?? '').trim();
+
+            if (attempt.status === 'PROVED_VARIANT') {
+              const suggested = (attempt.finalStatement || '').trim();
+              if (suggested) {
+                set({
+                  loading: false,
+                  pendingSuggestion: {
+                    suggested,
+                    variantType: (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                    provedStatement: suggested,
+                    sublemmas: [],
+                    explanation: attempt.explanation || '',
+                    rawProof: raw || undefined,
+                    normalizedProof: undefined,
+                  },
+                });
+              } else {
+                // Fallback: no suggested statement; just show the draft.
+                const rawVersion = makeRawVersion((get() as AppState).proofHistory, raw);
+                set((state: AppState) => ({
+                  loading: false,
+                  viewMode: 'raw',
+                  rawProof: raw,
+                  decomposeError: null,
+                  isDecomposing: false,
+                  proofHistory: [...state.proofHistory, rawVersion],
+                  activeVersionIdx: state.proofHistory.length,
+                }));
+                lastSavedRaw = raw;
+              }
+              return;
+            }
+
+            // Reveal raw proof for PROVED_AS_IS and FAILED.
+            if (raw.length > 0) {
+              const rawVersion = makeRawVersion((get() as AppState).proofHistory, raw);
+              set((state: AppState) => ({
+                loading: false,
+                viewMode: 'raw',
+                rawProof: raw,
+                decomposeError: null,
+                isDecomposing: false,
+                proofHistory: [...state.proofHistory, rawVersion],
+                activeVersionIdx: state.proofHistory.length,
+                pendingRejection:
+                  attempt.status === 'FAILED'
+                    ? { explanation: attempt.explanation || 'No details provided.' }
+                    : null,
+              }));
+              lastSavedRaw = raw;
+
+              // Token-streaming path: auto-decompose once the raw proof is revealed.
+              // Keep UX on Raw Proof (background structuring) and avoid duplicating work.
+              // NOTE: PROVED_VARIANT is handled above (suggestion gate) and will decompose on Accept.
+              try {
+                const alreadyDecomposed = ((get() as AppState).decomposedRaw || '').trim() === raw;
+                if (!alreadyDecomposed && raw.length >= 10) {
+                  // Fire-and-forget; runDecomposition internally guards against stale runs.
+                  void (get() as AppState).runDecomposition();
+                }
+              } catch {
+                // Ignore: decomposition is best-effort here.
+              }
+            } else {
+              set({
+                loading: false,
+                pendingRejection:
+                  attempt.status === 'FAILED'
+                    ? { explanation: attempt.explanation || 'No details provided.' }
+                    : null,
+              });
+            }
+          } catch (e) {
+            set({
+              loading: false,
+              error: e instanceof Error ? e.message : 'Unexpected error.',
+            });
+          } finally {
+            try {
+              es.close();
+            } catch {}
+            set({ cancelCurrent: null, isDraftStreaming: false });
+            clearWatchdog();
+          }
+        });
+
+        es.onerror = () => {
+          if (finished) return;
+          finished = true;
+          clearWatchdog();
+          try {
+            es.close();
+          } catch {}
+          set({ cancelCurrent: null, isDraftStreaming: false });
+          appendLog('Token stream connection lost. Falling back to metadata stream...');
+          runMetadataSSE();
+        };
+      } catch (e) {
+        appendLog('Token streaming not available. Falling back to metadata stream...');
+        await runMetadataSSE();
+      }
+    } else {
+      await runNonStreaming();
+    }
   },
 
   resumeProof: () => {
