@@ -221,6 +221,11 @@ function autoWrapInlineMathIfNeeded(input: string): string {
 
       const mdStripped = t.replace(/^\*+|\*+$/g, '');
 
+      // Cross-reference commands are prose-level LaTeX and should never be auto-wrapped as math.
+      // If we wrap them, KaTeX will (correctly) fail to parse them and emit error fragments.
+      // This is a narrow allowlist to avoid impacting real math commands (\frac, \sum, ...).
+      if (/^\\(?:[cC]ref|[cC]refrange|ref|eqref|autoref|pageref)\b/.test(mdStripped)) return false;
+
       // Very specific fix: dash-prefixed English words after inline math should stay text.
       // Example: "$(1-\eps)$-approximate union" should not wrap "-approximate" into math.
       // Keep negative numbers/variables as math (e.g. -1, -x).

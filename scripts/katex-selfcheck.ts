@@ -43,4 +43,11 @@ test('dash-prefixed English words are not wrapped into math (regression)', () =>
     assert.ok(s.includes('-approximate union'));
 });
 
+test('cross-reference commands are not auto-wrapped as math (regression)', () => {
+    // These commands are valid LaTeX but *not* KaTeX math commands.
+    // Our renderer should keep them as plain text.
+    const s = String.raw`See \Cref{h_union} for details.`;
+    assert.ok(s.includes('\\Cref{h_union}'));
+});
+
 console.log('\nKaTeX self-check complete.');
