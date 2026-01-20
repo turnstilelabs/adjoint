@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { isUnlockEnabled } from './src/lib/unlock';
+
 // Versioned cookie name so older unlock cookies (from previous implementations)
 // do not silently bypass the gate.
 const UNLOCK_COOKIE_NAME = 'adjoint_unlocked_v2';
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
+
+    // Gate is optional. When disabled (default for local dev), do not intercept routes.
+    if (!isUnlockEnabled()) {
+        return NextResponse.next();
+    }
 
     // IMPORTANT: Don't intercept Next.js internal Server Action POSTs.
     // These requests include a `next-action` header and must reach Next's action handler.
