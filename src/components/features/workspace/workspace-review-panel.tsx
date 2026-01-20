@@ -15,6 +15,7 @@ import { reviewArtifactSoundnessAction } from '@/app/actions';
 import AdjointProse from '@/components/adjoint-prose';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
 
 function artifactKey(a: ExtractedArtifact): string {
     const label = (a.label ?? '').trim();
@@ -87,6 +88,8 @@ function cleanFeedback(s: unknown): string {
 export function WorkspaceReviewPanel() {
     const { toast } = useToast();
     const doc = useAppStore((s) => s.workspaceDoc);
+
+    const macros = useMemo(() => extractKatexMacrosFromLatexDocument(doc || ''), [doc]);
 
     const artifacts = useAppStore((s) => s.workspaceReviewArtifacts);
     const setArtifacts = useAppStore((s) => s.setWorkspaceReviewArtifacts);
@@ -448,7 +451,7 @@ export function WorkspaceReviewPanel() {
                                             title="Click to edit"
                                             onClick={() => setIsEditingStatement(true)}
                                         >
-                                            <KatexRenderer content={activeStatement} />
+                                            <KatexRenderer content={activeStatement} macros={macros} />
                                         </div>
                                     )}
                                 </div>
@@ -530,7 +533,7 @@ export function WorkspaceReviewPanel() {
                                                         title="Click to edit"
                                                         onClick={() => setIsEditingProof(true)}
                                                     >
-                                                        <AdjointProse content={activeProof} />
+                                                        <AdjointProse content={activeProof} macros={macros} />
                                                     </div>
                                                 )}
                                             </>
@@ -585,6 +588,7 @@ export function WorkspaceReviewPanel() {
                                                     content={results[artifactKey(active)].summary}
                                                     autoWrap={true}
                                                     className="text-sm"
+                                                    macros={macros}
                                                 />
 
                                                 <Collapsible
@@ -614,6 +618,7 @@ export function WorkspaceReviewPanel() {
                                                                     content={cleanFeedback((results as any)[artifactKey(active)].correctness?.feedback)}
                                                                     autoWrap={true}
                                                                     className="text-sm"
+                                                                    macros={macros}
                                                                 />
                                                             </div>
                                                             <div>
@@ -622,6 +627,7 @@ export function WorkspaceReviewPanel() {
                                                                     content={cleanFeedback(results[artifactKey(active)].clarity.feedback)}
                                                                     autoWrap={true}
                                                                     className="text-sm"
+                                                                    macros={macros}
                                                                 />
                                                             </div>
 
@@ -632,6 +638,7 @@ export function WorkspaceReviewPanel() {
                                                                         content={cleanFeedback((results as any)[artifactKey(active)]?.suggestedImprovement)}
                                                                         autoWrap={true}
                                                                         className="text-sm"
+                                                                        macros={macros}
                                                                     />
                                                                 </div>
                                                             )}

@@ -30,6 +30,7 @@ export default function AdjointProse({
     className,
     paragraphClassName,
     autoWrapMath,
+    macros,
 }: {
     content: string;
     className?: string;
@@ -39,6 +40,7 @@ export default function AdjointProse({
      * When false, only explicit $...$ / $$...$$ / \(\) / \[\] are treated as math.
      */
     autoWrapMath?: boolean;
+    macros?: Record<string, string>;
 }) {
     const paragraphs = splitIntoParagraphs(content);
 
@@ -46,7 +48,7 @@ export default function AdjointProse({
         <div className={cn('adjoint-prose space-y-4', className)}>
             {paragraphs.map((para, idx) => (
                 <p key={idx} className={cn('adjoint-paragraph', paragraphClassName)}>
-                    <KatexRenderer content={para} inline autoWrap={autoWrapMath ?? true} />
+                    <KatexRenderer content={para} inline autoWrap={autoWrapMath ?? true} macros={macros} />
                 </p>
             ))}
         </div>

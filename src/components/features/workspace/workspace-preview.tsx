@@ -4,6 +4,7 @@
 import { useMemo } from 'react';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { cn } from '@/lib/utils';
+import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
 
 type Segment =
     | { type: 'text'; content: string }
@@ -141,6 +142,7 @@ function normalizeLatexStructureForPreview(input: string): string {
 }
 
 export function WorkspacePreview({ content, className }: { content: string; className?: string }) {
+    const macros = useMemo(() => extractKatexMacrosFromLatexDocument(content), [content]);
     const { body, hasPreamble } = useMemo(() => extractDocumentBody(content), [content]);
     const normalized = useMemo(() => normalizeLatexStructureForPreview(body), [body]);
     const segments = useMemo(() => splitLatexIntoSegments(normalized), [normalized]);
@@ -189,8 +191,9 @@ export function WorkspacePreview({ content, className }: { content: string; clas
         >
             {hasPreamble && (
                 <div className="mb-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                    Preview is showing the document body (everything after <code>{'\\begin{document}'}</code>). The preamble
-                    (packages/macros) isn’t executed in KaTeX preview.
+                    Preview is showing the document body (everything after <code>{'\\begin{document}'}</code>). Packages/other
+                    preamble code isn’t executed, but simple 0‑argument macros (<code>\\newcommand</code>/<code>\\renewcommand</code>)
+                    are supported.
                 </div>
             )}
             {runs.map((run, i) => {
@@ -204,6 +207,7 @@ export function WorkspacePreview({ content, className }: { content: string; clas
                             autoWrap={false}
                             className="my-3"
                             inline={false}
+                            macros={macros}
                         />
                     );
                 }
@@ -230,6 +234,7 @@ export function WorkspacePreview({ content, className }: { content: string; clas
                                     autoWrap={false}
                                     className="inline"
                                     inline={true}
+                                    macros={macros}
                                 />
                             );
                         })}
