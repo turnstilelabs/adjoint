@@ -815,6 +815,7 @@ export default function WorkspaceView() {
                         }}
                         className={cn(
                             isReviewMode ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
+                            hoverHint === 'review' ? 'ring-1 ring-primary/25' : '',
                         )}
                     >
                         <CheckSquare />

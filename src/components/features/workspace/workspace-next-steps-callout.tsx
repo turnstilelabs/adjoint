@@ -90,7 +90,7 @@ export function WorkspaceNextStepsCallout({ className }: { className?: string })
                         <div className="mt-1 text-xs text-muted-foreground">
                             {active
                                 ? DESCRIPTIONS[active]
-                                : 'Use the left sidebar to import/export, chat with the assistant, open a preview, or review artifacts.'}
+                                : 'Use the left sidebar to import/export, chat with the assistant, preview the document, or review artifacts.'}
                         </div>
                     </div>
 
