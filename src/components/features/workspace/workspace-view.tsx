@@ -11,11 +11,12 @@ import type { Message } from '@/components/chat/interactive-chat';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { useSendWorkspaceThreadMessage } from '@/components/workspace/useSendWorkspaceThreadMessage';
 import { cn } from '@/lib/utils';
-import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil, Maximize2, Minimize2, ArrowLeft } from 'lucide-react';
+import { Download, MessageCircle, FileUp, Sparkles, X, Eye, Pencil, Maximize2, Minimize2, ArrowLeft, CheckSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
 import { WorkspacePreview } from '@/components/features/workspace/workspace-preview';
 import { WorkspaceNextStepsCallout } from '@/components/features/workspace/workspace-next-steps-callout';
+import { WorkspaceReviewPanel } from '@/components/features/workspace/workspace-review-panel';
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
@@ -38,6 +39,32 @@ import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 
 type Anchor = { top: number; left: number };
+
+function splitSelectionIntoStatementAndProof(selectionLatex: string): { statement: string; proof: string | null } {
+    const s = String(selectionLatex ?? '').trim();
+    if (!s) return { statement: '', proof: null };
+
+    // Heuristic 1: explicit proof environment inside selection.
+    // If present, split at first \begin{proof}.
+    const proofBegin = s.search(/\\begin\{proof\*?\}/);
+    if (proofBegin >= 0) {
+        const statement = s.slice(0, proofBegin).trim();
+        const proof = s.slice(proofBegin).trim();
+        return { statement, proof: proof || null };
+    }
+
+    // Heuristic 2: split on a line starting with "Proof" (common in drafts).
+    const lines = s.split(/\r?\n/);
+    const idx = lines.findIndex((l) => /^\s*(Proof\b|\*?Proof\b)[:.]?\s*$/i.test(l.trim()));
+    if (idx >= 0) {
+        const statement = lines.slice(0, idx).join('\n').trim();
+        const proof = lines.slice(idx + 1).join('\n').trim();
+        return { statement, proof: proof || null };
+    }
+
+    // Otherwise treat everything as a statement.
+    return { statement: s, proof: null };
+}
 
 function downloadTextFile(filename: string, contents: string) {
     const blob = new Blob([contents], { type: 'text/plain;charset=utf-8' });
@@ -92,9 +119,21 @@ export default function WorkspaceView() {
     // "Focus" state for expanding the chat panel into an overlay (match Prove mode UX).
     const [isChatFocused, setIsChatFocused] = useState(false);
 
+    // Review is a full-screen workspace mode (not shown in the right sidebar).
+    const isReviewMode = rightTab === 'review';
+    const lastNonReviewTabRef = useRef<'chat' | 'insights' | 'preview'>('chat');
+
+    // When entering review mode, ensure the right sidebar is closed.
+    useEffect(() => {
+        if (!isReviewMode) return;
+        setIsChatOpen(false);
+        setIsChatFocused(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isReviewMode]);
+
     // Hover hint coming from the “Getting started in Workspace” callout.
     // Kept as local UI state (no global store changes).
-    const [hoverHint, setHoverHint] = useState<'import' | 'chat' | 'preview' | 'export' | null>(null);
+    const [hoverHint, setHoverHint] = useState<'import' | 'chat' | 'preview' | 'review' | 'export' | null>(null);
 
     useEffect(() => {
         const onHover = (evt: any) => {
@@ -487,7 +526,7 @@ export default function WorkspaceView() {
     // (e.g. older state), close it.
     useEffect(() => {
         if (!isChatOpen) return;
-        if (rightTab !== 'chat' && rightTab !== 'insights' && rightTab !== 'preview') {
+        if (rightTab !== 'chat' && rightTab !== 'insights' && rightTab !== 'preview' && rightTab !== 'review') {
             setIsChatOpen(false);
         }
     }, [isChatOpen, rightTab, setIsChatOpen]);
@@ -512,7 +551,11 @@ export default function WorkspaceView() {
             {/* Header bar (keeps controls aligned + avoids overlaying messages) */}
             <div className="h-11 px-3 border-b flex items-center justify-between">
                 <div className="text-xs font-medium text-muted-foreground">
-                    {rightTab === 'insights' ? 'Insights' : rightTab === 'preview' ? 'Preview' : 'Chat'}
+                    {rightTab === 'insights'
+                        ? 'Insights'
+                        : rightTab === 'preview'
+                            ? 'Preview'
+                            : 'Chat'}
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -714,6 +757,7 @@ export default function WorkspaceView() {
                         size="icon"
                         title="Chat"
                         onClick={() => {
+                            if (isReviewMode) lastNonReviewTabRef.current = 'chat';
                             setIsChatOpen((prev) => (prev && rightTab === 'chat' ? false : true));
                             setRightTab('chat');
                         }}
@@ -732,6 +776,7 @@ export default function WorkspaceView() {
                         size="icon"
                         title="Preview"
                         onClick={() => {
+                            if (isReviewMode) lastNonReviewTabRef.current = 'preview';
                             setIsChatOpen((prev) => (prev && rightTab === 'preview' ? false : true));
                             setRightTab('preview');
                         }}
@@ -744,6 +789,36 @@ export default function WorkspaceView() {
                     >
                         <Eye />
                         <span className="sr-only">Preview</span>
+                    </Button>
+
+                    <Button
+                        data-workspace-action="review"
+                        variant="ghost"
+                        size="icon"
+                        title="Review"
+                        onClick={() => {
+                            if (rightTab === 'review') {
+                                setRightTab(lastNonReviewTabRef.current ?? 'chat');
+                                // remain in editor mode; keep side panel closed by default
+                                setIsChatOpen(false);
+                                setIsChatFocused(false);
+                                return;
+                            }
+
+                            // entering review mode: remember last non-review right panel tab
+                            if (rightTab === 'chat' || rightTab === 'insights' || rightTab === 'preview') {
+                                lastNonReviewTabRef.current = rightTab;
+                            }
+                            setRightTab('review');
+                            setIsChatOpen(false);
+                            setIsChatFocused(false);
+                        }}
+                        className={cn(
+                            isReviewMode ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary' : '',
+                        )}
+                    >
+                        <CheckSquare />
+                        <span className="sr-only">Review</span>
                     </Button>
 
                     <Button
@@ -763,187 +838,229 @@ export default function WorkspaceView() {
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
                 <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
-                    <div className="mb-3">
-                        <WorkspaceNextStepsCallout />
-                    </div>
-                    <div
-                        className={cn(
-                            'h-full rounded-lg border bg-background overflow-hidden',
-                            isEditorDragOver ? 'ring-2 ring-primary/40 border-primary/30' : '',
-                        )}
-                        data-local-selection="1"
-                        data-selection-enabled="1"
-                        onDragEnter={(e) => {
-                            // Only react to text drags.
-                            if (!e.dataTransfer?.types?.includes('text/plain')) return;
-                            setIsEditorDragOver(true);
-                        }}
-                        onDragOver={(e) => {
-                            if (!e.dataTransfer?.types?.includes('text/plain')) return;
-                            // Required to allow drop.
-                            e.preventDefault();
-                            try {
-                                e.dataTransfer.dropEffect = 'copy';
-                            } catch {
-                                // ignore
-                            }
-                        }}
-                        onDragLeave={() => setIsEditorDragOver(false)}
-                        onDrop={(e) => {
-                            setIsEditorDragOver(false);
-                            const view = cmRef.current?.view;
-                            if (!view) return;
+                    {isReviewMode ? (
+                        <div className="h-full rounded-lg border bg-background overflow-hidden">
+                            <WorkspaceReviewPanel />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="mb-3">
+                                <WorkspaceNextStepsCallout />
+                            </div>
+                            <div
+                                className={cn(
+                                    'h-full rounded-lg border bg-background overflow-hidden',
+                                    isEditorDragOver ? 'ring-2 ring-primary/40 border-primary/30' : '',
+                                )}
+                                data-local-selection="1"
+                                data-selection-enabled="1"
+                                onDragEnter={(e) => {
+                                    // Only react to text drags.
+                                    if (!e.dataTransfer?.types?.includes('text/plain')) return;
+                                    setIsEditorDragOver(true);
+                                }}
+                                onDragOver={(e) => {
+                                    if (!e.dataTransfer?.types?.includes('text/plain')) return;
+                                    // Required to allow drop.
+                                    e.preventDefault();
+                                    try {
+                                        e.dataTransfer.dropEffect = 'copy';
+                                    } catch {
+                                        // ignore
+                                    }
+                                }}
+                                onDragLeave={() => setIsEditorDragOver(false)}
+                                onDrop={(e) => {
+                                    setIsEditorDragOver(false);
+                                    const view = cmRef.current?.view;
+                                    if (!view) return;
 
-                            e.preventDefault();
-                            const text = String(e.dataTransfer?.getData('text/plain') ?? '');
-                            if (!text) return;
+                                    e.preventDefault();
+                                    const text = String(e.dataTransfer?.getData('text/plain') ?? '');
+                                    if (!text) return;
 
-                            // Prefer dropping at mouse location.
-                            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.from;
+                                    // Prefer dropping at mouse location.
+                                    const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.from;
 
-                            view.dispatch({
-                                changes: { from: pos, to: pos, insert: text },
-                                selection: { anchor: pos + text.length },
-                            });
-                            view.focus();
-                        }}
-                    >
-                        <CodeMirror
-                            ref={cmRef}
-                            value={doc}
-                            onChange={(val) => setDoc(val)}
-                            onMouseUp={onMouseUp as any}
-                            onKeyUp={onMouseUp as any}
-                            placeholder="Type LaTeX here…"
-                            extensions={cmExtensions}
-                            theme="dark"
-                            basicSetup={{
-                                lineNumbers: false,
-                                foldGutter: false,
-                                highlightActiveLine: false,
-                                highlightSelectionMatches: false,
-                            }}
-                            className="h-full [&_.cm-editor]:h-full"
-                        />
-                    </div>
-
-                    {selection.anchor && (
-                        <SelectionToolbar
-                            anchor={selection.anchor}
-                            selectedText={selection.text}
-                            copyText={selection.text}
-                            onRevise={() => { }}
-                            canCheckAgain={false}
-                            showCheckAgain={false}
-                            showRevise={false}
-                            showCopy={true}
-                            showAskAI={true}
-                            showProveThis={true}
-                            onProveThis={() => openProveModalFromSelection()}
-                            onAskAI={() => {
-                                // Open chat and prefill with the selected excerpt.
-                                setDraft(selection.text, { open: true });
-                                setRightTab('chat');
-                                setIsChatOpen(true);
-                            }}
-                        />
-                    )}
-
-                    <Dialog
-                        open={isProveOpen}
-                        onOpenChange={(open) => {
-                            setIsProveOpen(open);
-                        }}
-                    >
-                        <DialogContent className="sm:max-w-[720px]">
-                            <DialogHeader>
-                                <DialogTitle>Attempt proof with AI?</DialogTitle>
-                            </DialogHeader>
-
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="prove-payload" className="flex items-center gap-2">
-                                            Inferred Statement
-                                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                                        </Label>
-                                    </div>
-                                    <Textarea
-                                        id="prove-payload"
-                                        value={provePayload}
-                                        onChange={(e) => setProvePayload(e.target.value)}
-                                        rows={6}
-                                        className="font-mono text-xs"
-                                    />
-                                </div>
-
-                                <div className="flex flex-col gap-3 rounded-md border p-3">
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="prove-include-context"
-                                            checked={proveIncludeContext}
-                                            onCheckedChange={(v) => setProveIncludeContext(Boolean(v))}
-                                        />
-                                        <Label htmlFor="prove-include-context">Add preceding context</Label>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="prove-strip-macros"
-                                            checked={proveStripMacros}
-                                            onCheckedChange={(v) => {
-                                                const next = Boolean(v);
-                                                setProveStripMacros(next);
-                                                // Recompute previews with the new mode.
-                                                const selected = (selection.text || '').trim();
-                                                const body = next ? stripLatexPreambleAndMacros(selected) : selected;
-                                                const ctx = contextBeforeSelection({
-                                                    doc: doc || '',
-                                                    selectionStart: selection.start,
-                                                    maxChars: 6000,
-                                                    stripMacros: next,
-                                                });
-                                                setProveStatement(body);
-                                                setProveContextPreview(ctx);
-                                            }}
-                                        />
-                                        <Label htmlFor="prove-strip-macros">Strip macros/preamble from context</Label>
-                                    </div>
-
-                                    {/* Inferred payload is always editable. */}
-                                </div>
+                                    view.dispatch({
+                                        changes: { from: pos, to: pos, insert: text },
+                                        selection: { anchor: pos + text.length },
+                                    });
+                                    view.focus();
+                                }}
+                            >
+                                <CodeMirror
+                                    ref={cmRef}
+                                    value={doc}
+                                    onChange={(val) => setDoc(val)}
+                                    onMouseUp={onMouseUp as any}
+                                    onKeyUp={onMouseUp as any}
+                                    placeholder="Type LaTeX here…"
+                                    extensions={cmExtensions}
+                                    theme="dark"
+                                    basicSetup={{
+                                        lineNumbers: false,
+                                        foldGutter: false,
+                                        highlightActiveLine: false,
+                                        highlightSelectionMatches: false,
+                                    }}
+                                    className="h-full [&_.cm-editor]:h-full"
+                                />
                             </div>
 
-                            <DialogFooter>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setIsProveOpen(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={() => {
-                                        const payload = (provePayload || '').trim();
-                                        if (!payload) return;
-                                        setIsProveOpen(false);
-                                        clearSelection();
-                                        // Switch to dedicated prover mode.
-                                        void startProof(payload);
+                            {selection.anchor && (
+                                <SelectionToolbar
+                                    anchor={selection.anchor}
+                                    selectedText={selection.text}
+                                    copyText={selection.text}
+                                    onRevise={() => { }}
+                                    canCheckAgain={false}
+                                    showCheckAgain={false}
+                                    showRevise={false}
+                                    showCopy={true}
+                                    showAskAI={true}
+                                    showProveThis={true}
+                                    showAddToReview={true}
+                                    onProveThis={() => openProveModalFromSelection()}
+                                    onAddToReview={({ selectionLatex }) => {
+                                        const view = cmRef.current?.view;
+                                        if (!view) return;
+
+                                        const sel = view.state.selection.main;
+                                        const from = sel.from;
+                                        const to = sel.to;
+                                        if (from === to) return;
+
+                                        const { statement, proof } = splitSelectionIntoStatementAndProof(selectionLatex);
+                                        const env = 'claim';
+                                        const body = statement.trim();
+                                        const proofBody = (proof ?? '').trim();
+
+                                        const block = proofBody
+                                            ? `\\begin{${env}}\n${body}\n\\end{${env}}\n\n${proofBody}`
+                                            : `\\begin{${env}}\n${body}\n\\end{${env}}`;
+
+                                        view.dispatch({
+                                            changes: { from, to, insert: block },
+                                            selection: { anchor: from + block.length },
+                                        });
+                                        view.focus();
+
+                                        // Switch to Review mode so the user sees the newly created artifact.
+                                        try {
+                                            setRightTab('review');
+                                            setIsChatOpen(false);
+                                            setIsChatFocused(false);
+                                        } catch {
+                                            // ignore
+                                        }
                                     }}
-                                >
-                                    Continue
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                                    onAskAI={() => {
+                                        // Open chat and prefill with the selected excerpt.
+                                        setDraft(selection.text, { open: true });
+                                        setRightTab('chat');
+                                        setIsChatOpen(true);
+                                    }}
+                                />
+                            )}
+
+                            <Dialog
+                                open={isProveOpen}
+                                onOpenChange={(open) => {
+                                    setIsProveOpen(open);
+                                }}
+                            >
+                                <DialogContent className="sm:max-w-[720px]">
+                                    <DialogHeader>
+                                        <DialogTitle>Attempt proof with AI?</DialogTitle>
+                                    </DialogHeader>
+
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="prove-payload" className="flex items-center gap-2">
+                                                    Inferred Statement
+                                                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                                </Label>
+                                            </div>
+                                            <Textarea
+                                                id="prove-payload"
+                                                value={provePayload}
+                                                onChange={(e) => setProvePayload(e.target.value)}
+                                                rows={6}
+                                                className="font-mono text-xs"
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-col gap-3 rounded-md border p-3">
+                                            <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id="prove-include-context"
+                                                    checked={proveIncludeContext}
+                                                    onCheckedChange={(v) => setProveIncludeContext(Boolean(v))}
+                                                />
+                                                <Label htmlFor="prove-include-context">Add preceding context</Label>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id="prove-strip-macros"
+                                                    checked={proveStripMacros}
+                                                    onCheckedChange={(v) => {
+                                                        const next = Boolean(v);
+                                                        setProveStripMacros(next);
+                                                        // Recompute previews with the new mode.
+                                                        const selected = (selection.text || '').trim();
+                                                        const body = next ? stripLatexPreambleAndMacros(selected) : selected;
+                                                        const ctx = contextBeforeSelection({
+                                                            doc: doc || '',
+                                                            selectionStart: selection.start,
+                                                            maxChars: 6000,
+                                                            stripMacros: next,
+                                                        });
+                                                        setProveStatement(body);
+                                                        setProveContextPreview(ctx);
+                                                    }}
+                                                />
+                                                <Label htmlFor="prove-strip-macros">Strip macros/preamble from context</Label>
+                                            </div>
+
+                                            {/* Inferred payload is always editable. */}
+                                        </div>
+                                    </div>
+
+                                    <DialogFooter>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsProveOpen(false)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            onClick={() => {
+                                                const payload = (provePayload || '').trim();
+                                                if (!payload) return;
+                                                setIsProveOpen(false);
+                                                clearSelection();
+                                                // Switch to dedicated prover mode.
+                                                void startProof(payload);
+                                            }}
+                                        >
+                                            Continue
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    )}
                 </main>
 
                 {/* Draggable divider + Right panel */}
-                <div className={cn('relative shrink-0 h-full', isChatOpen ? '' : 'w-0')}
+                <div className={cn('relative shrink-0 h-full', isChatOpen && !isReviewMode ? '' : 'w-0')}
                     style={{ width: isChatOpen ? rightWidth : 0 }}
                 >
                     {/* Drag handle */}
-                    {isChatOpen && (
+                    {isChatOpen && !isReviewMode && (
                         <div
                             className="absolute left-0 top-0 h-full w-2 -translate-x-1 cursor-col-resize"
                             role="separator"
@@ -973,13 +1090,13 @@ export default function WorkspaceView() {
                             isChatOpen ? '' : 'w-0 p-0 border-l-0',
                         )}
                     >
-                        {isChatOpen && !isChatFocused && ChatPanel}
+                        {isChatOpen && !isReviewMode && !isChatFocused && ChatPanel}
                     </aside>
                 </div>
             </div>
 
             {/* Focus overlay (chat only) */}
-            {isChatOpen && isChatFocused && rightTab === 'chat' && (
+            {isChatOpen && !isReviewMode && isChatFocused && rightTab === 'chat' && (
                 <div
                     className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
                     role="dialog"

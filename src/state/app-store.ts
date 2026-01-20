@@ -5,6 +5,7 @@ import { type Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { type Message } from '@/components/chat/interactive-chat';
 import { type GraphData } from '@/components/proof-graph';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
+import type { ArtifactReviewResult, ExtractedArtifact } from '@/types/review';
 import {
   attemptProofAction,
   attemptProofActionForce,
@@ -250,8 +251,14 @@ type StoreData = {
   workspaceDraft: string;
   workspaceDraftNonce: number;
   isWorkspaceChatOpen: boolean;
-  workspaceRightPanelTab: 'chat' | 'insights' | 'preview';
+  workspaceRightPanelTab: 'chat' | 'insights' | 'preview' | 'review';
   workspaceRightPanelWidth: number; // px
+
+  // Workspace Review mode (theorem-like LaTeX artifacts)
+  workspaceReviewArtifacts: ExtractedArtifact[];
+  /** Keyed by label (preferred) else `type@startChar`. */
+  workspaceReviewEdits: Record<string, { statement: string; proof?: string | null }>;
+  workspaceReviewResults: Record<string, ArtifactReviewResult>;
 
   // Workspace Insights (Explore-style artifacts)
   workspaceArtifacts: ExploreArtifacts | null;
@@ -294,8 +301,15 @@ interface AppState extends StoreData {
   setWorkspaceDraft: (text: string, opts?: { open?: boolean }) => void;
   setWorkspaceMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
   setIsWorkspaceChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setWorkspaceRightPanelTab: (tab: 'chat' | 'insights' | 'preview') => void;
+  setWorkspaceRightPanelTab: (tab: 'chat' | 'insights' | 'preview' | 'review') => void;
   setWorkspaceRightPanelWidth: (widthPx: number) => void;
+
+  // Workspace Review actions
+  setWorkspaceReviewArtifacts: (items: ExtractedArtifact[]) => void;
+  setWorkspaceReviewEdit: (key: string, edits: { statement: string; proof?: string | null }) => void;
+  resetWorkspaceReviewEdits: (key?: string) => void;
+  applyWorkspaceReviewEditsToDoc: (key: string) => void;
+  setWorkspaceReviewResult: (key: string, result: ArtifactReviewResult) => void;
 
   // Workspace Insights actions
   setWorkspaceArtifacts: (artifacts: ExploreArtifacts | null) => void;
@@ -469,9 +483,14 @@ const initialState: StoreData = {
   workspaceMessages: [],
   workspaceDraft: '',
   workspaceDraftNonce: 0,
-  isWorkspaceChatOpen: true,
+  // Prefer showing just the editor on entry.
+  isWorkspaceChatOpen: false,
   workspaceRightPanelTab: 'chat',
   workspaceRightPanelWidth: 448, // 28rem default
+
+  workspaceReviewArtifacts: [],
+  workspaceReviewEdits: {},
+  workspaceReviewResults: {},
 
   workspaceArtifacts: null,
   workspaceInsightsIsExtracting: false,
@@ -563,7 +582,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       workspaceMessages: [],
       workspaceDraft: '',
       workspaceDraftNonce: 0,
-      isWorkspaceChatOpen: true,
+      isWorkspaceChatOpen: false,
       workspaceRightPanelTab: 'chat',
       workspaceRightPanelWidth: 448,
     });
@@ -589,6 +608,105 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Keep it within a sensible range.
     const next = clamp(Number(widthPx) || 0, 280, 720);
     set({ workspaceRightPanelWidth: next });
+  },
+
+  // --- Workspace Review ----------------------------------------------------
+  setWorkspaceReviewArtifacts: (items) => set({ workspaceReviewArtifacts: items ?? [] }),
+
+  setWorkspaceReviewEdit: (key, edits) => {
+    const k = String(key ?? '').trim();
+    if (!k) return;
+    set((s) => ({
+      workspaceReviewEdits: {
+        ...s.workspaceReviewEdits,
+        [k]: {
+          statement: String(edits?.statement ?? '').trim(),
+          proof: edits?.proof == null ? null : String(edits.proof).trim(),
+        },
+      },
+    }));
+  },
+
+  resetWorkspaceReviewEdits: (key) => {
+    const k = String(key ?? '').trim();
+    if (!k) {
+      set({ workspaceReviewEdits: {} });
+      return;
+    }
+    set((s) => {
+      const { [k]: _omit, ...rest } = s.workspaceReviewEdits;
+      return { workspaceReviewEdits: rest } as any;
+    });
+  },
+
+  applyWorkspaceReviewEditsToDoc: (key) => {
+    const k = String(key ?? '').trim();
+    if (!k) return;
+    const state = get();
+    const edits = state.workspaceReviewEdits[k];
+    if (!edits) return;
+    const art = state.workspaceReviewArtifacts.find((a) => {
+      const kk = (a.label && a.label.trim()) ? a.label.trim() : `${a.type}@${a.artifactStartChar}`;
+      return kk === k;
+    });
+    if (!art) return;
+
+    const doc = String(state.workspaceDoc ?? '');
+
+    // Splice helper
+    const splice = (s: string, from: number, to: number, insert: string) =>
+      `${s.slice(0, Math.max(0, from))}${insert}${s.slice(Math.max(0, to))}`;
+
+    // IMPORTANT: when applying multiple edits, apply from back-to-front so earlier
+    // replacements don't shift later offsets.
+    const replacements: Array<{ from: number; to: number; insert: string }> = [];
+
+    // Statement edit (artifact body only)
+    if (typeof edits.statement === 'string' && edits.statement.trim().length > 0) {
+      let statement = edits.statement.trim();
+      // Preserve the artifact's label in the source when applying edits.
+      // (The UI deliberately hides \label{...} from the editor for cleanliness.)
+      if (art.label && !/\\label\s*\{[^}]+\}/.test(statement)) {
+        statement = `\\label{${art.label}}\n${statement}`;
+      }
+      replacements.push({ from: art.bodyStartChar, to: art.bodyEndChar, insert: `\n${statement}\n` });
+    }
+
+    // Proof edit (proof body only)
+    if (art.proofBlock && edits.proof != null) {
+      replacements.push({
+        from: art.proofBlock.bodyStartChar,
+        to: art.proofBlock.bodyEndChar,
+        insert: `\n${String(edits.proof ?? '').trim()}\n`,
+      });
+    }
+
+    // Apply descending by position.
+    const sorted = replacements.sort((a, b) => b.from - a.from);
+    let nextDoc = doc;
+    for (const r of sorted) {
+      nextDoc = splice(nextDoc, r.from, r.to, r.insert);
+    }
+
+    set({ workspaceDoc: nextDoc });
+  },
+
+  setWorkspaceReviewResult: (key, result) => {
+    const k = String(key ?? '').trim();
+    if (!k) return;
+    if (result == null) {
+      set((s) => {
+        const { [k]: _omit, ...rest } = s.workspaceReviewResults;
+        return { workspaceReviewResults: rest } as any;
+      });
+      return;
+    }
+    set((s) => ({
+      workspaceReviewResults: {
+        ...s.workspaceReviewResults,
+        [k]: result,
+      },
+    }));
   },
 
   setWorkspaceArtifacts: (artifacts) => set({ workspaceArtifacts: artifacts }),

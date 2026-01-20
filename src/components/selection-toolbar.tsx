@@ -1,5 +1,5 @@
 "use client";
-import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles } from 'lucide-react';
+import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles, CheckSquare } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
@@ -80,6 +80,10 @@ interface SelectionToolbarProps {
 
   /** Optional override for Ask AI behavior (e.g. Workspace selection -> open chat). */
   onAskAI?: () => void;
+
+  /** Optional action for Workspace: add selection to Review by wrapping it in a theorem-like env. */
+  showAddToReview?: boolean;
+  onAddToReview?: (opts: { selectionText: string; selectionLatex: string }) => void;
 }
 
 export function SelectionToolbar({
@@ -99,6 +103,8 @@ export function SelectionToolbar({
   showProveThis = false,
   onProveThis,
   onAskAI,
+  showAddToReview = false,
+  onAddToReview,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -202,6 +208,24 @@ export function SelectionToolbar({
         align="center"
       >
         <div className="flex items-center gap-1">
+          {showAddToReview && typeof onAddToReview === 'function' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              // Prevent the click from collapsing the current selection before we read it.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                const fromSelection = computeCopyTextFromLiveSelection();
+                const selectionLatex = (fromSelection || selectedText || '').trim();
+                const selectionTextPlain = (selectedText || '').trim();
+                if (!selectionLatex && !selectionTextPlain) return;
+                onAddToReview({ selectionText: selectionTextPlain, selectionLatex });
+              }}
+              title="Add to review"
+            >
+              <CheckSquare className="h-4 w-4" />
+            </Button>
+          )}
           {showCopy && (
             <Button
               variant="ghost"

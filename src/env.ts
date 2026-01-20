@@ -21,6 +21,15 @@ const BaseEnvSchema = z
       .enum(['TRUE', 'FALSE'])
       .optional()
       .transform((v) => v === 'TRUE'),
+
+    /**
+     * Debug: when TRUE, log full LLM prompts for server-side flows.
+     * WARNING: may contain sensitive user content.
+     */
+    DEBUG_LLM_PROMPTS: z
+      .enum(['TRUE', 'FALSE'])
+      .optional()
+      .transform((v) => v === 'TRUE'),
   })
   .passthrough();
 

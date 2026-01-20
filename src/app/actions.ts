@@ -7,6 +7,8 @@ import { validateRawProof } from '@/ai/flows/validate-raw-proof';
 import { validateSublemma } from '@/ai/flows/validate-sublemma';
 import { generateProofGraph } from '@/ai/flows/generate-proof-graph';
 import type { GenerateProofGraphOutput } from '@/ai/flows/generate-proof-graph';
+import { reviewArtifactSoundness } from '@/ai/flows/review-artifact-soundness';
+import type { ReviewArtifactInput } from '@/ai/flows/review-artifact-soundness.schemas';
 import { attemptProof, type AttemptProofOutput } from '@/ai/flows/attempt-proof';
 import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/decompose-raw-proof';
 import { llmModel } from '@/ai/genkit';
@@ -36,6 +38,16 @@ export type DecomposeRawProofActionResult =
 
 export type ValidateRawProofActionResult =
     | ({ success: true } & { isValid: boolean; feedback: string; model: string })
+    | { success: false; error: string };
+
+export type ReviewArtifactSoundnessActionResult =
+    | ({ success: true } & {
+        verdict: 'OK' | 'ISSUE' | 'UNCLEAR';
+        summary: string;
+        correctness: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
+        clarity: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
+        model: string;
+    })
     | { success: false; error: string };
 
 // Decompose and Graph caches (dev-only)
@@ -309,6 +321,24 @@ export async function validateRawProofAction(
     } catch (error) {
         logError('validateRawProof', reqId, hash, error);
         return { success: false as const, error: 'Failed to validate the raw proof with AI.' };
+    }
+}
+
+export async function reviewArtifactSoundnessAction(input: ReviewArtifactInput): Promise<ReviewArtifactSoundnessActionResult> {
+    const { reqId, hash } = logStart('reviewArtifactSoundness', {
+        type: input?.type,
+        label: input?.label,
+        contentLen: input?.content?.length ?? 0,
+        hasProof: Boolean((input?.proof ?? '').trim()),
+    });
+    try {
+        const out = await reviewArtifactSoundness(input);
+        logSuccess('reviewArtifactSoundness', reqId, hash);
+        return { success: true as const, ...out, model: llmModel };
+    } catch (error) {
+        logError('reviewArtifactSoundness', reqId, hash, error);
+        const norm = normalizeModelError(error);
+        return { success: false as const, error: norm.message };
     }
 }
 
