@@ -5,22 +5,40 @@ import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 
 import { cn } from '@/lib/utils';
 
+type ScrollbarMode = 'vertical' | 'horizontal' | 'both' | 'none';
+
+type ScrollAreaProps = React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & {
+  /**
+   * Which scrollbar(s) to render.
+   *
+   * Note: horizontal scrolling can still work without rendering a horizontal scrollbar,
+   * but in practice it’s much clearer for users if we render it when needed.
+   */
+  scrollbar?: ScrollbarMode;
+};
+
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
->(({ className, children, ...props }, ref) => (
-  <ScrollAreaPrimitive.Root
-    ref={ref}
-    className={cn('relative overflow-hidden', className)}
-    {...props}
-  >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
-      {children}
-    </ScrollAreaPrimitive.Viewport>
-    <ScrollBar />
-    <ScrollAreaPrimitive.Corner />
-  </ScrollAreaPrimitive.Root>
-));
+  ScrollAreaProps
+>(({ className, children, scrollbar = 'vertical', ...props }, ref) => {
+  const showVertical = scrollbar === 'vertical' || scrollbar === 'both';
+  const showHorizontal = scrollbar === 'horizontal' || scrollbar === 'both';
+
+  return (
+    <ScrollAreaPrimitive.Root
+      ref={ref}
+      className={cn('relative overflow-hidden', className)}
+      {...props}
+    >
+      <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] overflow-x-auto">
+        {children}
+      </ScrollAreaPrimitive.Viewport>
+      {showVertical && <ScrollBar />}
+      {showHorizontal && <ScrollBar orientation="horizontal" />}
+      {showVertical && showHorizontal && <ScrollAreaPrimitive.Corner />}
+    </ScrollAreaPrimitive.Root>
+  );
+});
 ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName;
 
 const ScrollBar = React.forwardRef<

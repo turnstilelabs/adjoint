@@ -1,5 +1,5 @@
-"use client";
-import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles } from 'lucide-react';
+'use client';
+import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles, CheckSquare } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
@@ -16,14 +16,18 @@ async function copyWithFormat(text: string, html?: string) {
 
   // Prefer writing HTML + plain text (keeps math formatting when pasted into rich editors).
   try {
-    if (navigator.clipboard && 'write' in navigator.clipboard && typeof (window as any).ClipboardItem === 'function') {
+    if (
+      navigator.clipboard &&
+      'write' in navigator.clipboard &&
+      typeof (window as any).ClipboardItem === 'function'
+    ) {
       const safeHtml =
         typeof html === 'string' && html.trim().length > 0
           ? html
           : `<pre style="white-space:pre-wrap">${t
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')}</pre>`;
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')}</pre>`;
       const item = new (window as any).ClipboardItem({
         'text/plain': new Blob([t], { type: 'text/plain' }),
         'text/html': new Blob([safeHtml], { type: 'text/html' }),
@@ -80,6 +84,20 @@ interface SelectionToolbarProps {
 
   /** Optional override for Ask AI behavior (e.g. Workspace selection -> open chat). */
   onAskAI?: () => void;
+
+  /** Optional action for Workspace: add selection to Review by wrapping it in a theorem-like env. */
+  showAddToReview?: boolean;
+  onAddToReview?: (opts: { selectionText: string; selectionLatex: string }) => void;
+
+  /**
+   * Optional override for button order.
+   *
+   * Default preserves the existing order to avoid UI regressions in other screens.
+   * Workspace can pass e.g. ['copy','addToReview','proveThis','askAI'].
+   */
+  buttonOrder?: Array<
+    'addToReview' | 'copy' | 'askAI' | 'proveThis' | 'checkAgain' | 'editSelection' | 'revise'
+  >;
 }
 
 export function SelectionToolbar({
@@ -99,6 +117,9 @@ export function SelectionToolbar({
   showProveThis = false,
   onProveThis,
   onAskAI,
+  showAddToReview = false,
+  onAddToReview,
+  buttonOrder,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -181,6 +202,24 @@ export function SelectionToolbar({
     });
   };
 
+  const defaultOrder: NonNullable<SelectionToolbarProps['buttonOrder']> = [
+    'addToReview',
+    'copy',
+    'askAI',
+    'proveThis',
+    'checkAgain',
+    'editSelection',
+    'revise',
+  ];
+
+  const order = (() => {
+    const requested = (buttonOrder ?? []).filter(Boolean);
+    if (requested.length === 0) return defaultOrder;
+    // Append any remaining known actions to ensure we don't accidentally hide buttons.
+    const set = new Set(requested);
+    return [...requested, ...defaultOrder.filter((k) => !set.has(k))];
+  })();
+
   return (
     <Popover open={!!anchor}>
       <PopoverAnchor asChild>
@@ -202,114 +241,173 @@ export function SelectionToolbar({
         align="center"
       >
         <div className="flex items-center gap-1">
-          {showCopy && (
-            <Button
-              variant="ghost"
-              size="icon"
-              // Prevent the click from collapsing the current selection before we copy.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={async () => {
-                const fromSelection = computeCopyTextFromLiveSelection();
-                const effective = (copyText ?? fromSelection ?? selectedText).trim();
-                await copyWithFormat(effective, selectedHtml);
-                toast({ title: 'Copied', description: 'Selection copied to clipboard.' });
-              }}
-              title="Copy"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          )}
+          {order.map((k) => {
+            if (k === 'addToReview') {
+              if (!showAddToReview || typeof onAddToReview !== 'function') return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  // Prevent the click from collapsing the current selection before we read it.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const fromSelection = computeCopyTextFromLiveSelection();
+                    const selectionLatex = (fromSelection || selectedText || '').trim();
+                    const selectionTextPlain = (selectedText || '').trim();
+                    if (!selectionLatex && !selectionTextPlain) return;
+                    onAddToReview({ selectionText: selectionTextPlain, selectionLatex });
+                  }}
+                  title="Add to review"
+                >
+                  <CheckSquare className="h-4 w-4" />
+                </Button>
+              );
+            }
 
-          {showAskAI && (
-            <Button
-              variant="ghost"
-              size="icon"
-              // Prevent the click from collapsing the current selection before we read it.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                if (typeof onAskAI === 'function') {
-                  onAskAI();
-                  return;
-                }
+            if (k === 'copy') {
+              if (!showCopy) return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  // Prevent the click from collapsing the current selection before we copy.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={async () => {
+                    const fromSelection = computeCopyTextFromLiveSelection();
+                    const effective = (copyText ?? fromSelection ?? selectedText).trim();
+                    await copyWithFormat(effective, selectedHtml);
+                    toast({ title: 'Copied', description: 'Selection copied to clipboard.' });
+                  }}
+                  title="Copy"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              );
+            }
 
-                const fromSelection = computeCopyTextFromLiveSelection();
-                const text = (fromSelection || selectedText || '').trim();
-                if (!text) return;
+            if (k === 'askAI') {
+              if (!showAskAI) return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  // Prevent the click from collapsing the current selection before we read it.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (typeof onAskAI === 'function') {
+                      onAskAI();
+                      return;
+                    }
 
-                if (view === 'explore') {
-                  setExploreDraft(text);
-                  return;
-                }
+                    const fromSelection = computeCopyTextFromLiveSelection();
+                    const text = (fromSelection || selectedText || '').trim();
+                    if (!text) return;
 
-                if (view === 'proof') {
-                  setChatDraft(text, { open: true });
-                  return;
-                }
+                    if (view === 'explore') {
+                      setExploreDraft(text);
+                      return;
+                    }
 
-                if (view === 'workspace') {
-                  try {
-                    if (typeof setWorkspaceDraft === 'function') setWorkspaceDraft(text, { open: true });
-                    if (typeof setIsWorkspaceChatOpen === 'function') setIsWorkspaceChatOpen(true);
-                  } catch {
-                    // ignore
-                  }
-                  return;
-                }
+                    if (view === 'proof') {
+                      setChatDraft(text, { open: true });
+                      return;
+                    }
 
-                // Home (or unknown): send to Explore as a general "ask AI" context.
-                try {
-                  startExplore(text);
-                  router.push(`/explore?q=${encodeURIComponent(text)}`);
-                  // Prefill the explore input too.
-                  setExploreDraft(text);
-                } catch {
-                  toast({
-                    title: 'Ask AI unavailable',
-                    description: 'Please open Explore or Proof mode first.',
-                    variant: 'default',
-                  });
-                }
-              }}
-              title="Ask AI"
-            >
-              <MessageSquareText className="h-4 w-4" />
-            </Button>
-          )}
+                    if (view === 'workspace') {
+                      try {
+                        if (typeof setWorkspaceDraft === 'function')
+                          setWorkspaceDraft(text, { open: true });
+                        if (typeof setIsWorkspaceChatOpen === 'function')
+                          setIsWorkspaceChatOpen(true);
+                      } catch {
+                        // ignore
+                      }
+                      return;
+                    }
 
-          {showProveThis && typeof onProveThis === 'function' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              // Prevent the click from collapsing the current selection before we read it.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onProveThis()}
-              title="Prove this"
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-          )}
+                    // Home (or unknown): send to Explore as a general "ask AI" context.
+                    try {
+                      startExplore(text);
+                      router.push(`/explore?q=${encodeURIComponent(text)}`);
+                      // Prefill the explore input too.
+                      setExploreDraft(text);
+                    } catch {
+                      toast({
+                        title: 'Ask AI unavailable',
+                        description: 'Please open Explore or Proof mode first.',
+                        variant: 'default',
+                      });
+                    }
+                  }}
+                  title="Ask AI"
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                </Button>
+              );
+            }
 
-          {showCheckAgain && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCheckAgain}
-              disabled={isPending || !canCheckAgain}
-              title={canCheckAgain ? 'Check again' : 'Check again (Proof only)'}
-            >
-              <HelpCircle className="h-4 w-4" />
-            </Button>
-          )}
+            if (k === 'proveThis') {
+              if (!showProveThis || typeof onProveThis !== 'function') return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  // Prevent the click from collapsing the current selection before we read it.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onProveThis()}
+                  title="Prove this"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+              );
+            }
 
-          {showEditSelection && onEditSelection ? (
-            <Button variant="ghost" size="icon" onClick={onEditSelection} title="Edit">
-              <Edit className="h-4 w-4" />
-            </Button>
-          ) : showRevise ? (
-            <Button variant="ghost" size="icon" onClick={onRevise} title="Revise statement">
-              <Edit className="h-4 w-4" />
-            </Button>
-          ) : null}
+            if (k === 'checkAgain') {
+              if (!showCheckAgain) return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCheckAgain}
+                  disabled={isPending || !canCheckAgain}
+                  title={canCheckAgain ? 'Check again' : 'Check again (Proof only)'}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+              );
+            }
+
+            if (k === 'editSelection') {
+              if (!showEditSelection || !onEditSelection) return null;
+              return (
+                <Button key={k} variant="ghost" size="icon" onClick={onEditSelection} title="Edit">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              );
+            }
+
+            if (k === 'revise') {
+              if (!showRevise) return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  onClick={onRevise}
+                  title="Revise statement"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              );
+            }
+
+            return null;
+          })}
         </div>
       </PopoverContent>
     </Popover>

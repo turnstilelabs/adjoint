@@ -11,6 +11,11 @@ type KatexRendererProps = {
   inline?: boolean; // when true, render container as <span> to avoid block breaks inside lists
   output?: 'html' | 'htmlAndMathml';
   /**
+   * KaTeX macro map (\name -> replacement). This is intentionally *not* inferred
+   * automatically at this layer to avoid changing behavior globally.
+   */
+  macros?: Record<string, string>;
+  /**
    * When true (default), if KaTeX produces an error node we fall back to rendering
    * the math segment as plain text (useful for Explore artifacts where partial/invalid
    * math would otherwise show large red error fragments).
@@ -106,7 +111,9 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
         flush();
         const inner = text.slice(i + 2, end);
         nodes.push(
-          <strong key={`${keyPrefix}-b-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-b-${key}`)}</strong>,
+          <strong key={`${keyPrefix}-b-${key++}`}>
+            {renderInlineEmphasis(inner, `${keyPrefix}-b-${key}`)}
+          </strong>,
         );
         i = end + 2;
         continue;
@@ -123,7 +130,9 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
         flush();
         const inner = text.slice(i + 1, end);
         nodes.push(
-          <em key={`${keyPrefix}-i-${key++}`}>{renderInlineEmphasis(inner, `${keyPrefix}-i-${key}`)}</em>,
+          <em key={`${keyPrefix}-i-${key++}`}>
+            {renderInlineEmphasis(inner, `${keyPrefix}-i-${key}`)}
+          </em>,
         );
         i = end + 1;
         continue;
@@ -216,6 +225,16 @@ function autoWrapInlineMathIfNeeded(input: string): string {
 
       const mdStripped = t.replace(/^\*+|\*+$/g, '');
 
+      // Cross-reference commands are prose-level LaTeX and should never be auto-wrapped as math.
+      // If we wrap them, KaTeX will (correctly) fail to parse them and emit error fragments.
+      // This is a narrow allowlist to avoid impacting real math commands (\frac, \sum, ...).
+      if (/^\\(?:[cC]ref|[cC]refrange|ref|eqref|autoref|pageref)\b/.test(mdStripped)) return false;
+
+      // Very specific fix: dash-prefixed English words after inline math should stay text.
+      // Example: "$(1-\eps)$-approximate union" should not wrap "-approximate" into math.
+      // Keep negative numbers/variables as math (e.g. -1, -x).
+      if (/^-[A-Za-z]{2,}(?:-[A-Za-z]+)*$/.test(mdStripped)) return false;
+
       // Allow bracket-wrapped hyphenated words with optional trailing punctuation to remain plain text
       // Examples that should stay plain: "word,", "word:", "(AM-GM)", "[well-known];"
       const core = mdStripped
@@ -237,7 +256,10 @@ function autoWrapInlineMathIfNeeded(input: string): string {
       if (/[=<>^_+\-*/|]/.test(mdStripped)) return true;
 
       // Digits mixed with letters, or standalone numbers
-      if ((/\d/.test(mdStripped) && /[A-Za-z]/.test(mdStripped)) || /^\d+(\.\d+)?$/.test(mdStripped)) {
+      if (
+        (/\d/.test(mdStripped) && /[A-Za-z]/.test(mdStripped)) ||
+        /^\d+(\.\d+)?$/.test(mdStripped)
+      ) {
         return true;
       }
 
@@ -302,6 +324,7 @@ export function KatexRenderer({
   autoWrap = true,
   inline = false,
   output = 'htmlAndMathml',
+  macros,
   fallbackOnError = true,
 }: KatexRendererProps) {
   const parts = useMemo(() => {
@@ -329,6 +352,7 @@ export function KatexRenderer({
             displayMode: true,
             errorColor: '#dc2626',
             output,
+            macros,
           });
 
           // If KaTeX could not parse the expression, it emits a "katex-error" span.
@@ -351,6 +375,7 @@ export function KatexRenderer({
             displayMode: false,
             errorColor: '#dc2626',
             output,
+            macros,
           });
 
           if (fallbackOnError && html.includes('katex-error')) {
@@ -367,7 +392,7 @@ export function KatexRenderer({
         return renderTextWithLineBreaks(part, index);
       }
     });
-  }, [content, autoWrap, output, fallbackOnError]);
+  }, [content, autoWrap, output, macros, fallbackOnError]);
 
   // Use 'whitespace-pre-wrap' is no longer needed as we manually handle line breaks.
   // Ensure math never causes global horizontal overflow.
