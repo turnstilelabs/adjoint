@@ -30,6 +30,30 @@ const BaseEnvSchema = z
       .enum(['TRUE', 'FALSE'])
       .optional()
       .transform((v) => v === 'TRUE'),
+
+    /**
+     * Optional unlock gate for internet deployments.
+     *
+     * Defaults:
+     * - development: disabled
+     * - production: enabled
+     *
+     * You can override with:
+     * - APP_UNLOCK_ENABLED=TRUE  (force on)
+     * - APP_UNLOCK_ENABLED=FALSE (force off)
+     */
+    APP_UNLOCK_ENABLED: z
+      .enum(['TRUE', 'FALSE'])
+      .optional()
+      .transform((v) => v === 'TRUE'),
+
+    /**
+     * Password for the optional unlock gate.
+     *
+     * NOTE: not validated here because whether it's required depends on
+     * APP_UNLOCK_ENABLED and NODE_ENV.
+     */
+    APP_UNLOCK_PASSWORD: z.string().min(1).optional(),
   })
   .passthrough();
 

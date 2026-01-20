@@ -80,6 +80,44 @@ Then open the Adjoint at **http://localhost:9002** (or whatever port you configu
 
 ---
 
+## Optional app unlock gate (recommended for public deployments)
+
+The Adjoint includes an **optional password gate** intended for deployments on the internet.
+
+**Defaults**
+
+- Local development (`npm run dev`): **disabled** (no password required)
+- Production (`NODE_ENV=production`): **enabled** (password required)
+
+### Enable / configure (production)
+
+Set an unlock password in your deployment environment:
+
+```bash
+APP_UNLOCK_PASSWORD=your-strong-password
+```
+
+If `APP_UNLOCK_PASSWORD` is missing in production, the app will **fail closed** (users will be redirected to `/unlock` but unlocking will error until the password is configured).
+
+### Disable (public deployment)
+
+To make a production deployment public, explicitly disable the gate:
+
+```bash
+APP_UNLOCK_ENABLED=FALSE
+```
+
+### Enable locally (optional)
+
+If you want to test the gate locally:
+
+```bash
+APP_UNLOCK_ENABLED=TRUE
+APP_UNLOCK_PASSWORD=dev-password
+```
+
+---
+
 ## Future Directions
 
 There is still a lot of work to do. From better prompts for all internal AI models to validation with either symbolic engines (like Sympy) and formal engines (like Lean or Rocq) or literature exploration...  

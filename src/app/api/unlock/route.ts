@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 
+import { isUnlockEnabled } from '@/lib/unlock';
+
 // Kept for completeness, though the unlock page now sets this cookie directly.
 // Must stay in sync with `middleware.ts` and `unlock/page.tsx`.
 const UNLOCK_COOKIE_NAME = 'adjoint_unlocked_v2';
 
 export async function POST(request: Request) {
+    // If the unlock gate is disabled (default for local dev), this endpoint should
+    // not be usable.
+    if (!isUnlockEnabled()) {
+        return NextResponse.json({ ok: false, error: 'Unlock gate is disabled.' }, { status: 404 });
+    }
+
     const contentType = request.headers.get('content-type') || '';
     let password = '';
     let next = '/';
