@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server';
-import { appRoute } from '@genkit-ai/next';
 import {
     reviewArtifactSoundnessStreamOrchestrator,
-    reviewArtifactSoundnessStreamFlow,
     type ReviewArtifactStreamChunk,
 } from '@/ai/flows/review-artifact-soundness-stream';
 
@@ -121,7 +119,3 @@ export async function POST(req: NextRequest) {
         },
     });
 }
-
-// Genkit appRoute adapter (not used by the UI today, but keeps parity with other flows)
-export const POST_appRoute = appRoute(reviewArtifactSoundnessStreamFlow);
-
