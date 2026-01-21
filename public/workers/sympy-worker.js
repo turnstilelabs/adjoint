@@ -12,6 +12,7 @@ const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_CDN_VERSI
 const PYTHON_DISPATCHER = `
 import json
 import sympy
+import re
 
 from sympy import Eq, latex, simplify, diff, integrate
 from sympy.solvers.ode import dsolve
@@ -25,6 +26,9 @@ from sympy.parsing.sympy_parser import (
 
 TRANSFORMS = standard_transformations + (implicit_multiplication_application, convert_xor)
 
+# Split a single equality sign that is NOT part of <=, >=, ==, !=.
+EQ_SPLIT_RE = re.compile(r"(?<![<>=!])=(?![=])")
+
 def _parse(s: str):
     if s is None:
         raise ValueError('Missing expression')
@@ -33,6 +37,28 @@ def _parse(s: str):
         raise ValueError('Empty expression')
     # Parse with implicit multiplication (2x -> 2*x) and ^ -> **
     return parse_expr(s, transformations=TRANSFORMS)
+
+def _parse_maybe_equation(s: str):
+    """Parse either an expression or a single equality into (lhs, rhs).
+
+    Returns:
+      - (expr, None) if no standalone '=' is present
+      - (lhs_expr, rhs_expr) if a single standalone '=' is present
+    """
+    if s is None:
+        raise ValueError('Missing expression')
+    raw = str(s).strip()
+    if not raw:
+        raise ValueError('Empty expression')
+
+    parts = EQ_SPLIT_RE.split(raw, maxsplit=1)
+    if len(parts) == 2:
+        lhs = parse_expr(parts[0].strip(), transformations=TRANSFORMS)
+        rhs = parse_expr(parts[1].strip(), transformations=TRANSFORMS)
+        return lhs, rhs
+
+    expr = parse_expr(raw, transformations=TRANSFORMS)
+    return expr, None
 
 def process_spec(spec_json: str):
     try:
@@ -61,7 +87,28 @@ def process_spec(spec_json: str):
             }
 
         if op == 'simplify':
-            expr = _parse(spec.get('expr'))
+            # Robustness: models sometimes return expr strings containing '=' even when op is 'simplify'.
+            # parse_expr cannot parse '=' (it's invalid python syntax), so if we detect an equation,
+            # treat this as a verify request.
+            lhs_or_expr, rhs = _parse_maybe_equation(spec.get('expr'))
+            if rhs is not None:
+                lhs = lhs_or_expr
+                diff_expr = simplify(lhs - rhs)
+                truth = 'true' if diff_expr == 0 else 'false'
+                return {
+                    "ok": True,
+                    "op": 'verify',
+                    "result_latex": latex(Eq(lhs, rhs)),
+                    "result_text": str(Eq(lhs, rhs)),
+                    "meta": {
+                        "truth": truth,
+                        "difference_latex": latex(diff_expr),
+                        "difference_text": str(diff_expr),
+                    },
+                    "warnings": ["Interpreted '=' as an equation (verify)."],
+                }
+
+            expr = lhs_or_expr
             res = simplify(expr)
             return {"ok": True, "op": op, "result_latex": latex(res), "result_text": str(res), "meta": {}, "warnings": []}
 

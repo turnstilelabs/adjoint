@@ -47,6 +47,7 @@ export function ProofSidebar() {
   const [openAddToWorkspaceConfirm, setOpenAddToWorkspaceConfirm] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
+  const view = useAppStore((s) => s.view);
 
   const { isChatOpen, viewMode, problem, isHistoryOpen, rawProof, proofHistory } = useAppStore((s) => ({
     isChatOpen: s.isChatOpen,
@@ -261,6 +262,9 @@ export function ProofSidebar() {
   const addToWorkspaceDisabled =
     !((rawProof || '').trim()) && (!proof || (proof.sublemmas?.length ?? 0) === 0);
 
+  // Prover mode (Proof view) should not show the "Add to workspace" CTA.
+  const showAddToWorkspaceCta = view !== 'proof';
+
   return (
     <>
       <aside className="w-14 flex flex-col items-center py-4 border-r bg-card shrink-0">
@@ -355,18 +359,20 @@ export function ProofSidebar() {
               <span className="sr-only">{isAnalyzingProof ? 'Cancel analysis' : 'Analyze'}</span>
             </Button>
           )}
-          <Button
-            data-proof-action="workspace"
-            variant="ghost"
-            size="icon"
-            title="Add to Workspace"
-            onClick={() => setOpenAddToWorkspaceConfirm(true)}
-            disabled={addToWorkspaceDisabled}
-            className={hoverHint === 'workspace' ? 'ring-1 ring-primary/25' : undefined}
-          >
-            <Plus />
-            <span className="sr-only">Add to Workspace</span>
-          </Button>
+          {showAddToWorkspaceCta && (
+            <Button
+              data-proof-action="workspace"
+              variant="ghost"
+              size="icon"
+              title="Add to Workspace"
+              onClick={() => setOpenAddToWorkspaceConfirm(true)}
+              disabled={addToWorkspaceDisabled}
+              className={hoverHint === 'workspace' ? 'ring-1 ring-primary/25' : undefined}
+            >
+              <Plus />
+              <span className="sr-only">Add to Workspace</span>
+            </Button>
+          )}
           <Button
             data-proof-action="export"
             variant="ghost"
@@ -417,27 +423,29 @@ export function ProofSidebar() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={openAddToWorkspaceConfirm} onOpenChange={setOpenAddToWorkspaceConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Add this proof to Workspace?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will append the current proof ({viewMode === 'raw' ? 'raw' : 'structured'}) to your current workspace draft.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setOpenAddToWorkspaceConfirm(false);
-                onConfirmAddToWorkspace();
-              }}
-            >
-              Add
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {showAddToWorkspaceCta && (
+        <AlertDialog open={openAddToWorkspaceConfirm} onOpenChange={setOpenAddToWorkspaceConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Add this proof to Workspace?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will append the current proof ({viewMode === 'raw' ? 'raw' : 'structured'}) to your current workspace draft.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setOpenAddToWorkspaceConfirm(false);
+                  onConfirmAddToWorkspace();
+                }}
+              >
+                Add
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <ConfirmResetDialog
         open={openResetConfirm}

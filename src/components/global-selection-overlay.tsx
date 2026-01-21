@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { selectionRangeToLatex } from '@/lib/selection-to-latex';
+import { useAppStore } from '@/state/app-store';
 
 type Anchor = { top: number; left: number };
 
@@ -27,6 +28,10 @@ export function GlobalSelectionOverlay() {
     const [selectedText, setSelectedText] = useState('');
     const [copyText, setCopyText] = useState<string>('');
     const [selectedHtml, setSelectedHtml] = useState<string | undefined>(undefined);
+
+    // Gate SymPy verify to Workspace + Prover (Proof) mode only.
+    const view = useAppStore((s) => s.view);
+    const showVerify = view === 'workspace' || view === 'proof';
 
     const clear = () => {
         setAnchor(null);
@@ -122,6 +127,7 @@ export function GlobalSelectionOverlay() {
             canCheckAgain={false}
             showCheckAgain={false}
             showRevise={false}
+            showVerify={showVerify}
         />
     );
 }

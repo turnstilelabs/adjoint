@@ -36,6 +36,7 @@ export function VerifyDialogController() {
     const { toast } = useToast();
     const { preload, run } = useSympyWorker();
     const goToWorkspace = useAppStore((s) => s.goToWorkspace);
+    const view = useAppStore((s) => s.view);
 
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState<VerifyDialogInput | null>(null);
@@ -298,7 +299,7 @@ export function VerifyDialogController() {
                                     </CollapsibleTrigger>
                                 </Collapsible>
 
-                                {result && result.ok && (
+                                {result && result.ok && view === 'workspace' && (
                                     <Button
                                         size="sm"
                                         variant="secondary"
