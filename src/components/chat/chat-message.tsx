@@ -70,6 +70,9 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
 
         {message.isTyping && (
           <div className="mt-2 space-y-2">
+            {message.waitingMessage && (
+              <div className="text-xs text-muted-foreground">{message.waitingMessage}</div>
+            )}
             <ChatTypingIndicator />
             <div className="mt-3">
               <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
