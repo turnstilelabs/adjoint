@@ -205,24 +205,6 @@ export const useSendExploreMessage = () => {
             }
 
             await runner.output;
-
-            // After the assistant response, refresh artifacts in the background.
-            const convo = [...history, { role: 'user' as const, content: userVisibleText }, { role: 'assistant' as const, content: assistantText }]
-                .map((m) => `[${m.role}] ${m.content}`)
-                .join('\n');
-            const convoTrimmed = convo.length > MAX_BASIS_LEN ? convo.slice(0, MAX_BASIS_LEN) : convo;
-
-            // Run extraction with a separate controller (independent of chat).
-            const extractionController = new AbortController();
-            await runExtraction({
-                request: convoTrimmed,
-                history: [],
-                artifacts: useAppStore.getState().exploreArtifacts ?? null,
-                seed: useAppStore.getState().exploreSeed ?? null,
-                extractOnly: true,
-                turnId,
-                abortSignal: extractionController.signal,
-            });
         } catch (e: unknown) {
             if (!(e && typeof e === 'object' && ('name' in e || 'message' in e) && ((e as { name?: unknown }).name === 'AbortError' || (e as { message?: unknown }).message === 'The operation was aborted.'))) {
                 // eslint-disable-next-line no-console

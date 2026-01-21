@@ -85,6 +85,8 @@ export default function ExploreView() {
     const sendExploreMessage = useSendExploreMessage();
     const [isExtracting, setIsExtracting] = useState(false);
 
+    const lastMsgIsTyping = Boolean(exploreMessages[exploreMessages.length - 1]?.isTyping);
+
     // Auto-extract artifacts whenever the conversation changes (debounced).
     // This removes the need for a manual "Extract statements" button.
     useEffect(() => {
@@ -92,6 +94,9 @@ export default function ExploreView() {
         const hasAnyText = [...exploreMessages].some((m) => (m.content || '').trim().length > 0) || Boolean(exploreSeed?.trim());
         if (!hasAnyText) return;
         if (isExtracting) return;
+        // Avoid running extraction while the assistant is still streaming.
+        // This prevents redundant /api/explore calls and reduces perceived latency.
+        if (lastMsgIsTyping) return;
 
         const t = window.setTimeout(async () => {
             try {
@@ -111,7 +116,7 @@ export default function ExploreView() {
 
         return () => window.clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [exploreMessages.length, exploreSeed]);
+    }, [exploreMessages.length, exploreSeed, lastMsgIsTyping]);
 
     // Allow deleting a single candidate statement from the UI.
     useEffect(() => {
