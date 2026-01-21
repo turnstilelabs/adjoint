@@ -42,7 +42,8 @@ export function useSympyWorker() {
         new Map(),
     );
 
-    const workerVersion = 'v6';
+    // Bump this when editing /public/workers/sympy-worker.js so dev reliably reloads the script.
+    const workerVersion = 'v7';
 
     const ensureWorker = useCallback(() => {
         if (workerRef.current) return workerRef.current;
