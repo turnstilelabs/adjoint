@@ -113,7 +113,19 @@ export function ProofLoading() {
     <div className="mx-auto w-full max-w-4xl p-3 md:p-10 flex flex-col items-center justify-start min-h-screen">
       <Card className="w-full text-left">
         <CardContent className="pt-6">
-          {problem ? <KatexRenderer content={problem} /> : <p>Loading problem statement...</p>}
+          {problem ? (
+            <div
+              className={
+                // Prevent very long statements from pushing the progress/log UI below the fold.
+                // Keep the statement area scrollable during streaming/loading.
+                'max-h-[32vh] overflow-y-auto pr-2'
+              }
+            >
+              <KatexRenderer content={problem} />
+            </div>
+          ) : (
+            <p>Loading problem statement...</p>
+          )}
         </CardContent>
       </Card>
       <div className="mt-12 flex flex-col items-center gap-3 text-muted-foreground">
