@@ -5,6 +5,7 @@ import './globals.css';
 import 'katex/dist/katex.min.css';
 import FeedbackWidget from '@/components/feedback/feedback-widget';
 import { GlobalSelectionOverlay } from '@/components/global-selection-overlay';
+import { VerifyDialogController } from '@/components/sympy/verify-dialog';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         {children}
         <GlobalSelectionOverlay />
+        <VerifyDialogController />
         {/* Global, non-intrusive feedback widget */}
         <FeedbackWidget />
         <Toaster />

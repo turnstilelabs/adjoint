@@ -505,11 +505,11 @@ export default function WorkspaceView() {
               prev.map((m, idx) =>
                 idx === prev.length - 1
                   ? ({
-                      ...m,
-                      role: 'assistant',
-                      isTyping: true,
-                      content: String(m.content || '') + delta,
-                    } as any)
+                    ...m,
+                    role: 'assistant',
+                    isTyping: true,
+                    content: String(m.content || '') + delta,
+                  } as any)
                   : m,
               ),
             );
@@ -941,7 +941,7 @@ export default function WorkspaceView() {
                   anchor={selection.anchor}
                   selectedText={selection.text}
                   copyText={selection.text}
-                  onRevise={() => {}}
+                  onRevise={() => { }}
                   canCheckAgain={false}
                   showCheckAgain={false}
                   showRevise={false}
@@ -949,7 +949,8 @@ export default function WorkspaceView() {
                   showAskAI={true}
                   showProveThis={true}
                   showAddToReview={true}
-                  buttonOrder={['copy', 'addToReview', 'proveThis', 'askAI']}
+                  // Put Verify before Ask AI (chat) in the selection toolbar.
+                  buttonOrder={['copy', 'addToReview', 'verify', 'proveThis', 'askAI']}
                   onProveThis={() => openProveModalFromSelection()}
                   onAddToReview={({ selectionLatex }) => {
                     const view = cmRef.current?.view;
