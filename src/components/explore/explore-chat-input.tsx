@@ -1,7 +1,7 @@
 'use client';
 
 import { Textarea } from '@/components/ui/textarea';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
@@ -9,7 +9,7 @@ import { useAppStore } from '@/state/app-store';
 
 export function ExploreChatInput() {
     const sendMessage = useSendExploreMessage();
-    const [isSendingMessage, startSendMessage] = useTransition();
+    const [isSendingMessage, setIsSendingMessage] = useState(false);
     const [input, setInput] = useState('');
     const draft = useAppStore((s) => s.exploreDraft);
     const draftNonce = useAppStore((s) => s.exploreDraftNonce);
@@ -38,7 +38,7 @@ export function ExploreChatInput() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draftNonce]);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         const trimmed = input.trim();
         if (!trimmed) return;
 
@@ -46,9 +46,13 @@ export function ExploreChatInput() {
         // If this is a proof request, the send hook will:
         //   1) run extract-only (to ensure a statement exists)
         //   2) then open the chooser (option 2 UX)
-
-        startSendMessage(() => sendMessage(trimmed));
+        setIsSendingMessage(true);
         setInput('');
+        try {
+            await sendMessage(trimmed);
+        } finally {
+            setIsSendingMessage(false);
+        }
     };
 
 

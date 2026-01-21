@@ -6,6 +6,7 @@ import 'katex/dist/katex.min.css';
 import FeedbackWidget from '@/components/feedback/feedback-widget';
 import { GlobalSelectionOverlay } from '@/components/global-selection-overlay';
 import { VerifyDialogController } from '@/components/sympy/verify-dialog';
+import { WarmupClient } from '@/components/warmup-client';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -43,6 +44,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${poppins.variable} ${sourceCodePro.variable}`}>
       <head></head>
       <body className="font-body antialiased">
+        <WarmupClient />
         {children}
         <GlobalSelectionOverlay />
         <VerifyDialogController />
