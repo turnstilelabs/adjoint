@@ -1,5 +1,13 @@
 'use client';
-import { HelpCircle, Edit, MessageSquareText, Copy, Sparkles, CheckSquare } from 'lucide-react';
+import {
+  HelpCircle,
+  Edit,
+  MessageSquareText,
+  Copy,
+  Sparkles,
+  CheckSquare,
+  CheckCircle,
+} from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
@@ -25,9 +33,9 @@ async function copyWithFormat(text: string, html?: string) {
         typeof html === 'string' && html.trim().length > 0
           ? html
           : `<pre style="white-space:pre-wrap">${t
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')}</pre>`;
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')}</pre>`;
       const item = new (window as any).ClipboardItem({
         'text/plain': new Blob([t], { type: 'text/plain' }),
         'text/html': new Blob([safeHtml], { type: 'text/html' }),
@@ -85,6 +93,13 @@ interface SelectionToolbarProps {
   /** Optional override for Ask AI behavior (e.g. Workspace selection -> open chat). */
   onAskAI?: () => void;
 
+  /**
+   * Optional SymPy verification action.
+   * If no handler is provided, we dispatch a global browser event (`adjoint:sympyVerify`).
+   */
+  showVerify?: boolean;
+  onVerify?: (opts: { selectionText: string; selectionLatex: string }) => void;
+
   /** Optional action for Workspace: add selection to Review by wrapping it in a theorem-like env. */
   showAddToReview?: boolean;
   onAddToReview?: (opts: { selectionText: string; selectionLatex: string }) => void;
@@ -96,7 +111,14 @@ interface SelectionToolbarProps {
    * Workspace can pass e.g. ['copy','addToReview','proveThis','askAI'].
    */
   buttonOrder?: Array<
-    'addToReview' | 'copy' | 'askAI' | 'proveThis' | 'checkAgain' | 'editSelection' | 'revise'
+    | 'addToReview'
+    | 'copy'
+    | 'verify'
+    | 'askAI'
+    | 'proveThis'
+    | 'checkAgain'
+    | 'editSelection'
+    | 'revise'
   >;
 }
 
@@ -111,12 +133,14 @@ export function SelectionToolbar({
   showEditSelection = false,
   onEditSelection,
   showCopy = true,
+  showVerify = true,
   showAskAI = true,
   showCheckAgain = true,
   showRevise = true,
   showProveThis = false,
   onProveThis,
   onAskAI,
+  onVerify,
   showAddToReview = false,
   onAddToReview,
   buttonOrder,
@@ -205,6 +229,7 @@ export function SelectionToolbar({
   const defaultOrder: NonNullable<SelectionToolbarProps['buttonOrder']> = [
     'addToReview',
     'copy',
+    'verify',
     'askAI',
     'proveThis',
     'checkAgain',
@@ -283,6 +308,47 @@ export function SelectionToolbar({
                   title="Copy"
                 >
                   <Copy className="h-4 w-4" />
+                </Button>
+              );
+            }
+
+            if (k === 'verify') {
+              if (!showVerify) return null;
+              return (
+                <Button
+                  key={k}
+                  variant="ghost"
+                  size="icon"
+                  // Prevent the click from collapsing the current selection before we read it.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    const fromSelection = computeCopyTextFromLiveSelection();
+                    const selectionLatex = (fromSelection || selectedText || '').trim();
+                    const selectionTextPlain = (selectedText || '').trim();
+                    if (!selectionLatex && !selectionTextPlain) return;
+
+                    if (typeof onVerify === 'function') {
+                      onVerify({ selectionText: selectionTextPlain, selectionLatex });
+                      return;
+                    }
+
+                    // Default global handler: let the app open a verify dialog.
+                    try {
+                      window.dispatchEvent(
+                        new CustomEvent('adjoint:sympyVerify', {
+                          detail: {
+                            selectionText: selectionTextPlain,
+                            selectionLatex,
+                          },
+                        }),
+                      );
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  title="Verify (SymPy)"
+                >
+                  <CheckCircle className="h-4 w-4" />
                 </Button>
               );
             }
