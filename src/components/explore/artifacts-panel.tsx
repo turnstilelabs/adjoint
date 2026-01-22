@@ -247,9 +247,10 @@ export function ArtifactsPanel({
                     )}
                     {a.candidateStatements.length === 0 ? (
                         <div className="space-y-3">
-                            <div className="text-sm text-muted-foreground">
-                                {isExtracting ? 'Extracting…' : 'No statement extracted yet.'}
-                            </div>
+                            {!isExtracting && (
+                                <div className="text-sm text-muted-foreground">No statement extracted yet.</div>
+                            )}
+
                             {isExtracting && (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <Loader2 className="h-4 w-4 animate-spin" />
