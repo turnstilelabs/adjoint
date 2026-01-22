@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter, Poppins, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
@@ -42,7 +43,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`dark ${inter.variable} ${poppins.variable} ${sourceCodePro.variable}`}>
-      <head></head>
+      <head>
+        {/* GoatCounter analytics */}
+        <Script
+          src="https://gc.zgo.at/count.js"
+          data-goatcounter="https://adjoint.goatcounter.com/count"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className="font-body antialiased">
         <WarmupClient />
         {children}
