@@ -6,7 +6,7 @@ It’s built around a simple workflow:
 
 1. **Explore**: to turn a problem or a question into candidate statements together with their assumptions.
 2. **Prove**: to transform a first proof into a structured proof, decomposed into smaller lemmas, that you can easily iterate on.
-
+3. **Write**: to write and iterate on mathematical notes, check and review statements. 
 
 ![The Adjoint](docs/images/homepage.png)
 ---
@@ -37,7 +37,16 @@ Keep a **version history** so you can revisit earlier attempts.
 
 And last but not least, **Export to LaTeX** (`proof.tex`).
 
----
+### Workspace mode to write and review mathematical notes
+
+Write a mathematical document with direct in-context actions (chat, prove, review,...)
+![Workspace](docs/images/workspace.png)
+
+Review notes artifacts (lemmas, propositions, theorems,...). Those are automatically extracted through a regex heuristic if in proper LaTeX environment.
+![Workspace Artifact](docs/images/review.png)
+
+Check artifact consistency and send to the prover mode if needed.
+![Workspace Review](docs/images/review_result.png)
 
 ## Quick start
 
@@ -54,7 +63,7 @@ npm install
 
 ### Configure an LLM provider
 
-Create `adjoint/.env.local` where you should specify either Gemini or OpenAI API keys.
+Create `adjoint/.env.local` where you should specify either Gemini or OpenAI API keys. 
 
 **Google (Gemini)**
 
@@ -77,44 +86,6 @@ npm run dev
 ```
 
 Then open the Adjoint at **http://localhost:9002** (or whatever port you configured).
-
----
-
-## Optional app unlock gate (recommended for public deployments)
-
-The Adjoint includes an **optional password gate** intended for deployments on the internet.
-
-**Defaults**
-
-- Local development (`npm run dev`): **disabled** (no password required)
-- Production (`NODE_ENV=production`): **enabled** (password required)
-
-### Enable / configure (production)
-
-Set an unlock password in your deployment environment:
-
-```bash
-APP_UNLOCK_PASSWORD=your-strong-password
-```
-
-If `APP_UNLOCK_PASSWORD` is missing in production, the app will **fail closed** (users will be redirected to `/unlock` but unlocking will error until the password is configured).
-
-### Disable (public deployment)
-
-To make a production deployment public, explicitly disable the gate:
-
-```bash
-APP_UNLOCK_ENABLED=FALSE
-```
-
-### Enable locally (optional)
-
-If you want to test the gate locally:
-
-```bash
-APP_UNLOCK_ENABLED=TRUE
-APP_UNLOCK_PASSWORD=dev-password
-```
 
 ---
 
