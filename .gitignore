@@ -46,3 +46,6 @@ firestore-debug.log
 
 # intellij
 .idea/workspace.xml
+
+# local documentation
+README.local.md
