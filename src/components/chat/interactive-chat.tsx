@@ -26,6 +26,8 @@ export type Message = {
     updated?: boolean;
   };
   isTyping?: boolean;
+  /** Optional short line shown before the typing dots (used by Explore chat). */
+  waitingMessage?: string;
   offTopic?: boolean;
   noImpact?: boolean;
 };

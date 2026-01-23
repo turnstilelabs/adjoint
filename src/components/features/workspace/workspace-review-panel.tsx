@@ -79,9 +79,31 @@ function cleanFeedback(s: unknown): string {
   return String(s ?? '').trim();
 }
 
+function buildProverPayloadFromReview(opts: {
+  doc: string;
+  artifactStartChar: number;
+  statement: string;
+  proof?: string | null;
+}): string {
+  const ctx = buildPaperContextBefore(opts.doc || '', opts.artifactStartChar || 0).trim();
+
+  // IMPORTANT: per UX requirement, we do NOT add any LaTeX wrappers when sending to the prover.
+  // We also avoid sending \label{...} tokens.
+  const statementNoLabel = stripFirstLabelFromBody(opts.statement || '').body.trim();
+  const proofNoLabel = stripFirstLabelFromBody(opts.proof || '').body.trim();
+
+  const parts: string[] = [];
+  if (ctx) parts.push(ctx);
+  if (statementNoLabel) parts.push(statementNoLabel);
+  if (proofNoLabel) parts.push(proofNoLabel);
+
+  return parts.join('\n\n').trim();
+}
+
 export function WorkspaceReviewPanel() {
   const { toast } = useToast();
   const doc = useAppStore((s) => s.workspaceDoc);
+  const startProof = useAppStore((s) => s.startProof);
 
   const macros = useMemo(() => extractKatexMacrosFromLatexDocument(doc || ''), [doc]);
 
@@ -595,6 +617,35 @@ export function WorkspaceReviewPanel() {
                       <div className="rounded-md border bg-muted/20 p-3 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <ReviewVerdictBadge v={results[artifactKey(active)].verdict} />
+
+                          {results[artifactKey(active)].verdict !== 'OK' && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                if (!active) return;
+                                const payload = buildProverPayloadFromReview({
+                                  doc: doc || '',
+                                  artifactStartChar: active.artifactStartChar,
+                                  statement: activeStatement,
+                                  proof: active.proofBlock ? activeProof : null,
+                                });
+
+                                if (!payload) {
+                                  toast({
+                                    title: 'Nothing to prove',
+                                    description:
+                                      'Could not build a statement/proof payload for the prover.',
+                                  });
+                                  return;
+                                }
+
+                                // Jump to the prover/proof page with the inferred context.
+                                void startProof(payload);
+                              }}
+                            >
+                              Prove this
+                            </Button>
+                          )}
                         </div>
 
                         <KatexRenderer
@@ -658,20 +709,20 @@ export function WorkspaceReviewPanel() {
                               {Boolean(
                                 (results as any)[artifactKey(active)]?.suggestedImprovement,
                               ) && (
-                                <div>
-                                  <div className="text-xs font-medium text-muted-foreground">
-                                    Suggested improvement
+                                  <div>
+                                    <div className="text-xs font-medium text-muted-foreground">
+                                      Suggested improvement
+                                    </div>
+                                    <KatexRenderer
+                                      content={cleanFeedback(
+                                        (results as any)[artifactKey(active)]?.suggestedImprovement,
+                                      )}
+                                      autoWrap={true}
+                                      className="text-sm"
+                                      macros={macros}
+                                    />
                                   </div>
-                                  <KatexRenderer
-                                    content={cleanFeedback(
-                                      (results as any)[artifactKey(active)]?.suggestedImprovement,
-                                    )}
-                                    autoWrap={true}
-                                    className="text-sm"
-                                    macros={macros}
-                                  />
-                                </div>
-                              )}
+                                )}
                             </div>
                           </CollapsibleContent>
                         </Collapsible>

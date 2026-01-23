@@ -32,6 +32,20 @@ export const useSendExploreMessage = () => {
     const setExploreCancelCurrent = useAppStore((s) => s.setExploreCancelCurrent);
     const { toast } = useToast();
 
+    const WAITING_MESSAGES = [
+        'Integrating ideas…',
+        'Factoring in the details…',
+        'Taking it to the next step…',
+    ] as const;
+
+    const pickWaitingMessage = () => {
+        try {
+            return WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)];
+        } catch {
+            return WAITING_MESSAGES[0];
+        }
+    };
+
     // Avoid streaming huge payloads.
     const MAX_BASIS_LEN = 4000;
 
@@ -48,7 +62,8 @@ export const useSendExploreMessage = () => {
             url: '/api/explore',
             ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
             input: {
-                seed: input.seed ?? undefined,
+                // Schema expects either a string or omission; never null.
+                seed: input.seed == null ? undefined : input.seed,
                 request: input.request,
                 history: input.history ?? [],
                 artifacts: input.artifacts ?? undefined,
@@ -155,7 +170,7 @@ export const useSendExploreMessage = () => {
                     request: basisTrimmed,
                     history,
                     artifacts: liveArtifacts ?? null,
-                    seed: seed ?? null,
+                    seed: liveSeed ?? undefined,
                     extractOnly: true,
                     turnId,
                     // No abortSignal for background extraction.
@@ -167,7 +182,14 @@ export const useSendExploreMessage = () => {
         }
 
         // Normal send: stream response via the same backend as Workspace.
-        const typingMessage: Message = { role: 'assistant', content: '', isTyping: true };
+        const typingMessage: Message = {
+            role: 'assistant',
+            content: '',
+            isTyping: true,
+            // Nice little line shown before the 3-dot typing indicator.
+            // Picked once per request so it doesn't flicker while streaming tokens.
+            waitingMessage: pickWaitingMessage(),
+        };
         setExploreMessages([...newMessages, typingMessage]);
 
         let assistantText = '';
@@ -205,24 +227,6 @@ export const useSendExploreMessage = () => {
             }
 
             await runner.output;
-
-            // After the assistant response, refresh artifacts in the background.
-            const convo = [...history, { role: 'user' as const, content: userVisibleText }, { role: 'assistant' as const, content: assistantText }]
-                .map((m) => `[${m.role}] ${m.content}`)
-                .join('\n');
-            const convoTrimmed = convo.length > MAX_BASIS_LEN ? convo.slice(0, MAX_BASIS_LEN) : convo;
-
-            // Run extraction with a separate controller (independent of chat).
-            const extractionController = new AbortController();
-            await runExtraction({
-                request: convoTrimmed,
-                history: [],
-                artifacts: useAppStore.getState().exploreArtifacts ?? null,
-                seed: useAppStore.getState().exploreSeed ?? null,
-                extractOnly: true,
-                turnId,
-                abortSignal: extractionController.signal,
-            });
         } catch (e: unknown) {
             if (!(e && typeof e === 'object' && ('name' in e || 'message' in e) && ((e as { name?: unknown }).name === 'AbortError' || (e as { message?: unknown }).message === 'The operation was aborted.'))) {
                 // eslint-disable-next-line no-console

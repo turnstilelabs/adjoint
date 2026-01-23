@@ -1,6 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { validateStatementAction } from '@/app/actions';
 import { useAppStore } from '@/state/app-store';
 import { Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -39,25 +38,12 @@ function EditableProblemCard() {
         setEditError('Please enter a problem to solve.');
         return;
       }
-      console.debug('[UI][EditableProblemCard] validate edited problem len=', trimmed.length);
-      const result = await validateStatementAction(trimmed);
-      console.debug('[UI][EditableProblemCard] validation done validity=', (result as any)?.validity);
-      if ('validity' in result && result.validity === 'VALID') {
-        console.debug('[UI][EditableProblemCard] calling startProof');
-        setIsEditing(false);
-        await startProof(trimmed);
-      } else if ('validity' in result) {
-        setEditError('Looks like that’s not math! This app only works with math problems.');
-      } else {
-        const errorMessage =
-          result.error || 'An unexpected error occurred while validating the problem.';
-        setEditError(errorMessage);
-        toast({
-          title: 'Validation Error',
-          description: errorMessage,
-          variant: 'destructive',
-        });
-      }
+
+      // UX: do not gate statement edits behind a “is this math?” classifier.
+      // Let the prover pipeline decide how to handle the input.
+      console.debug('[UI][EditableProblemCard] calling startProof');
+      setIsEditing(false);
+      await startProof(trimmed);
     });
   };
 
@@ -129,7 +115,11 @@ function EditableProblemCard() {
                   setIsEditing(true);
                 }}
                 style={{ cursor: 'pointer' }}
-                className={hasSuggestion ? 'rounded-md p-2' : undefined}
+                className={
+                  // Prevent very long statements from pushing the whole proof UI off-screen.
+                  // Keep the problem area scrollable instead.
+                  `max-h-[32vh] overflow-y-auto pr-2 ${hasSuggestion ? 'rounded-md p-2' : ''}`
+                }
                 data-selection-enabled="1"
               >
                 <KatexRenderer content={problem} />

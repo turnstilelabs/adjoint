@@ -14,6 +14,7 @@ import { decomposeRawProof, type DecomposeRawProofOutput } from '@/ai/flows/deco
 import { llmModel } from '@/ai/genkit';
 import { normalizeModelError } from '@/lib/model-error-core';
 import { createHash, randomUUID } from 'node:crypto';
+import { convertSelectionToSympySpec, type SymPySpec } from '@/ai/flows/convert-selection-to-sympy-spec';
 
 const isDev = process.env.NODE_ENV !== 'production';
 const IDEMPOTENCY_TTL_MS = 2 * 60 * 1000; // 2 minutes
@@ -42,13 +43,13 @@ export type ValidateRawProofActionResult =
 
 export type ReviewArtifactSoundnessActionResult =
   | ({ success: true } & {
-      verdict: 'OK' | 'ISSUE' | 'UNCLEAR';
-      summary: string;
-      correctness: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
-      clarity: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
-      suggestedImprovement?: string;
-      model: string;
-    })
+    verdict: 'OK' | 'ISSUE' | 'UNCLEAR';
+    summary: string;
+    correctness: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
+    clarity: { verdict: 'OK' | 'ISSUE' | 'UNCLEAR'; feedback: string };
+    suggestedImprovement?: string;
+    model: string;
+  })
   | { success: false; error: string };
 
 // Decompose and Graph caches (dev-only)
@@ -60,11 +61,68 @@ const graphCache: Map<string, CacheEntry<GraphActionResult>> = new Map();
 const attemptCache: Map<string, CacheEntry<AttemptProofActionResult>> = new Map();
 const decomposeRawCache: Map<string, CacheEntry<DecomposeRawProofActionResult>> = new Map();
 
+// Convert-selection cache (dev-only, short-lived)
+const sympySpecCache: Map<string, CacheEntry<{ success: true; spec: SymPySpec } | { success: false; error: string }>> =
+  new Map();
+
 function hashPayload(payload: unknown): string {
   try {
     return createHash('sha1').update(JSON.stringify(payload)).digest('hex').slice(0, 8);
   } catch {
     return 'na';
+  }
+}
+
+export async function convertSelectionToSympySpecAction(input: {
+  selectionLatex: string;
+  selectionText: string;
+}): Promise<{ success: true; spec: SymPySpec } | { success: false; error: string }> {
+  const { reqId, hash } = logStart('convertSelectionToSympySpec', {
+    selectionLatexLen: input?.selectionLatex?.length ?? 0,
+    selectionTextLen: input?.selectionText?.length ?? 0,
+  });
+
+  const payloadKey = hashPayload(input);
+
+  if (isDev) {
+    const now = Date.now();
+    const existing = sympySpecCache.get(payloadKey);
+    if (existing?.pending) {
+      console.info(`[SA][convertSelectionToSympySpec] dedupe pending reqId=${reqId} hash=${hash}`);
+      return existing.pending;
+    }
+    if (existing?.value && now - existing.ts < IDEMPOTENCY_TTL_MS) {
+      console.info(`[SA][convertSelectionToSympySpec] cache hit reqId=${reqId} hash=${hash}`);
+      return existing.value;
+    }
+
+    const pending = (async () => {
+      try {
+        const spec = await convertSelectionToSympySpec(input);
+        const result = { success: true as const, spec };
+        logSuccess('convertSelectionToSympySpec', reqId, hash);
+        sympySpecCache.set(payloadKey, { value: result, ts: Date.now() });
+        return result;
+      } catch (error) {
+        logError('convertSelectionToSympySpec', reqId, hash, error);
+        sympySpecCache.delete(payloadKey);
+        const norm = normalizeModelError(error);
+        return { success: false as const, error: norm.message };
+      }
+    })();
+
+    sympySpecCache.set(payloadKey, { pending, ts: now });
+    return pending;
+  }
+
+  try {
+    const spec = await convertSelectionToSympySpec(input);
+    logSuccess('convertSelectionToSympySpec', reqId, hash);
+    return { success: true as const, spec };
+  } catch (error) {
+    logError('convertSelectionToSympySpec', reqId, hash, error);
+    const norm = normalizeModelError(error);
+    return { success: false as const, error: norm.message };
   }
 }
 
@@ -187,8 +245,7 @@ function logSuccess(action: string, reqId: string, hash: string) {
 function logError(action: string, reqId: string, hash: string, err: unknown) {
   const at = new Date().toISOString();
   console.error(
-    `[SA][${action}] error reqId=${reqId} hash=${hash} at=${at} msg=${
-      err instanceof Error ? err.message : String(err)
+    `[SA][${action}] error reqId=${reqId} hash=${hash} at=${at} msg=${err instanceof Error ? err.message : String(err)
     }`,
   );
 }

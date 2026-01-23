@@ -8,11 +8,9 @@ import { useRouter } from 'next/navigation';
 import type { HomeMode } from '@/components/features/home/home-mode-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
-import { validateStatementAction } from '@/app/actions';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from './ui/alert';
 import { useAppStore } from '@/state/app-store';
-import { showModelError, getModelErrorMessage } from '@/lib/model-errors';
 
 export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
   const lastProblem = useAppStore((s) => s.lastProblem);
@@ -23,7 +21,6 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
   const router = useRouter();
   const startProof = useAppStore((s) => s.startProof);
   const startExplore = useAppStore((s) => s.startExplore);
-  const goBack = useAppStore((s) => s.goBack);
 
   const submitProblem = async (text: string) => {
     const trimmedProblem = text.trim();
@@ -32,28 +29,10 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
       return;
     }
     setError(null);
-    const validationResult = await validateStatementAction(trimmedProblem);
 
-    if ('validity' in validationResult && validationResult.validity === 'VALID') {
-      await startProof(trimmedProblem);
-    } else if ('validity' in validationResult) {
-      // The statement was validated but not as a valid math problem
-      setError('Looks like that’s not math! This app only works with math problems.');
-    } else {
-      const friendlyDefault =
-        'Adjoint’s connection to the model was interrupted, please go back and retry.';
-      const code = showModelError(toast, (validationResult as any).error, goBack, 'Validation error');
-      if (code) {
-        setError(getModelErrorMessage(code));
-      } else {
-        setError(friendlyDefault);
-        toast({
-          title: 'Validation error',
-          description: friendlyDefault,
-          variant: 'destructive',
-        });
-      }
-    }
+    // UX: do not gate the Prove flow behind a “is this math?” validator.
+    // Let the proof attempt pipeline handle arbitrary input.
+    await startProof(trimmedProblem);
   };
 
   const runExplore = () => {
