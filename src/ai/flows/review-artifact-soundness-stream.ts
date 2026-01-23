@@ -8,6 +8,7 @@ import {
   type ReviewArtifactInput,
   type ReviewArtifactOutput,
 } from '@/ai/flows/review-artifact-soundness.schemas';
+import { buildReviewArtifactSoundnessMessages } from '@/ai/flows/review-artifact-soundness.prompt';
 
 /**
  * Streamed chunk variants emitted during artifact review.
@@ -65,46 +66,7 @@ export async function reviewArtifactSoundnessStreamOrchestrator(
     candidates.push(llmId);
   }
 
-  const system =
-    'You are a precise JSON API. Return ONLY a single JSON object matching the schema. No markdown, no extra keys.';
-
-  const hasProof = Boolean((input.proof ?? '').trim());
-  const ctx = (input.paperContextBefore ?? '').trim();
-  const user = `You are a meticulous mathematics referee reviewing a single artifact extracted from a LaTeX article.
-
-Artifact type: ${input.type}
-Environment: ${input.envName}
-Title: ${input.title ?? ''}
-Label: ${input.label ?? ''}
-
-Context (paper content before this artifact):
-"""
-${ctx || '[no context provided]'}
-"""
-
-Statement (as LaTeX/prose):
-"""
-${input.content}
-"""
-
-${hasProof ? `Proof (as LaTeX/prose):\n"""\n${input.proof}\n"""\n` : 'No proof is provided.'}
-
-Task:
-Return a structured review with two categories:
-- correctness: mathematical correctness / logical validity AND checkability (missing assumptions/steps that prevent verification).
-- clarity: exposition quality (definitions, notation, readability).
-
-Also provide:
-- suggestedImprovement: concrete, minimal suggestions to improve correctness/clarity (no full rewrite).
-
-Also provide:
-- summary: 1–3 sentences.
-- verdict: overall verdict (reflecting the worst category).
-
-Output requirements:
-- Use the provided JSON schema exactly.
-- Do not propose edits.
-`;
+  const { system, prompt: user } = buildReviewArtifactSoundnessMessages(input);
 
   let fullText = '';
   let lastErr: ReturnType<typeof normalizeModelError> | null = null;
