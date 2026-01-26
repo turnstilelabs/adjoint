@@ -18,9 +18,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useEffect, useState } from 'react';
-import { ConfirmResetDialog } from '@/components/confirm-reset-dialog';
+import { useRouter } from 'next/navigation';
 
 export function ProofSidebar() {
+  const router = useRouter();
   const { toast } = useToast();
 
   // Hover hint coming from the “Where to go from here” callout.
@@ -43,7 +44,6 @@ export function ProofSidebar() {
   }, []);
 
   const [openAnalyzeConfirm, setOpenAnalyzeConfirm] = useState(false);
-  const [openResetConfirm, setOpenResetConfirm] = useState(false);
   const [openAddToWorkspaceConfirm, setOpenAddToWorkspaceConfirm] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
@@ -65,11 +65,11 @@ export function ProofSidebar() {
   const isAnalyzingProof = useAppStore((s) => s.isAnalyzingProof);
   const runDecomposition = useAppStore((s) => s.runDecomposition);
   const hasUserEditedStructuredForCurrentRaw = useAppStore((s) => s.hasUserEditedStructuredForCurrentRaw);
-  const reset = useAppStore((s) => s.reset);
   const goToWorkspace = useAppStore((s) => s.goToWorkspace);
 
   const onClickLogo = () => {
-    setOpenResetConfirm(true);
+    // Phase 1 routing: preserve in-memory state, just navigate home.
+    router.push('/');
   };
 
   const hasStructuredSteps = (proof?.sublemmas?.length ?? 0) > 0;
@@ -221,6 +221,7 @@ export function ProofSidebar() {
         return;
       }
       goToWorkspace({ from: 'proof', append: snippet });
+      router.push('/workspace');
       toast({
         title: 'Added to Workspace',
         description: 'The current proof was appended to your workspace draft.',
@@ -447,11 +448,6 @@ export function ProofSidebar() {
         </AlertDialog>
       )}
 
-      <ConfirmResetDialog
-        open={openResetConfirm}
-        onOpenChange={setOpenResetConfirm}
-        onConfirm={reset}
-      />
     </>
   );
 }

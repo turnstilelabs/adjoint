@@ -1,35 +1,6 @@
-'use client';
-
-import type { View } from '@/state/store.types';
-
-/**
- * Minimal browser history integration for the in-app view state.
- *
- * Why: our app uses a single Next.js route and switches modes via Zustand state.
- * If users use the browser Back/Forward buttons, we still want to restore the
- * previous in-app view (e.g. Workspace -> Prove) without losing the current
- * proof/explore session.
- */
-export const pushAppViewToHistory = (
-  view: View,
-  extra?: { lastViewBeforeWorkspace?: View | null },
-) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const cur = window.history.state as any;
-    // Avoid pushing duplicate entries.
-    if (cur?.adjointInternal === true && cur?.adjointView === view) return;
-    window.history.pushState(
-      {
-        ...(cur || {}),
-        adjointInternal: true,
-        adjointView: view,
-        adjointLastViewBeforeWorkspace: extra?.lastViewBeforeWorkspace ?? null,
-      },
-      '',
-      window.location.href,
-    );
-  } catch {
-    // ignore
-  }
-};
+// Deprecated.
+//
+// The app used to rely on a single URL and encode "view" transitions in
+// window.history.state. We now use real Next.js routes for navigation.
+// This file is kept temporarily to avoid import breakage during migration.
+export { };

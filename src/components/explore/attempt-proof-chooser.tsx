@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { EditableArtifactItem } from '@/components/explore/editable-artifact-item';
+import { useRouter } from 'next/navigation';
 
 export function AttemptProofChooser({
     open,
@@ -17,10 +18,10 @@ export function AttemptProofChooser({
     title?: string;
     description?: string;
 }) {
+    const router = useRouter();
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const edits = useAppStore((s) => s.exploreArtifactEdits);
     const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
-    const promoteToProof = useAppStore((s) => s.promoteToProof);
 
     const candidates = artifacts?.candidateStatements ?? [];
     const [selectedIdx, setSelectedIdx] = React.useState<number>(0);
@@ -37,7 +38,7 @@ export function AttemptProofChooser({
         const stmt = ((edits.candidateStatements[original] ?? original) ?? '').trim();
         if (!stmt) return;
         onOpenChange(false);
-        await promoteToProof(stmt);
+        router.push(`/prove?q=${encodeURIComponent(stmt)}`);
     };
 
     return (

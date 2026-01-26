@@ -3,11 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/state/app-store';
 import ExploreView from '@/components/features/explore/explore-view';
-import ProofView from '@/components/features/proof/proof-view';
-import WorkspaceView from '@/components/features/workspace/workspace-view';
-import HomeView from '@/components/features/home/home-view';
 import { AppViewport } from '@/components/app-viewport';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
+import { RouteViewSync } from '@/components/route-view-sync';
 
 /**
  * Client-side Explore route body.
@@ -65,15 +63,8 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
 
     return (
         <AppViewport>
-            {view === 'proof' ? (
-                <ProofView />
-            ) : view === 'workspace' ? (
-                <WorkspaceView />
-            ) : view === 'explore' ? (
-                <ExploreView />
-            ) : (
-                <HomeView />
-            )}
+            <RouteViewSync view="explore" />
+            <ExploreView />
         </AppViewport>
     );
 }

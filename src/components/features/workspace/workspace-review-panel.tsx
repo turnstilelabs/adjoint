@@ -16,6 +16,7 @@ import AdjointProse from '@/components/adjoint-prose';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
+import { useRouter } from 'next/navigation';
 
 function artifactKey(a: ExtractedArtifact): string {
   const label = (a.label ?? '').trim();
@@ -102,8 +103,8 @@ function buildProverPayloadFromReview(opts: {
 
 export function WorkspaceReviewPanel() {
   const { toast } = useToast();
+  const router = useRouter();
   const doc = useAppStore((s) => s.workspaceDoc);
-  const startProof = useAppStore((s) => s.startProof);
 
   const macros = useMemo(() => extractKatexMacrosFromLatexDocument(doc || ''), [doc]);
 
@@ -640,7 +641,7 @@ export function WorkspaceReviewPanel() {
                                 }
 
                                 // Jump to the prover/proof page with the inferred context.
-                                void startProof(payload);
+                                router.push(`/prove?q=${encodeURIComponent(payload)}`);
                               }}
                             >
                               Prove this
