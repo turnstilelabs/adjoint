@@ -9,8 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { RefreshCw, Pencil, Info } from 'lucide-react';
 import { openFeedback } from '@/components/feedback/feedback-widget';
 import { KatexRenderer } from '@/components/katex-renderer';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function ProofView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const deriveErrorTitle = (code?: string | null, msg?: string | null) => {
     switch (code) {
       case 'MODEL_AUTH_INVALID': return 'Model credentials issue';
@@ -56,6 +60,19 @@ export default function ProofView() {
     acceptSuggestedChange: s.acceptSuggestedChange,
     clearSuggestion: s.clearSuggestion,
   }));
+
+  const hasProof = !!proof();
+  const q = (searchParams?.get('q') || '').trim();
+
+  // If the user lands on /prove without an active proof (e.g. after a cancel/reset),
+  // redirect to home without flashing an intermediate empty state.
+  useEffect(() => {
+    // Only redirect away from /prove when there is no active proof AND no explicit query.
+    // If `q` exists, ProveClientPage will start the proof attempt in an effect shortly.
+    if (!q && !loading && !hasProof && !error && !pendingSuggestion) {
+      router.replace('/');
+    }
+  }, [q, loading, hasProof, error, pendingSuggestion, router]);
 
   if (!loading && error) {
     return (
@@ -187,12 +204,7 @@ export default function ProofView() {
     return <ProofLoading />;
   }
 
-  if (!proof()) {
-    // With the new split-phase pipeline, we can temporarily have no structured proof
-    // (we still want to render the proof view so the user can edit raw proof).
-    // A minimal placeholder version will be created in the store when the draft completes.
-    return <ProofLoading />;
-  }
+  if (!hasProof) return null;
 
   return <ProofDisplay />;
 }

@@ -75,9 +75,10 @@ function ResizableAside({ children }: { children: React.ReactNode }) {
 
 import { ExploreSidebar } from '@/components/explore-sidebar';
 import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
+import { useRouter } from 'next/navigation';
 
 export default function ExploreView() {
-    const promoteToProof = useAppStore((s) => s.promoteToProof);
+    const router = useRouter();
     const [openAttemptProof, setOpenAttemptProof] = useState(false);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const exploreMessages = useAppStore((s) => s.exploreMessages);
@@ -160,7 +161,9 @@ export default function ExploreView() {
                         <ResizableAside>
                             <ArtifactsPanel
                                 artifacts={artifacts}
-                                onPromote={(statement: string) => promoteToProof(statement)}
+                                onPromote={(statement: string) =>
+                                    router.push(`/prove?q=${encodeURIComponent(statement)}`)
+                                }
                                 isExtracting={isExtracting}
                             />
                         </ResizableAside>

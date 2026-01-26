@@ -134,6 +134,8 @@ export type StoreData = {
   pendingRejection: { explanation: string } | null;
   // Streaming progress
   progressLog: string[];
+  /** Monotonic run id for the current proof attempt. Used to ignore late callbacks after cancel/restart. */
+  proofAttemptRunId: number;
   // Cancel the current in-flight streaming request (if any)
   cancelCurrent?: (() => void) | null;
   // Live draft streaming (token-level)
@@ -180,6 +182,9 @@ export type StoreData = {
 
 export interface AppState extends StoreData {
   reset: () => void;
+
+  /** Cancel an in-flight proof attempt and restore a consistent non-loading UI state. */
+  cancelProofAttempt: () => void;
 
   /** Navigate back to homepage without clearing current workspace/proof state. */
   goHome: () => void;

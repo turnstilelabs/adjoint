@@ -15,11 +15,6 @@ export default function HomeView() {
   const [mode, setMode] = React.useState<HomeMode>('prove');
   const router = useRouter();
 
-  const newWorkspace = useAppStore((s) => s.newWorkspace);
-  const startWorkspace = useAppStore((s) => s.startWorkspace);
-  const newExplore = useAppStore((s) => s.newExplore);
-  const startExplore = useAppStore((s) => s.startExplore);
-
   const hasDraft = useAppStore((s) => (s.workspaceDoc || '').trim().length > 0);
   const hasExploreSession = useAppStore((s) =>
     s.exploreHasSession ||
@@ -52,9 +47,7 @@ export default function HomeView() {
             <Button
               size="lg"
               onClick={() => {
-                // Fresh empty session (set store first so homepage can immediately show "Continue exploring")
-                newExplore();
-                router.push('/explore');
+                router.push('/explore?new=1');
               }}
             >
               Start exploring
@@ -64,8 +57,6 @@ export default function HomeView() {
                 variant="outline"
                 size="lg"
                 onClick={() => {
-                  // Preserve existing
-                  startExplore();
                   router.push('/explore');
                 }}
               >
@@ -75,11 +66,11 @@ export default function HomeView() {
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2">
-            <Button size="lg" onClick={() => startWorkspace()}>
+            <Button size="lg" onClick={() => router.push('/workspace')}>
               {hasDraft ? 'Continue writing' : 'Start writing'}
             </Button>
             {hasDraft && (
-              <Button variant="outline" size="lg" onClick={() => newWorkspace()}>
+              <Button variant="outline" size="lg" onClick={() => router.push('/workspace?new=1')}>
                 New document
               </Button>
             )}

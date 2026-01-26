@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { useRouter } from 'next/navigation';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView, keymap } from '@codemirror/view';
@@ -97,11 +98,9 @@ function downloadTextFile(filename: string, contents: string) {
 
 export default function WorkspaceView() {
   const { toast } = useToast();
+  const router = useRouter();
   const doc = useAppStore((s) => s.workspaceDoc);
   const setDoc = useAppStore((s) => s.setWorkspaceDoc);
-
-  const startProof = useAppStore((s) => s.startProof);
-  const goHome = useAppStore((s) => s.goHome);
 
   const messages = useAppStore((s) => s.workspaceMessages);
   const setMessages = useAppStore((s) => s.setWorkspaceMessages);
@@ -721,7 +720,7 @@ export default function WorkspaceView() {
             onPromote={(statement: string) => {
               const s = (statement || '').trim();
               if (!s) return;
-              void startProof(s);
+              router.push(`/prove?q=${encodeURIComponent(s)}`);
             }}
             isExtracting={Boolean(workspaceInsightsIsExtracting)}
             edits={workspaceArtifactEdits}
@@ -757,7 +756,7 @@ export default function WorkspaceView() {
           }}
         />
 
-        <div className="mb-6 cursor-pointer" onClick={() => goHome()}>
+        <div className="mb-6 cursor-pointer" onClick={() => router.push('/')}>
           <LogoSmall />
         </div>
 
@@ -1073,7 +1072,7 @@ export default function WorkspaceView() {
                         setIsProveOpen(false);
                         clearSelection();
                         // Switch to dedicated prover mode.
-                        void startProof(payload);
+                        router.push(`/prove?q=${encodeURIComponent(payload)}`);
                       }}
                     >
                       Continue

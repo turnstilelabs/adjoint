@@ -22,7 +22,6 @@ export function ExploreSidebar() {
     const [openProve, setOpenProve] = React.useState(false);
     const [openAddToWorkspace, setOpenAddToWorkspace] = React.useState(false);
 
-    const goHome = useAppStore((s) => s.goHome);
     const goToWorkspace = useAppStore((s) => s.goToWorkspace);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const edits = useAppStore((s) => s.exploreArtifactEdits);
@@ -80,7 +79,6 @@ export function ExploreSidebar() {
                     onClick={(e) => {
                         e.preventDefault();
                         // Preserve Explore progress. No reset confirmation.
-                        goHome();
                         router.push('/');
                     }}
                     className="mb-6 cursor-pointer"

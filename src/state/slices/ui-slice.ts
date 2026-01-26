@@ -1,7 +1,6 @@
 'use client';
 
 import type { AppState } from '@/state/store.types';
-import { pushAppViewToHistory } from '@/state/store.history';
 
 export const createUiSlice = (
   set: any,
@@ -12,7 +11,6 @@ export const createUiSlice = (
 > => ({
   goHome: () => {
     set({ view: 'home' });
-    pushAppViewToHistory('home');
   },
 
   setChatDraft: (text, opts) => {

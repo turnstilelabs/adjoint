@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { X } from 'lucide-react';
@@ -8,9 +9,10 @@ import { TriviaCard } from '@/components/features/proof/trivia-card';
 import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
 
 export function ProofLoading() {
+  const router = useRouter();
   const problem = useAppStore((s) => s.problem);
   const loading = useAppStore((s) => s.loading);
-  const reset = useAppStore((s) => s.reset);
+  const cancelProofAttempt = useAppStore((s) => s.cancelProofAttempt);
   const progressLog = useAppStore((s) => s.progressLog);
   const liveDraft = useAppStore((s) => s.liveDraft);
   const isDraftStreaming = useAppStore((s) => s.isDraftStreaming);
@@ -183,7 +185,13 @@ export function ProofLoading() {
         )}
       </div>
       <div className="mt-8 flex items-center gap-2">
-        <Button variant="outline" onClick={reset}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            cancelProofAttempt();
+            router.push('/');
+          }}
+        >
           <X className="mr-2 h-4 w-4" />
           Cancel
         </Button>

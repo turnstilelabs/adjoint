@@ -7,10 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { KatexRenderer } from '@/components/katex-renderer';
 
-export default function UnlockClient() {
+export default function UnlockClient({ initialNext }: { initialNext?: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const next = useMemo(() => searchParams.get('next') || '/', [searchParams]);
+    const next = useMemo(
+        () => searchParams.get('next') || initialNext || '/',
+        [searchParams, initialNext]
+    );
 
     const [password, setPassword] = useState('');
     const [submitting, setSubmitting] = useState(false);

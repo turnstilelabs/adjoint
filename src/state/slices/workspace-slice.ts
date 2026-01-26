@@ -2,7 +2,6 @@
 
 import type { AppState } from '@/state/store.types';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
-import { pushAppViewToHistory } from '@/state/store.history';
 
 export const createWorkspaceSlice = (
   set: any,
@@ -42,8 +41,6 @@ export const createWorkspaceSlice = (
       // keep conversation by default
       workspaceMessages: s.workspaceMessages,
     }));
-
-    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: prevView });
   },
 
   goToWorkspace: (opts) => {
@@ -64,8 +61,6 @@ export const createWorkspaceSlice = (
         workspaceDoc: nextDoc,
       };
     });
-
-    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: from });
   },
 
   returnFromWorkspace: () => {
@@ -90,8 +85,6 @@ export const createWorkspaceSlice = (
       workspaceRightPanelTab: 'chat',
       workspaceRightPanelWidth: 448,
     });
-
-    pushAppViewToHistory('workspace', { lastViewBeforeWorkspace: prevView });
   },
 
   setWorkspaceDoc: (doc) => set({ workspaceDoc: String(doc ?? '') }),

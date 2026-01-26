@@ -19,31 +19,27 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
-  const startProof = useAppStore((s) => s.startProof);
-  const startExplore = useAppStore((s) => s.startExplore);
 
-  const submitProblem = async (text: string) => {
+  const validate = (text: string) => {
     const trimmedProblem = text.trim();
     if (!trimmedProblem) {
       setError('Please enter a problem to solve.');
-      return;
+      return null;
     }
     setError(null);
-
-    // UX: do not gate the Prove flow behind a “is this math?” validator.
-    // Let the proof attempt pipeline handle arbitrary input.
-    await startProof(trimmedProblem);
+    return trimmedProblem;
   };
 
   const runExplore = () => {
-    const trimmed = problem.trim();
-    startExplore(trimmed || undefined);
-    const url = trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : '/explore';
+    const trimmed = (problem || '').trim();
+    const url = trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : '/explore?new=1';
     router.push(url);
   };
 
   const runProve = async () => {
-    await submitProblem(problem);
+    const trimmed = validate(problem);
+    if (!trimmed) return;
+    router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
   };
 
   const runCurrentMode = () => {

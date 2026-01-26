@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter, Poppins, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
@@ -44,12 +43,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${inter.variable} ${poppins.variable} ${sourceCodePro.variable}`}>
       <head>
-        {/* GoatCounter analytics */}
-        <Script
-          src="https://gc.zgo.at/count.js"
-          data-goatcounter="https://adjoint.goatcounter.com/count"
-          strategy="afterInteractive"
-        />
+        {/* GoatCounter analytics (disabled on localhost / dev to avoid chunk-load timeouts) */}
+        {process.env.NODE_ENV === 'production' ? (
+          // Avoid next/script here: dev chunk loading can become flaky when the browser
+          // blocks/slow-loads third-party scripts, which presents as "Loading chunk app/layout failed".
+          <script
+            async
+            src="https://gc.zgo.at/count.js"
+            data-goatcounter="https://adjoint.goatcounter.com/count"
+          />
+        ) : null}
       </head>
       <body className="font-body antialiased">
         <WarmupClient />

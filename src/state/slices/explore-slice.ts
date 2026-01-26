@@ -3,7 +3,6 @@
 import type { AppState } from '@/state/store.types';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import type { Message } from '@/components/chat/interactive-chat';
-import { pushAppViewToHistory } from '@/state/store.history';
 
 export const createExploreSlice = (
   set: any,
@@ -29,7 +28,7 @@ export const createExploreSlice = (
     if (cancel) {
       try {
         cancel();
-      } catch {}
+      } catch { }
     }
 
     const trimmed = seed?.trim() ? seed.trim() : null;
@@ -48,8 +47,6 @@ export const createExploreSlice = (
         },
         exploreTurnId: 0,
       });
-
-      pushAppViewToHistory('explore');
       return;
     }
 
@@ -61,8 +58,6 @@ export const createExploreSlice = (
       exploreMessages: get().exploreMessages.length ? get().exploreMessages : [],
       exploreArtifacts: get().exploreArtifacts,
     });
-
-    pushAppViewToHistory('explore');
   },
 
   newExplore: () => {
@@ -88,8 +83,6 @@ export const createExploreSlice = (
       },
       exploreTurnId: 0,
     });
-
-    pushAppViewToHistory('explore');
   },
 
   setExploreMessages: (updater) => {
@@ -185,11 +178,10 @@ export const createExploreSlice = (
 
   setExploreCancelCurrent: (cancel) => set({ cancelExploreCurrent: cancel }),
 
-  promoteToProof: async (statement: string) => {
-    const trimmed = statement.trim();
-    if (!trimmed) return;
-    // Keep explore context in store; switch view to proof via startProof
-    await get().startProof(trimmed);
+  // Routing handles transitions to /prove. Keep this action for now to avoid type churn;
+  // UI should no longer call it.
+  promoteToProof: async (_statement: string) => {
+    return;
   },
 
   startExploreFromFailedProof: () => {

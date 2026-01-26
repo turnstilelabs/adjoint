@@ -3,10 +3,10 @@ import { KatexRenderer } from '@/components/katex-renderer';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import exampleProblems from './home-examples-problems.json';
-import { useAppStore } from '@/state/app-store';
+import { useRouter } from 'next/navigation';
 
 function HomeExamples() {
-  const startProof = useAppStore((s) => s.startProof);
+  const router = useRouter();
 
   return (
     <div className="mt-16 text-center">
@@ -45,7 +45,7 @@ function HomeExamples() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => startProof(example.problem)}
+                onClick={() => router.push(`/prove?q=${encodeURIComponent(example.problem)}`)}
               >
                 Attempt Proof <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

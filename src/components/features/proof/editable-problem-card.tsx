@@ -43,7 +43,7 @@ function EditableProblemCard() {
       // Let the prover pipeline decide how to handle the input.
       console.debug('[UI][EditableProblemCard] calling startProof');
       setIsEditing(false);
-      await startProof(trimmed);
+      router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
     });
   };
 
