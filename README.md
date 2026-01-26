@@ -79,6 +79,13 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=your-key
 ```
 
+**Anthropic**
+
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-key
+```
+
 ### Run
 
 ```bash
