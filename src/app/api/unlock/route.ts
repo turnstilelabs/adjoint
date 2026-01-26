@@ -5,6 +5,7 @@ import { isUnlockEnabled } from '@/lib/unlock';
 // Kept for completeness, though the unlock page now sets this cookie directly.
 // Must stay in sync with `middleware.ts` and `unlock/page.tsx`.
 const UNLOCK_COOKIE_NAME = 'adjoint_unlocked_v2';
+const NEXT_AFTER_UNLOCK_COOKIE_NAME = 'adjoint_next_after_unlock';
 
 export async function POST(request: Request) {
     // If the unlock gate is disabled (default for local dev), this endpoint should
@@ -52,6 +53,15 @@ export async function POST(request: Request) {
         secure: process.env.NODE_ENV === 'production',
         path: '/',
         maxAge: 60 * 60 * 24, // 24 hours
+    });
+
+    // Clear one-time return-to cookie if present.
+    res.cookies.set(NEXT_AFTER_UNLOCK_COOKIE_NAME, '', {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: 0,
     });
 
     return res;

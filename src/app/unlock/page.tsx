@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { isUnlockEnabled } from '@/lib/unlock';
@@ -18,11 +19,17 @@ export default async function UnlockPage({
         redirect(sp.next || '/');
     }
 
+    const cookieStore = await cookies();
+    const nextFromCookie = cookieStore.get('adjoint_next_after_unlock')?.value ?? null;
+    const sp = (await searchParams) ?? {};
+    const nextFromQuery = sp.next ?? null;
+    const next = nextFromCookie || nextFromQuery || '/';
+
     // `useSearchParams()` (used inside UnlockClient) triggers a CSR bailout and must be
     // wrapped in a Suspense boundary to satisfy Next.js prerendering constraints.
     return (
         <Suspense fallback={null}>
-            <UnlockClient />
+            <UnlockClient initialNext={next} />
         </Suspense>
     );
 }
