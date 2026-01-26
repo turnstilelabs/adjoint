@@ -10,7 +10,6 @@ import {
   decomposeRawProofAction,
   generateProofGraphForGoalAction,
 } from '@/app/actions';
-import { pushAppViewToHistory } from '@/state/store.history';
 
 // Autosave debounce timer (module-level so multiple components share it)
 let rawAutosaveTimer: number | null = null;
@@ -114,6 +113,9 @@ export const createProofSlice = (
   | 'hasUserEditedStructuredForCurrentRaw'
   | 'snapshotStructuredEdit'
 > => ({
+  // NOTE: proofAttemptRunId lives in the global store (see StoreData).
+  // We use it to ignore late EventSource callbacks after cancel/restart.
+
   ensureGraphForVersion: async (versionId: string) => {
     try {
       const state = get() as AppState;
@@ -180,10 +182,10 @@ export const createProofSlice = (
           proofHistory: s.proofHistory.map((x) =>
             x.id === versionId
               ? {
-                  ...x,
-                  graphData: { nodes: normalizedNodes, edges } as GraphData,
-                  graphHash,
-                }
+                ...x,
+                graphData: { nodes: normalizedNodes, edges } as GraphData,
+                graphHash,
+              }
               : x,
           ),
         };
@@ -344,6 +346,9 @@ export const createProofSlice = (
     const trimmed = problem.trim();
     if (!trimmed) return;
 
+    // Begin a new proof attempt and capture a run id for cancellation/late events.
+    const myRun = ((get() as AppState).proofAttemptRunId || 0) + 1;
+
     // Initialize state for a new proof run
     // Cancel any in-flight decomposition runs by bumping the run id.
     decomposeRunId += 1;
@@ -376,22 +381,28 @@ export const createProofSlice = (
       cancelCurrent: null,
       liveDraft: '',
       isDraftStreaming: false,
+
+      proofAttemptRunId: myRun,
     });
 
-    pushAppViewToHistory('proof');
-
     const appendLog = (line: string) =>
-      set((s: AppState) => ({ progressLog: [...s.progressLog, line] }));
+      set((s: AppState) =>
+        s.proofAttemptRunId === myRun ? { progressLog: [...s.progressLog, line] } : ({} as any),
+      );
 
     // Fallback non-streaming implementation (existing behavior)
     const runNonStreaming = async () => {
       await new Promise((r) => setTimeout(r, 50));
+      if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t0 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
       const attempt = opts?.force
         ? await attemptProofActionForce(trimmed)
         : await attemptProofAction(trimmed);
+
+      // Ignore late results after cancel/restart.
+      if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       console.debug(
@@ -402,24 +413,32 @@ export const createProofSlice = (
       );
 
       if (!(attempt as any)?.success) {
-        set({ loading: false, error: (attempt as any)?.error || 'Failed to attempt proof.' });
+        set((s: AppState) =>
+          s.proofAttemptRunId === myRun
+            ? { loading: false, error: (attempt as any)?.error || 'Failed to attempt proof.' }
+            : ({} as any),
+        );
         return;
       }
 
       if ((attempt as any).status === 'FAILED') {
         const rawContent = String((attempt as any).rawProof || '').trim();
         const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
-        set({
-          loading: false,
-          viewMode: 'raw',
-          rawProof: rawContent,
-          error: null,
-          pendingRejection: {
-            explanation: (attempt as any).explanation || 'No details provided.',
-          },
-          proofHistory: [rawVersion],
-          activeVersionIdx: 0,
-        });
+        set((s: AppState) =>
+          s.proofAttemptRunId === myRun
+            ? {
+              loading: false,
+              viewMode: 'raw',
+              rawProof: rawContent,
+              error: null,
+              pendingRejection: {
+                explanation: (attempt as any).explanation || 'No details provided.',
+              },
+              proofHistory: [rawVersion],
+              activeVersionIdx: 0,
+            }
+            : ({} as any),
+        );
         lastSavedRaw = rawContent;
         return;
       }
@@ -427,6 +446,9 @@ export const createProofSlice = (
       const d0 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       const decomp = await decomposeRawProofAction((attempt as any).rawProof || '');
+
+      // Ignore late results after cancel/restart.
+      if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const d1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       console.debug(
@@ -441,14 +463,18 @@ export const createProofSlice = (
         // Keep the proof UI alive (Raw Proof is still available) and surface a non-blocking error.
         const rawContent = String((attempt as any).rawProof || '').trim();
         const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
-        set({
-          loading: false,
-          viewMode: 'raw',
-          rawProof: rawContent,
-          decomposeError: (decomp as any).error || 'Failed to decompose the drafted proof.',
-          proofHistory: [rawVersion],
-          activeVersionIdx: 0,
-        });
+        set((s: AppState) =>
+          s.proofAttemptRunId === myRun
+            ? {
+              loading: false,
+              viewMode: 'raw',
+              rawProof: rawContent,
+              decomposeError: (decomp as any).error || 'Failed to decompose the drafted proof.',
+              proofHistory: [rawVersion],
+              activeVersionIdx: 0,
+            }
+            : ({} as any),
+        );
         lastSavedRaw = rawContent;
         return;
       }
@@ -458,15 +484,15 @@ export const createProofSlice = (
           (decomp as any).sublemmas && (decomp as any).sublemmas.length > 0
             ? ((decomp as any).sublemmas as Sublemma[])
             : ([
-                {
-                  title: 'Proof',
-                  statement: (decomp as any).provedStatement,
-                  proof:
-                    (decomp as any).normalizedProof ||
-                    (attempt as any).rawProof ||
-                    'Proof unavailable.',
-                },
-              ] as Sublemma[]);
+              {
+                title: 'Proof',
+                statement: (decomp as any).provedStatement,
+                proof:
+                  (decomp as any).normalizedProof ||
+                  (attempt as any).rawProof ||
+                  'Proof unavailable.',
+              },
+            ] as Sublemma[]);
 
         const assistantMessage: Message = {
           role: 'assistant',
@@ -489,16 +515,20 @@ export const createProofSlice = (
         );
 
         // Match the streaming UX: reveal Raw Proof first, but keep Structured available.
-        set({
-          messages: [assistantMessage],
-          loading: false,
-          error: null,
-          viewMode: 'raw',
-          rawProof: rawContent,
-          proofHistory: [rawVersion, structuredVersion],
-          activeVersionIdx: 0,
-          decomposedRaw: rawContent,
-        });
+        set((s: AppState) =>
+          s.proofAttemptRunId === myRun
+            ? {
+              messages: [assistantMessage],
+              loading: false,
+              error: null,
+              viewMode: 'raw',
+              rawProof: rawContent,
+              proofHistory: [rawVersion, structuredVersion],
+              activeVersionIdx: 0,
+              decomposedRaw: rawContent,
+            }
+            : ({} as any),
+        );
 
         lastSavedRaw = rawContent;
 
@@ -512,27 +542,33 @@ export const createProofSlice = (
       // PROVED_VARIANT or similar: keep suggestion but ensure raw version exists
       const rawContent = (attempt as any).rawProof || '';
       const rawVersion = makeRawVersion((get() as AppState).proofHistory, rawContent);
-      set({
-        loading: false,
-        error: null,
-        pendingSuggestion: {
-          suggested: (attempt as any).finalStatement || (decomp as any).provedStatement,
-          variantType: ((attempt as any).variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
-          provedStatement: (decomp as any).provedStatement,
-          sublemmas: (decomp as any).sublemmas as Sublemma[],
-          explanation: (attempt as any).explanation,
-          normalizedProof: (decomp as any).normalizedProof,
-          rawProof: (attempt as any).rawProof || undefined,
-        },
-        proofHistory: [rawVersion],
-        activeVersionIdx: 0,
-      });
+      set((s: AppState) =>
+        s.proofAttemptRunId === myRun
+          ? {
+            loading: false,
+            error: null,
+            pendingSuggestion: {
+              suggested: (attempt as any).finalStatement || (decomp as any).provedStatement,
+              variantType: ((attempt as any).variantType as 'WEAKENING' | 'OPPOSITE') ||
+                'WEAKENING',
+              provedStatement: (decomp as any).provedStatement,
+              sublemmas: (decomp as any).sublemmas as Sublemma[],
+              explanation: (attempt as any).explanation,
+              normalizedProof: (decomp as any).normalizedProof,
+              rawProof: (attempt as any).rawProof || undefined,
+            },
+            proofHistory: [rawVersion],
+            activeVersionIdx: 0,
+          }
+          : ({} as any),
+      );
     };
 
     // Try token streaming first; fallback to metadata-only SSE, then non-streaming
     if (typeof window !== 'undefined' && 'EventSource' in window) {
       const runMetadataSSE = async () => {
         try {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           const url2 = `/api/proof/attempt-sse?problem=${encodeURIComponent(trimmed)}`;
           const es2 = new EventSource(url2);
           let finished2 = false;
@@ -540,7 +576,7 @@ export const createProofSlice = (
             cancelCurrent: () => {
               try {
                 es2.close();
-              } catch {}
+              } catch { }
             },
           });
 
@@ -549,7 +585,7 @@ export const createProofSlice = (
               const data = JSON.parse(ev.data || '{}');
               if (data?.phase === 'attempt.start') appendLog('Attempting proof...');
               if (data?.phase === 'decompose.start') appendLog('Decomposing proof....');
-            } catch {}
+            } catch { }
           });
           es2.addEventListener('attempt', (ev: MessageEvent) => {
             try {
@@ -561,15 +597,21 @@ export const createProofSlice = (
               } else {
                 appendLog(`Model produced a proof (len ~${data?.rawProofLen ?? 0})...`);
               }
-            } catch {}
+            } catch { }
           });
           es2.addEventListener('decompose', (ev: MessageEvent) => {
             try {
               const data = JSON.parse(ev.data || '{}');
               appendLog(`Decomposed into ${data?.sublemmasCount ?? 0} step(s)....`);
-            } catch {}
+            } catch { }
           });
           es2.addEventListener('server-error', (ev: MessageEvent) => {
+            if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+              try {
+                es2.close();
+              } catch { }
+              return;
+            }
             if (finished2) return;
             finished2 = true;
             try {
@@ -590,10 +632,16 @@ export const createProofSlice = (
             }
             try {
               es2.close();
-            } catch {}
+            } catch { }
             set({ cancelCurrent: null });
           });
           es2.addEventListener('done', (ev: MessageEvent) => {
+            if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+              try {
+                es2.close();
+              } catch { }
+              return;
+            }
             if (finished2) return;
             finished2 = true;
             try {
@@ -639,15 +687,15 @@ export const createProofSlice = (
                   decomp.sublemmas && decomp.sublemmas.length > 0
                     ? (decomp.sublemmas as Sublemma[])
                     : ([
-                        {
-                          title: 'Proof',
-                          statement: decomp.provedStatement,
-                          proof:
-                            (decomp as any).normalizedProof ||
-                            attempt.rawProof ||
-                            'Proof unavailable.',
-                        },
-                      ] as Sublemma[]);
+                      {
+                        title: 'Proof',
+                        statement: decomp.provedStatement,
+                        proof:
+                          (decomp as any).normalizedProof ||
+                          attempt.rawProof ||
+                          'Proof unavailable.',
+                      },
+                    ] as Sublemma[]);
                 const assistantMessage: Message = {
                   role: 'assistant',
                   content:
@@ -712,14 +760,20 @@ export const createProofSlice = (
             } finally {
               try {
                 es2.close();
-              } catch {}
+              } catch { }
               set({ cancelCurrent: null });
             }
           });
           es2.onerror = () => {
+            if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+              try {
+                es2.close();
+              } catch { }
+              return;
+            }
             try {
               es2.close();
-            } catch {}
+            } catch { }
             set({ cancelCurrent: null });
             appendLog('Metadata stream lost. Falling back to non-streaming...');
             runNonStreaming();
@@ -730,6 +784,7 @@ export const createProofSlice = (
       };
 
       try {
+        if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
         const url = `/api/proof/attempt-stream?problem=${encodeURIComponent(trimmed)}`;
         const es = new EventSource(url);
         let finished = false;
@@ -742,19 +797,20 @@ export const createProofSlice = (
         const clearWatchdog = () => {
           try {
             if (watchdog != null) window.clearTimeout(watchdog);
-          } catch {}
+          } catch { }
           watchdog = null;
         };
         const armWatchdog = () => {
           clearWatchdog();
           watchdog = window.setTimeout(() => {
+            if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
             if (finished) return;
             // If we never received model identity or any token, assume stream is stuck.
             if (!gotModelStart && !gotDelta) {
               finished = true;
               try {
                 es.close();
-              } catch {}
+              } catch { }
               set({ cancelCurrent: null, isDraftStreaming: false });
               appendLog('Token stream stalled. Falling back to metadata stream...');
               runMetadataSSE();
@@ -765,30 +821,37 @@ export const createProofSlice = (
 
         set({
           cancelCurrent: () => {
+            // Mark this attempt as cancelled first, so any queued `error` events short-circuit.
+            try {
+              set((s: AppState) => ({ proofAttemptRunId: (s.proofAttemptRunId || 0) + 1 }));
+            } catch { }
             try {
               es.close();
-            } catch {}
+            } catch { }
             clearWatchdog();
           },
         });
         set({ isDraftStreaming: true, liveDraft: '' });
 
         es.addEventListener('model.start', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
           gotModelStart = true;
           try {
             const data = JSON.parse(ev.data || '{}');
             appendLog(`Using ${data?.provider}/${data?.model}...`);
-          } catch {}
+          } catch { }
         });
         es.addEventListener('model.switch', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
           try {
             const d = JSON.parse(ev.data || '{}');
             if (d?.to) appendLog(`Switched model to ${d.to}...`);
-          } catch {}
+          } catch { }
         });
         es.addEventListener('model.delta', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
           try {
             const data = JSON.parse(ev.data || '{}');
@@ -800,9 +863,10 @@ export const createProofSlice = (
               }
               set((s: AppState) => ({ liveDraft: s.liveDraft + t }));
             }
-          } catch {}
+          } catch { }
         });
         es.addEventListener('model.end', () => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
           // Draft complete, but we intentionally do NOT reveal it yet.
           // We first wait for classification (event: done) so we can show
@@ -812,6 +876,7 @@ export const createProofSlice = (
           appendLog('Classifying draft...');
         });
         es.addEventListener('classify.result', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
           try {
             const d = JSON.parse(ev.data || '{}');
@@ -821,13 +886,19 @@ export const createProofSlice = (
             } else if (st === 'FAILED') {
               appendLog("Draft doesn't prove the statement as written. Showing explanation...");
             }
-          } catch {}
+          } catch { }
         });
 
         // attempt-stream no longer performs decomposition server-side.
         // We do client-side decomposition only on explicit user request.
 
         es.addEventListener('server-error', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+            try {
+              es.close();
+            } catch { }
+            return;
+          }
           if (finished) return;
           finished = true;
           clearWatchdog();
@@ -839,10 +910,10 @@ export const createProofSlice = (
             if (data?.error) friendly = data.error; // already friendly from server
             if (data?.detail) detail = data.detail;
             if (data?.code) code = data.code;
-          } catch {}
+          } catch { }
           try {
             es.close();
-          } catch {}
+          } catch { }
           set({
             cancelCurrent: null,
             isDraftStreaming: false,
@@ -854,6 +925,12 @@ export const createProofSlice = (
         });
 
         es.addEventListener('done', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+            try {
+              es.close();
+            } catch { }
+            return;
+          }
           if (finished) return;
           finished = true;
           clearWatchdog();
@@ -959,19 +1036,25 @@ export const createProofSlice = (
           } finally {
             try {
               es.close();
-            } catch {}
+            } catch { }
             set({ cancelCurrent: null, isDraftStreaming: false });
             clearWatchdog();
           }
         });
 
         es.onerror = () => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+            try {
+              es.close();
+            } catch { }
+            return;
+          }
           if (finished) return;
           finished = true;
           clearWatchdog();
           try {
             es.close();
-          } catch {}
+          } catch { }
           set({ cancelCurrent: null, isDraftStreaming: false });
           appendLog('Token stream connection lost. Falling back to metadata stream...');
           runMetadataSSE();
@@ -987,7 +1070,6 @@ export const createProofSlice = (
 
   resumeProof: () => {
     set({ view: 'proof' });
-    pushAppViewToHistory('proof');
   },
 
   retry: async () => {
@@ -1008,7 +1090,6 @@ export const createProofSlice = (
       pendingSuggestion: null,
     }));
 
-    pushAppViewToHistory('home');
   },
 
   setMessages: (updater) => {
@@ -1458,12 +1539,12 @@ export const createProofSlice = (
         (result as any).sublemmas && (result as any).sublemmas.length > 0
           ? ((result as any).sublemmas as Sublemma[])
           : ([
-              {
-                title: 'Proof',
-                statement: (result as any).provedStatement,
-                proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
-              },
-            ] as Sublemma[]);
+            {
+              title: 'Proof',
+              statement: (result as any).provedStatement,
+              proof: (result as any).normalizedProof || raw || 'Proof unavailable.',
+            },
+          ] as Sublemma[]);
 
       // Update decompose meta (used for toasts / context).
       // IMPORTANT: do NOT mutate existing versions here. Decomposition results are persisted

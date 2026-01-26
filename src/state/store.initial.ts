@@ -51,6 +51,7 @@ export const initialState: StoreData = {
   pendingSuggestion: null,
   pendingRejection: null,
   progressLog: [],
+  proofAttemptRunId: 0,
   cancelCurrent: null,
   liveDraft: '',
   isDraftStreaming: false,
