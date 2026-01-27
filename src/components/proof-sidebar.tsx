@@ -2,7 +2,17 @@
 
 import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
-import { FileDown, History, MessageCircle, ListTree, Network, Sparkles, Loader2, Plus } from 'lucide-react';
+import {
+  FileDown,
+  FilePlus,
+  History,
+  MessageCircle,
+  ListTree,
+  Network,
+  Sparkles,
+  Loader2,
+  Plus,
+} from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
 import { exportProofTex, exportRawProofTex } from '@/lib/export-tex';
@@ -19,6 +29,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  createWorkspaceProject,
+  saveWorkspaceProject,
+  setCurrentWorkspaceProjectId,
+} from '@/lib/persistence/workspace-projects';
 
 export function ProofSidebar() {
   const router = useRouter();
@@ -45,6 +60,7 @@ export function ProofSidebar() {
 
   const [openAnalyzeConfirm, setOpenAnalyzeConfirm] = useState(false);
   const [openAddToWorkspaceConfirm, setOpenAddToWorkspaceConfirm] = useState(false);
+  const [openSaveAsWorkspaceConfirm, setOpenSaveAsWorkspaceConfirm] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
   const view = useAppStore((s) => s.view);
@@ -235,6 +251,45 @@ export function ProofSidebar() {
     }
   };
 
+  const onConfirmSaveAsWorkspaceProject = () => {
+    try {
+      const snippet = buildWorkspaceSnippetFromCurrentProof();
+      if (!snippet.trim()) {
+        toast({
+          title: 'Nothing to save',
+          description: 'Generate or edit a proof first.',
+        });
+        return;
+      }
+
+      const titleBase = (useAppStore.getState().problem || '').trim();
+      const title = titleBase ? titleBase.slice(0, 80) : 'Proof attempt';
+
+      const meta = createWorkspaceProject({ title, kind: 'project' });
+      saveWorkspaceProject(meta.id, {
+        doc: snippet + '\n',
+        messages: [],
+        uiState: {
+          isChatOpen: false,
+          rightPanelTab: 'chat',
+          rightPanelWidth: 448,
+        },
+      });
+      setCurrentWorkspaceProjectId(meta.id);
+      router.push('/workspace');
+      toast({
+        title: 'Saved to Workspace',
+        description: 'Created a new Workspace project from the current proof.',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Failed to save to Workspace',
+        description: e?.message || 'Unexpected error.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const onAnalyze = async () => {
     // Analysis is disabled in graph view (by design).
     if (viewMode === 'graph') return;
@@ -375,6 +430,17 @@ export function ProofSidebar() {
             </Button>
           )}
           <Button
+            data-proof-action="workspace-save"
+            variant="ghost"
+            size="icon"
+            title="Save as Workspace project"
+            onClick={() => setOpenSaveAsWorkspaceConfirm(true)}
+            disabled={addToWorkspaceDisabled}
+          >
+            <FilePlus />
+            <span className="sr-only">Save as Workspace project</span>
+          </Button>
+          <Button
             data-proof-action="export"
             variant="ghost"
             size="icon"
@@ -447,6 +513,28 @@ export function ProofSidebar() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <AlertDialog open={openSaveAsWorkspaceConfirm} onOpenChange={setOpenSaveAsWorkspaceConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save as a new Workspace project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new project in Workspace containing the current proof.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setOpenSaveAsWorkspaceConfirm(false);
+                onConfirmSaveAsWorkspaceProject();
+              }}
+            >
+              Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </>
   );

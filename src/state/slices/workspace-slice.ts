@@ -2,6 +2,7 @@
 
 import type { AppState } from '@/state/store.types';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
+import { createWorkspaceProject } from '@/lib/persistence/workspace-projects';
 
 export const createWorkspaceSlice = (
   set: any,
@@ -73,7 +74,14 @@ export const createWorkspaceSlice = (
   },
 
   newWorkspace: () => {
-    const prevView = get().view;
+    // Create a fresh persisted project and switch the UI to it.
+    // (This is important so /workspace?new=1 doesn't get overwritten by hydration.)
+    try {
+      createWorkspaceProject({ title: 'Untitled', kind: 'project' });
+    } catch {
+      // ignore: still reset in-memory state
+    }
+
     set({
       view: 'workspace',
       lastViewBeforeWorkspace: get().view,
