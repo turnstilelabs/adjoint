@@ -22,6 +22,7 @@ import {
   Maximize2,
   Minimize2,
   CheckSquare,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
@@ -38,9 +39,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
+import {
+  deleteWorkspaceProject,
+  getCurrentWorkspaceProjectId,
+  listWorkspaceProjects,
+  loadWorkspaceProject,
+  renameWorkspaceProject,
+  saveWorkspaceProject,
+  setCurrentWorkspaceProjectId,
+  type WorkspaceProjectMeta,
+} from '@/lib/persistence/workspace-projects';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView, keymap } from '@codemirror/view';
@@ -49,6 +70,8 @@ import { bracketMatching } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
+
+const DEFAULT_TITLE = 'Untitled';
 
 type Anchor = { top: number; left: number };
 
@@ -131,6 +154,14 @@ export default function WorkspaceView() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Workspace project state (persisted in localStorage)
+  const [projectMeta, setProjectMeta] = useState<WorkspaceProjectMeta | null>(null);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  const deleteTitle = (projectMeta?.title || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
 
   // "Focus" state for expanding the chat panel into an overlay (match Prove mode UX).
   const [isChatFocused, setIsChatFocused] = useState(false);
@@ -247,12 +278,58 @@ export default function WorkspaceView() {
   const [proveContextPreview, setProveContextPreview] = useState('');
   const [provePayload, setProvePayload] = useState('');
 
-  // Autosave doc to localStorage (debounced)
+  // Hydrate from project storage once.
+  // NOTE: we intentionally do NOT auto-create a project on first app open.
+  // We create a project when user clicks “Create Workspace” (Home modal) or
+  // when navigating to Workspace with /workspace?new=1.
+  useEffect(() => {
+    try {
+      const curId = getCurrentWorkspaceProjectId();
+      if (!curId) return;
+      const payload = loadWorkspaceProject(curId);
+      if (!payload) return;
+
+      const meta = listWorkspaceProjects().find((m) => m.id === curId) || null;
+      if (meta) {
+        setProjectMeta(meta);
+        setTitleDraft(meta.title || DEFAULT_TITLE);
+      }
+
+      if ((doc ?? '').trim().length === 0 && payload.doc.trim().length > 0) {
+        setDoc(payload.doc);
+      }
+      if ((messages ?? []).length === 0 && (payload.messages ?? []).length > 0) {
+        setMessages(payload.messages as any);
+      }
+
+      // Restore UI state best-effort.
+      const ui = payload.uiState || {};
+      if (typeof ui.rightPanelTab === 'string') setRightTab(ui.rightPanelTab as any);
+      if (typeof ui.rightPanelWidth === 'number') setRightWidth(ui.rightPanelWidth);
+      if (typeof ui.isChatOpen === 'boolean') setIsChatOpen(ui.isChatOpen);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave to the active project (debounced).
   useEffect(() => {
     try {
       const t = window.setTimeout(() => {
         try {
-          localStorage.setItem('adjoint.workspace.doc', doc ?? '');
+          const id = getCurrentWorkspaceProjectId() || projectMeta?.id;
+          if (!id) return;
+
+          saveWorkspaceProject(id, {
+            doc: doc ?? '',
+            messages: (messages ?? []) as any,
+            uiState: {
+              isChatOpen: Boolean(useAppStore.getState().isWorkspaceChatOpen),
+              rightPanelTab: useAppStore.getState().workspaceRightPanelTab,
+              rightPanelWidth: useAppStore.getState().workspaceRightPanelWidth,
+            },
+          });
         } catch {
           // ignore
         }
@@ -261,45 +338,88 @@ export default function WorkspaceView() {
     } catch {
       return;
     }
-  }, [doc]);
+  }, [doc, messages, projectMeta?.id]);
 
-  // Autosave messages to localStorage (best-effort)
-  useEffect(() => {
+  const syncMetaFromStorage = () => {
     try {
-      localStorage.setItem('adjoint.workspace.messages', JSON.stringify(messages ?? []));
+      const curId = getCurrentWorkspaceProjectId();
+      if (!curId) return;
+      const meta = listWorkspaceProjects().find((m) => m.id === curId) || null;
+      if (meta) {
+        setProjectMeta(meta);
+        if (!isEditingTitle) setTitleDraft(meta.title || DEFAULT_TITLE);
+      }
     } catch {
       // ignore
     }
-  }, [messages]);
+  };
 
-  // Hydrate from localStorage once
-  useEffect(() => {
+  const openProjectById = (id: string) => {
+    const trimmed = String(id || '').trim();
+    if (!trimmed) return;
     try {
-      if ((doc ?? '').trim().length === 0) {
-        const savedDoc = localStorage.getItem('adjoint.workspace.doc');
-        if (savedDoc && savedDoc.trim().length > 0) setDoc(savedDoc);
+      setCurrentWorkspaceProjectId(trimmed);
+      const meta = listWorkspaceProjects().find((m) => m.id === trimmed) || null;
+      if (meta) {
+        setProjectMeta(meta);
+        setTitleDraft(meta.title || DEFAULT_TITLE);
       }
-      if ((messages ?? []).length === 0) {
-        const raw = localStorage.getItem('adjoint.workspace.messages');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const safe = parsed
-              .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant'))
-              .map((m: any) => ({
-                role: m.role,
-                content: String(m.content ?? ''),
-                isTyping: false,
-              }));
-            if (safe.length) setMessages(safe as any);
-          }
-        }
-      }
+
+      const payload = loadWorkspaceProject(trimmed);
+      setDoc(payload?.doc ?? '');
+      setMessages((payload?.messages ?? []) as any);
+
+      const ui = payload?.uiState || {};
+      if (typeof ui.rightPanelTab === 'string') setRightTab(ui.rightPanelTab as any);
+      if (typeof ui.rightPanelWidth === 'number') setRightWidth(ui.rightPanelWidth);
+      if (typeof ui.isChatOpen === 'boolean') setIsChatOpen(ui.isChatOpen);
     } catch {
       // ignore
+    }
+  };
+
+  useEffect(() => {
+    // If user deep-links to /workspace with no selected project, redirect to home.
+    // (Home modal will offer “Create Workspace”.)
+    const curId = getCurrentWorkspaceProjectId();
+    if (!curId) {
+      router.push('/');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const commitTitleEdit = () => {
+    const id = getCurrentWorkspaceProjectId() || projectMeta?.id;
+    if (!id) return;
+    const next = String(titleDraft || '').trim() || DEFAULT_TITLE;
+    try {
+      renameWorkspaceProject(id, next);
+      setIsEditingTitle(false);
+      syncMetaFromStorage();
+      toast({ title: 'Renamed', description: `Project renamed to “${next}”.` });
+    } catch {
+      // ignore
+      setIsEditingTitle(false);
+    }
+  };
+
+  const onDeleteCurrentProject = () => {
+    const id = getCurrentWorkspaceProjectId() || projectMeta?.id;
+    if (!id) return;
+    try {
+      deleteWorkspaceProject(id);
+      setConfirmDeleteOpen(false);
+
+      toast({ title: 'Deleted', description: 'Workspace deleted.' });
+      router.push('/');
+    } catch (e: any) {
+      toast({
+        title: 'Delete failed',
+        description: e?.message || 'Could not delete the project.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const updateSelectionFromCodeMirror = () => {
     const view = cmRef.current?.view;
@@ -863,6 +983,54 @@ export default function WorkspaceView() {
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
+          {/* Top-left project header */}
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex items-center gap-2">
+              {isEditingTitle ? (
+                <input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={() => {
+                    // Click outside cancels edit.
+                    setIsEditingTitle(false);
+                    setTitleDraft(projectMeta?.title || DEFAULT_TITLE);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitTitleEdit();
+                    if (e.key === 'Escape') {
+                      setIsEditingTitle(false);
+                      setTitleDraft(projectMeta?.title || DEFAULT_TITLE);
+                    }
+                  }}
+                  autoFocus
+                  className="h-9 w-[280px] max-w-[60vw] rounded-md border bg-background px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="truncate text-sm font-medium text-foreground hover:underline"
+                  title="Rename project"
+                  onClick={() => {
+                    setIsEditingTitle(true);
+                    setTitleDraft(projectMeta?.title || DEFAULT_TITLE);
+                  }}
+                >
+                  {projectMeta?.title || DEFAULT_TITLE}
+                </button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setConfirmDeleteOpen(true)}
+                title="Delete project"
+                aria-label="Delete project"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           {isReviewMode ? (
             <div className="h-full rounded-lg border bg-background overflow-hidden">
               <WorkspaceReviewPanel />
@@ -1141,6 +1309,28 @@ export default function WorkspaceView() {
           </div>
         </div>
       )}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleteTitle}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this workspace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDeleteCurrentProject();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
