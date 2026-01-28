@@ -109,6 +109,8 @@ export type StoreData = {
   errorDetails: string | null;
   errorCode: string | null;
   isChatOpen: boolean;
+  /** Prove-mode chat panel width (px). Used for desktop resizable right sidebar. */
+  proofChatPanelWidth: number;
   isHistoryOpen: boolean;
   viewMode: 'raw' | 'structured' | 'graph';
   proofHistory: ProofVersion[];
@@ -269,6 +271,7 @@ export interface AppState extends StoreData {
 
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setProofChatPanelWidth: (widthPx: number) => void;
   setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setViewMode: (mode: 'raw' | 'structured' | 'graph') => void;
   toggleStructuredView: () => void;
