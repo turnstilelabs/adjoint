@@ -18,12 +18,12 @@ export default function ProofDisplay() {
     const setIsChatOpen = useAppStore((s) => s.setIsChatOpen);
     // In dev/HMR, new fields may be missing from the existing in-memory Zustand state.
     // Fall back to the historical default so the panel doesn't end up with width=0.
-    const rawChatWidth = useAppStore((s) => (s as any).proofChatPanelWidth as any);
+    const rawChatWidth = useAppStore((s) => s.proofChatPanelWidth);
     const chatWidth =
         typeof rawChatWidth === 'number' && Number.isFinite(rawChatWidth) && rawChatWidth > 0
             ? rawChatWidth
             : 448;
-    const setChatWidth = useAppStore((s) => (s as any).setProofChatPanelWidth as any);
+    const setChatWidth = useAppStore((s) => s.setProofChatPanelWidth);
 
     // Drag-to-resize state (desktop sidebar)
     const isDraggingRef = useRef(false);

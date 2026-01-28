@@ -15,7 +15,7 @@ export default function RawProofView() {
     const rawProof = useAppStore((s) => s.rawProof);
     const setRawProof = useAppStore((s) => s.setRawProof);
     const decomposeError = useAppStore((s) => s.decomposeError);
-    const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+    const macros = useAppStore((s) => s.proofRenderMacros);
     const editNonce = useAppStore((s) => s.rawProofEditNonce);
     const requestRawProofEdit = useAppStore((s) => s.requestRawProofEdit);
     const [isEditing, setIsEditing] = useState(false);

@@ -396,7 +396,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t0 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
       const attempt = opts?.force
         ? await attemptProofActionForce(trimmed)
         : await attemptProofAction(trimmed);
@@ -405,12 +404,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug(
-        '[UI][AppStore] attemptProof done ms=',
-        t1 - t0,
-        'success=',
-        (attempt as any)?.success,
-      );
 
       if (!(attempt as any)?.success) {
         set((s: AppState) =>
@@ -451,12 +444,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const d1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug(
-        '[UI][AppStore] decomposeRawProof done ms=',
-        d1 - d0,
-        'success=',
-        (decomp as any)?.success,
-      );
 
       if (!(decomp as any)?.success) {
         // Decomposition is not fatal in the new split-phase UX.

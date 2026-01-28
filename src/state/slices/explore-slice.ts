@@ -53,7 +53,6 @@ export const createExploreSlice = (
   | 'bumpExploreTurnId'
   | 'getExploreTurnId'
   | 'setExploreCancelCurrent'
-  | 'promoteToProof'
   | 'startExploreFromFailedProof'
 > => ({
   startExplore: (seed?: string) => {
@@ -214,12 +213,6 @@ export const createExploreSlice = (
   getExploreTurnId: () => get().exploreTurnId,
 
   setExploreCancelCurrent: (cancel) => set({ cancelExploreCurrent: cancel }),
-
-  // Routing handles transitions to /prove. Keep this action for now to avoid type churn;
-  // UI should no longer call it.
-  promoteToProof: async (_statement: string) => {
-    return;
-  },
 
   startExploreFromFailedProof: () => {
     const problem = (get().problem || '').trim();

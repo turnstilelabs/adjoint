@@ -164,8 +164,8 @@ export function SelectionToolbar({
   const view = useAppStore((s) => s.view);
   const setChatDraft = useAppStore((s) => s.setChatDraft);
   const setExploreDraft = useAppStore((s) => s.setExploreDraft);
-  const setWorkspaceDraft = useAppStore((s) => (s as any).setWorkspaceDraft);
-  const setIsWorkspaceChatOpen = useAppStore((s) => (s as any).setIsWorkspaceChatOpen);
+  const setWorkspaceDraft = useAppStore((s) => s.setWorkspaceDraft);
+  const setIsWorkspaceChatOpen = useAppStore((s) => s.setIsWorkspaceChatOpen);
   const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
 
@@ -232,17 +232,10 @@ export function SelectionToolbar({
       duration: 2147483647,
     });
     startTransition(async () => {
-      console.debug('[UI][SelectionToolbar] validate again len=', selectedText.length);
       const result =
         canCheckAgain && lemmaStatement
           ? await checkAgainProofAction(selectedText, lemmaStatement)
           : await validateStatementAction(selectedText);
-      console.debug(
-        '[UI][SelectionToolbar] validation result success=',
-        (result as any)?.success,
-        'validity=',
-        (result as any)?.validity,
-      );
       if ((result as any).success) {
         const r = result as {
           success: true;

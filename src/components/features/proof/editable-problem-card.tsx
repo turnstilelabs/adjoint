@@ -12,7 +12,7 @@ import { RejectionPanel } from '@/components/features/proof/rejection-panel';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
-  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+  const macros = useAppStore((s) => s.proofRenderMacros);
   const startProof = useAppStore((s) => s.startProof);
   const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
@@ -43,7 +43,6 @@ function EditableProblemCard() {
 
       // UX: do not gate statement edits behind a “is this math?” classifier.
       // Let the prover pipeline decide how to handle the input.
-      console.debug('[UI][EditableProblemCard] calling startProof');
       setIsEditing(false);
       router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
     });

@@ -20,7 +20,7 @@ import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 function ProofValidationFooter() {
     const proof = useAppStore((s) => s.proof());
     const isAnalyzingProof = useAppStore((s) => s.isAnalyzingProof);
-    const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+    const macros = useAppStore((s) => s.proofRenderMacros);
 
     const alertRef = useRef<HTMLDivElement | null>(null);
     const [isOpen, setIsOpen] = useState(true);

@@ -257,7 +257,6 @@ export interface AppState extends StoreData {
   bumpExploreTurnId: () => number;
   getExploreTurnId: () => number;
   setExploreCancelCurrent: (cancel: (() => void) | null) => void;
-  promoteToProof: (statement: string) => Promise<void>;
   startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;

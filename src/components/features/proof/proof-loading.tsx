@@ -11,7 +11,7 @@ import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
 export function ProofLoading() {
   const router = useRouter();
   const problem = useAppStore((s) => s.problem);
-  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+  const macros = useAppStore((s) => s.proofRenderMacros);
   const loading = useAppStore((s) => s.loading);
   const cancelProofAttempt = useAppStore((s) => s.cancelProofAttempt);
   const progressLog = useAppStore((s) => s.progressLog);

@@ -71,7 +71,7 @@ export default function ProofView() {
     clearSuggestion: s.clearSuggestion,
   }));
 
-  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+  const macros = useAppStore((s) => s.proofRenderMacros);
 
   const hasProof = !!proof();
   const q = (searchParams?.get('q') || '').trim();

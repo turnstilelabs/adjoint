@@ -23,9 +23,9 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
   const router = useRouter();
   const [openWorkspacePicker, setOpenWorkspacePicker] = useState(false);
   const view = useAppStore((s) => s.view);
-  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
-  const setWorkspaceDoc = useAppStore((s) => (s as any).setWorkspaceDoc);
-  const setWorkspaceMessages = useAppStore((s) => (s as any).setWorkspaceMessages);
+  const macros = useAppStore((s) => s.proofRenderMacros);
+  const setWorkspaceDoc = useAppStore((s) => s.setWorkspaceDoc);
+  const setWorkspaceMessages = useAppStore((s) => s.setWorkspaceMessages);
 
   const attemptProofAction = message.actions?.find((a) => a.type === 'attempt_proof');
   const showAttemptProof = Boolean(attemptProofAction);
