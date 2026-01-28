@@ -189,7 +189,13 @@ export function ProofLoading() {
           variant="outline"
           onClick={() => {
             cancelProofAttempt();
-            router.push('/');
+            // If Prove was opened from Explore/Workspace/etc, prefer returning there.
+            // This preserves the user’s previous mode + in-memory state.
+            try {
+              router.back();
+            } catch {
+              router.push('/explore');
+            }
           }}
         >
           <X className="mr-2 h-4 w-4" />

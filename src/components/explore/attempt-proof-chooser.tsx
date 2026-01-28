@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { EditableArtifactItem } from '@/components/explore/editable-artifact-item';
 import { useRouter } from 'next/navigation';
+import { Card, CardContent } from '@/components/ui/card';
+import { splitStatements } from '@/lib/split-statements';
 
 export function AttemptProofChooser({
     open,
@@ -23,23 +25,38 @@ export function AttemptProofChooser({
     const edits = useAppStore((s) => s.exploreArtifactEdits);
     const setEdit = useAppStore((s) => s.setExploreArtifactEdit);
 
-    const candidates = artifacts?.candidateStatements ?? [];
+    // Flatten multi-statement entries (if any) so the modal matches the right-panel carousel.
+    const flatCandidates = React.useMemo(
+        () => (artifacts?.candidateStatements ?? []).flatMap((s) => splitStatements(String(s ?? ''))).map((s) => s.trim()).filter(Boolean),
+        [artifacts?.candidateStatements],
+    );
+
     const [selectedIdx, setSelectedIdx] = React.useState<number>(0);
 
     // Clamp selection when candidates change.
     React.useEffect(() => {
-        // Candidate list is ordered with latest first.
-        // Default selection should always be the newest statement.
-        setSelectedIdx(0);
-    }, [candidates.length]);
+        setSelectedIdx((prev) => {
+            if (!flatCandidates.length) return 0;
+            return Math.max(0, Math.min(prev, flatCandidates.length - 1));
+        });
+    }, [flatCandidates.length]);
 
     const attemptSelected = async () => {
-        const original = (candidates[selectedIdx] ?? '').trim();
+        const original = (flatCandidates[selectedIdx] ?? '').trim();
         const stmt = ((edits.candidateStatements[original] ?? original) ?? '').trim();
         if (!stmt) return;
         onOpenChange(false);
         router.push(`/prove?q=${encodeURIComponent(stmt)}`);
     };
+
+    const count = flatCandidates.length;
+    const go = (i: number) => {
+        if (!count) return;
+        setSelectedIdx(((i % count) + count) % count);
+    };
+
+    const original = (flatCandidates[selectedIdx] ?? '').trim();
+    const display = (edits.candidateStatements[original] ?? original).trim();
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,34 +68,56 @@ export function AttemptProofChooser({
 
                 <div className="space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">Candidate statements</div>
-                    {candidates.length === 0 ? (
+                    {flatCandidates.length === 0 ? (
                         <div className="text-sm text-muted-foreground">No candidate statements yet.</div>
                     ) : (
-                        <div className="max-h-72 overflow-auto border rounded-md">
-                            {candidates.map((c, idx) => {
-                                const active = idx === selectedIdx;
-                                const original = (c ?? '').trim();
-                                const display = (edits.candidateStatements[original] ?? original).trim();
+                        <Card className="border-muted/50 overflow-hidden">
+                            <CardContent className="p-3 space-y-3 overflow-hidden">
+                                <div className="text-sm break-words whitespace-pre-wrap overflow-hidden">
+                                    <EditableArtifactItem
+                                        value={display}
+                                        onCommit={(next) =>
+                                            setEdit({ kind: 'candidateStatements', original, edited: next })
+                                        }
+                                        className="px-0"
+                                    />
+                                </div>
 
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`px-3 py-2 text-sm border-b last:border-b-0 hover:bg-muted/40 ${active ? 'bg-muted/40' : ''
-                                            }`}
-                                        onClick={() => setSelectedIdx(idx)}
-                                        role="button"
-                                        tabIndex={0}
-                                    >
-                                        <EditableArtifactItem
-                                            value={display}
-                                            onCommit={(next) =>
-                                                setEdit({ kind: 'candidateStatements', original, edited: next })
-                                            }
-                                        />
+                                <div className="flex items-center justify-between">
+                                    <div className="text-xs text-muted-foreground">Statement {selectedIdx + 1}</div>
+
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            aria-label="Previous statement"
+                                            className="h-6 w-6 rounded-full border border-muted/50 text-xs flex items-center justify-center hover:bg-muted/30"
+                                            onClick={() => go(selectedIdx - 1)}
+                                        >
+                                            ‹
+                                        </button>
+                                        <div className="flex gap-1">
+                                            {flatCandidates.map((_, i) => (
+                                                <button
+                                                    key={i}
+                                                    aria-label={`Go to statement ${i + 1}`}
+                                                    onClick={() => go(i)}
+                                                    className={`h-2 w-2 rounded-full ${i === selectedIdx ? 'bg-primary' : 'bg-muted'}`}
+                                                />
+                                            ))}
+                                        </div>
+                                        <button
+                                            aria-label="Next statement"
+                                            className="h-6 w-6 rounded-full border border-muted/50 text-xs flex items-center justify-center hover:bg-muted/30"
+                                            onClick={() => go(selectedIdx + 1)}
+                                        >
+                                            ›
+                                        </button>
+                                        <div className="ml-2 text-xs text-muted-foreground">
+                                            {selectedIdx + 1} / {count}
+                                        </div>
                                     </div>
-                                );
-                            })}
-                        </div>
+                                </div>
+                            </CardContent>
+                        </Card>
                     )}
                 </div>
 
@@ -86,7 +125,7 @@ export function AttemptProofChooser({
                     <Button variant="secondary" onClick={() => onOpenChange(false)}>
                         Close
                     </Button>
-                    <Button onClick={attemptSelected} disabled={!((candidates[selectedIdx] ?? '').trim())}>
+                    <Button onClick={attemptSelected} disabled={!((flatCandidates[selectedIdx] ?? '').trim())}>
                         Attempt Proof
                     </Button>
                 </DialogFooter>
