@@ -288,6 +288,7 @@ export default function RawProofView() {
                     canCheckAgain={false}
                     showCheckAgain={false}
                     showRevise={false}
+                    showAddToWorkspace={true}
                     showEditSelection={true}
                     onEditSelection={() => {
                         // Enter edit mode and place caret near the selected text.

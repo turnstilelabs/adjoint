@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { selectionRangeToLatex } from '@/lib/selection-to-latex';
 import { useAppStore } from '@/state/app-store';
+import { useRouter } from 'next/navigation';
 
 type Anchor = { top: number; left: number };
 
@@ -24,6 +25,7 @@ function getSelectionHtml(range: Range): string {
  * - avoids duplicating toolbars inside components that already provide a local selection toolbar
  */
 export function GlobalSelectionOverlay() {
+    const router = useRouter();
     const [anchor, setAnchor] = useState<Anchor | null>(null);
     const [selectedText, setSelectedText] = useState('');
     const [copyText, setCopyText] = useState<string>('');
@@ -56,7 +58,7 @@ export function GlobalSelectionOverlay() {
     };
 
     useEffect(() => {
-        const onMouseUp = () => {
+        const computeAnchorFromCurrentSelection = () => {
             const sel = window.getSelection();
             const text = (sel?.toString() ?? '').trim();
             if (!sel || !text) {
@@ -91,26 +93,45 @@ export function GlobalSelectionOverlay() {
             setSelectedText(text);
             setCopyText(selectionRangeToLatex(range) || text);
             setSelectedHtml(getSelectionHtml(range));
-            setAnchor({ top: rect.top, left: rect.left + rect.width / 2 });
+            // Clamp anchor to viewport so the popover doesn't disappear off-screen.
+            const cx = rect.left + rect.width / 2;
+            const clampedLeft = Math.max(24, Math.min(window.innerWidth - 24, cx));
+            const clampedTop = Math.max(24, Math.min(window.innerHeight - 24, rect.top));
+            setAnchor({ top: clampedTop, left: clampedLeft });
         };
+
+        const onMouseUp = () => computeAnchorFromCurrentSelection();
 
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') clear();
         };
 
-        const onScroll = () => {
-            // Avoid a "floating" toolbar when user scrolls.
-            if (anchor) clear();
+        const onScrollOrResize = () => {
+            // Keep the toolbar visible while scrolling by recomputing its anchor.
+            if (!anchor) return;
+            try {
+                const sel = window.getSelection();
+                const text = (sel?.toString() ?? '').trim();
+                if (!sel || !text || !sel.rangeCount) {
+                    clear();
+                    return;
+                }
+                computeAnchorFromCurrentSelection();
+            } catch {
+                clear();
+            }
         };
 
         document.addEventListener('mouseup', onMouseUp);
         window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('scroll', onScroll, true);
+        window.addEventListener('scroll', onScrollOrResize, true);
+        window.addEventListener('resize', onScrollOrResize);
 
         return () => {
             document.removeEventListener('mouseup', onMouseUp);
             window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('scroll', onScrollOrResize, true);
+            window.removeEventListener('resize', onScrollOrResize);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [anchor]);
@@ -128,6 +149,22 @@ export function GlobalSelectionOverlay() {
             showCheckAgain={false}
             showRevise={false}
             showVerify={showVerify}
+            // Add-to-workspace is available from selections in Explore + Prover chats.
+            showAddToWorkspace={view === 'explore' || view === 'proof'}
+            // Enable Prove-this in Explore selection (match Workspace UX).
+            showProveThis={view === 'explore'}
+            onProveThis={() => {
+                try {
+                    const payload = String(copyText || selectedText || '').trim();
+                    if (!payload) return;
+                    clear();
+                    window.getSelection()?.removeAllRanges?.();
+                    // Navigate into prover with the selected snippet.
+                    router.push(`/prove?q=${encodeURIComponent(payload)}`);
+                } catch {
+                    // ignore
+                }
+            }}
         />
     );
 }

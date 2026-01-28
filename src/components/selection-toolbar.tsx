@@ -7,16 +7,24 @@ import {
   Sparkles,
   CheckSquare,
   CheckCircle,
+  Plus,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { validateStatementAction, checkAgainProofAction } from '@/app/actions';
-import { useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useAppStore } from '@/state/app-store';
 import { showModelError } from '@/lib/model-errors';
 import { useRouter } from 'next/navigation';
 import { selectionRangeToLatex } from '@/lib/selection-to-latex';
+import { ToastAction } from '@/components/ui/toast';
+import {
+  loadWorkspaceProject,
+  saveWorkspaceProject,
+  setCurrentWorkspaceProjectId,
+} from '@/lib/persistence/workspace-projects';
+import { WorkspacePickerDialog } from '@/components/workspace/workspace-picker-dialog';
 
 async function copyWithFormat(text: string, html?: string) {
   const t = String(text ?? '');
@@ -104,6 +112,9 @@ interface SelectionToolbarProps {
   showAddToReview?: boolean;
   onAddToReview?: (opts: { selectionText: string; selectionLatex: string }) => void;
 
+  /** Optional action: add selection to a workspace (with picker). */
+  showAddToWorkspace?: boolean;
+
   /**
    * Optional override for button order.
    *
@@ -112,6 +123,7 @@ interface SelectionToolbarProps {
    */
   buttonOrder?: Array<
     | 'addToReview'
+    | 'addToWorkspace'
     | 'copy'
     | 'verify'
     | 'askAI'
@@ -143,6 +155,7 @@ export function SelectionToolbar({
   onVerify,
   showAddToReview = false,
   onAddToReview,
+  showAddToWorkspace = false,
   buttonOrder,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
@@ -155,6 +168,50 @@ export function SelectionToolbar({
   const setIsWorkspaceChatOpen = useAppStore((s) => (s as any).setIsWorkspaceChatOpen);
   const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
+
+  const [openWorkspacePicker, setOpenWorkspacePicker] = useState(false);
+  const [pendingWorkspaceAppend, setPendingWorkspaceAppend] = useState<string>('');
+
+  // Keep the popover anchored to the current selection even while scrolling.
+  const [liveAnchor, setLiveAnchor] = useState(anchor);
+  useEffect(() => {
+    setLiveAnchor(anchor);
+  }, [anchor]);
+
+  useEffect(() => {
+    if (!anchor) return;
+
+    const updateAnchorFromSelection = () => {
+      try {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        if (!rect || (rect.width === 0 && rect.height === 0)) return;
+
+        const cx = rect.left + rect.width / 2;
+        const clampedLeft = Math.max(24, Math.min(window.innerWidth - 24, cx));
+        const clampedTop = Math.max(24, Math.min(window.innerHeight - 24, rect.top));
+        setLiveAnchor({ top: clampedTop, left: clampedLeft });
+      } catch {
+        // ignore
+      }
+    };
+
+    // Recompute on scroll (capturing) and resize.
+    window.addEventListener('scroll', updateAnchorFromSelection, true);
+    window.addEventListener('resize', updateAnchorFromSelection);
+    return () => {
+      window.removeEventListener('scroll', updateAnchorFromSelection, true);
+      window.removeEventListener('resize', updateAnchorFromSelection);
+    };
+  }, [anchor]);
+
+  const safeAnchor = useMemo(() => {
+    if (!liveAnchor) return liveAnchor;
+    const left = Math.max(24, Math.min(window.innerWidth - 24, liveAnchor.left));
+    const top = Math.max(24, Math.min(window.innerHeight - 24, liveAnchor.top));
+    return { top, left };
+  }, [liveAnchor]);
 
   const computeCopyTextFromLiveSelection = () => {
     try {
@@ -228,6 +285,7 @@ export function SelectionToolbar({
 
   const defaultOrder: NonNullable<SelectionToolbarProps['buttonOrder']> = [
     'addToReview',
+    'addToWorkspace',
     'copy',
     'verify',
     'askAI',
@@ -246,236 +304,325 @@ export function SelectionToolbar({
   })();
 
   return (
-    <Popover open={!!anchor}>
-      <PopoverAnchor asChild>
-        <div
-          style={{
-            position: 'fixed',
-            top: anchor?.top ?? 0,
-            left: anchor?.left ?? 0,
-            width: 0,
-            height: 0,
-          }}
-        />
-      </PopoverAnchor>
-      <PopoverContent
-        className="w-auto p-1"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        side="top"
-        sideOffset={8}
-        align="center"
-      >
-        <div className="flex items-center gap-1">
-          {order.map((k) => {
-            if (k === 'addToReview') {
-              if (!showAddToReview || typeof onAddToReview !== 'function') return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  // Prevent the click from collapsing the current selection before we read it.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    const fromSelection = computeCopyTextFromLiveSelection();
-                    const selectionLatex = (fromSelection || selectedText || '').trim();
-                    const selectionTextPlain = (selectedText || '').trim();
-                    if (!selectionLatex && !selectionTextPlain) return;
-                    onAddToReview({ selectionText: selectionTextPlain, selectionLatex });
-                  }}
-                  title="Add to review"
-                >
-                  <CheckSquare className="h-4 w-4" />
-                </Button>
-              );
-            }
+    <>
+      <Popover open={!!anchor}>
+        <PopoverAnchor asChild>
+          <div
+            style={{
+              position: 'fixed',
+              top: safeAnchor?.top ?? 0,
+              left: safeAnchor?.left ?? 0,
+              width: 0,
+              height: 0,
+            }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          className="w-auto p-1"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          side="top"
+          sideOffset={8}
+          align="center"
+        >
+          <div className="flex items-center gap-1">
+            {order.map((k) => {
+              if (k === 'addToReview') {
+                if (!showAddToReview || typeof onAddToReview !== 'function') return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const fromSelection = computeCopyTextFromLiveSelection();
+                      const selectionLatex = (fromSelection || selectedText || '').trim();
+                      const selectionTextPlain = (selectedText || '').trim();
+                      if (!selectionLatex && !selectionTextPlain) return;
+                      onAddToReview({ selectionText: selectionTextPlain, selectionLatex });
+                    }}
+                    title="Add to review"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                  </Button>
+                );
+              }
 
-            if (k === 'copy') {
-              if (!showCopy) return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  // Prevent the click from collapsing the current selection before we copy.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={async () => {
-                    const fromSelection = computeCopyTextFromLiveSelection();
-                    const effective = (copyText ?? fromSelection ?? selectedText).trim();
-                    await copyWithFormat(effective, selectedHtml);
-                    toast({ title: 'Copied', description: 'Selection copied to clipboard.' });
-                  }}
-                  title="Copy"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              );
-            }
+              if (k === 'addToWorkspace') {
+                if (!showAddToWorkspace) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const fromSelection = computeCopyTextFromLiveSelection();
+                      const selectionLatex = (fromSelection || copyText || selectedText || '').trim();
+                      const selectionTextPlain = (selectedText || '').trim();
+                      if (!selectionLatex && !selectionTextPlain) return;
 
-            if (k === 'verify') {
-              if (!showVerify) return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  // Prevent the click from collapsing the current selection before we read it.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    const fromSelection = computeCopyTextFromLiveSelection();
-                    const selectionLatex = (fromSelection || selectedText || '').trim();
-                    const selectionTextPlain = (selectedText || '').trim();
-                    if (!selectionLatex && !selectionTextPlain) return;
+                      const body = selectionLatex || selectionTextPlain;
+                      const snippet = [
+                        '% --- Imported selection ---',
+                        body,
+                        '% --- End imported selection ---',
+                      ].join('\n');
 
-                    if (typeof onVerify === 'function') {
-                      onVerify({ selectionText: selectionTextPlain, selectionLatex });
-                      return;
-                    }
+                      setPendingWorkspaceAppend(snippet);
+                      setOpenWorkspacePicker(true);
+                    }}
+                    title="Add to Workspace"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                );
+              }
 
-                    // Default global handler: let the app open a verify dialog.
-                    try {
-                      window.dispatchEvent(
-                        new CustomEvent('adjoint:sympyVerify', {
-                          detail: {
-                            selectionText: selectionTextPlain,
-                            selectionLatex,
-                          },
-                        }),
-                      );
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  title="Verify (SymPy)"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                </Button>
-              );
-            }
+              if (k === 'copy') {
+                if (!showCopy) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we copy.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={async () => {
+                      const fromSelection = computeCopyTextFromLiveSelection();
+                      const effective = (copyText ?? fromSelection ?? selectedText).trim();
+                      await copyWithFormat(effective, selectedHtml);
+                      toast({ title: 'Copied', description: 'Selection copied to clipboard.' });
+                    }}
+                    title="Copy"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                );
+              }
 
-            if (k === 'askAI') {
-              if (!showAskAI) return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  // Prevent the click from collapsing the current selection before we read it.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    if (typeof onAskAI === 'function') {
-                      onAskAI();
-                      return;
-                    }
+              if (k === 'verify') {
+                if (!showVerify) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const fromSelection = computeCopyTextFromLiveSelection();
+                      const selectionLatex = (fromSelection || selectedText || '').trim();
+                      const selectionTextPlain = (selectedText || '').trim();
+                      if (!selectionLatex && !selectionTextPlain) return;
 
-                    const fromSelection = computeCopyTextFromLiveSelection();
-                    const text = (fromSelection || selectedText || '').trim();
-                    if (!text) return;
+                      if (typeof onVerify === 'function') {
+                        onVerify({ selectionText: selectionTextPlain, selectionLatex });
+                        return;
+                      }
 
-                    if (view === 'explore') {
-                      setExploreDraft(text);
-                      return;
-                    }
-
-                    if (view === 'proof') {
-                      setChatDraft(text, { open: true });
-                      return;
-                    }
-
-                    if (view === 'workspace') {
+                      // Default global handler: let the app open a verify dialog.
                       try {
-                        if (typeof setWorkspaceDraft === 'function')
-                          setWorkspaceDraft(text, { open: true });
-                        if (typeof setIsWorkspaceChatOpen === 'function')
-                          setIsWorkspaceChatOpen(true);
+                        window.dispatchEvent(
+                          new CustomEvent('adjoint:sympyVerify', {
+                            detail: {
+                              selectionText: selectionTextPlain,
+                              selectionLatex,
+                            },
+                          }),
+                        );
                       } catch {
                         // ignore
                       }
-                      return;
-                    }
+                    }}
+                    title="Verify (SymPy)"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                  </Button>
+                );
+              }
 
-                    // Home (or unknown): send to Explore as a general "ask AI" context.
-                    try {
-                      startExplore(text);
-                      router.push(`/explore?q=${encodeURIComponent(text)}`);
-                      // Prefill the explore input too.
-                      setExploreDraft(text);
-                    } catch {
-                      toast({
-                        title: 'Ask AI unavailable',
-                        description: 'Please open Explore or Proof mode first.',
-                        variant: 'default',
-                      });
-                    }
-                  }}
-                  title="Ask AI"
-                >
-                  <MessageSquareText className="h-4 w-4" />
-                </Button>
-              );
+              if (k === 'askAI') {
+                if (!showAskAI) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (typeof onAskAI === 'function') {
+                        onAskAI();
+                        return;
+                      }
+
+                      const fromSelection = computeCopyTextFromLiveSelection();
+                      const text = (fromSelection || selectedText || '').trim();
+                      if (!text) return;
+
+                      if (view === 'explore') {
+                        setExploreDraft(text);
+                        return;
+                      }
+
+                      if (view === 'proof') {
+                        setChatDraft(text, { open: true });
+                        return;
+                      }
+
+                      if (view === 'workspace') {
+                        try {
+                          if (typeof setWorkspaceDraft === 'function')
+                            setWorkspaceDraft(text, { open: true });
+                          if (typeof setIsWorkspaceChatOpen === 'function')
+                            setIsWorkspaceChatOpen(true);
+                        } catch {
+                          // ignore
+                        }
+                        return;
+                      }
+
+                      // Home (or unknown): send to Explore as a general "ask AI" context.
+                      try {
+                        startExplore(text);
+                        router.push(`/explore?q=${encodeURIComponent(text)}`);
+                        // Prefill the explore input too.
+                        setExploreDraft(text);
+                      } catch {
+                        toast({
+                          title: 'Ask AI unavailable',
+                          description: 'Please open Explore or Proof mode first.',
+                          variant: 'default',
+                        });
+                      }
+                    }}
+                    title="Ask AI"
+                  >
+                    <MessageSquareText className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              if (k === 'proveThis') {
+                if (!showProveThis || typeof onProveThis !== 'function') return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onProveThis()}
+                    title="Prove this"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              if (k === 'checkAgain') {
+                if (!showCheckAgain) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleCheckAgain}
+                    disabled={isPending || !canCheckAgain}
+                    title={canCheckAgain ? 'Check again' : 'Check again (Proof only)'}
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              if (k === 'editSelection') {
+                if (!showEditSelection || !onEditSelection) return null;
+                return (
+                  <Button key={k} variant="ghost" size="icon" onClick={onEditSelection} title="Edit">
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              if (k === 'revise') {
+                if (!showRevise) return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    onClick={onRevise}
+                    title="Revise statement"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              return null;
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <WorkspacePickerDialog
+        open={openWorkspacePicker}
+        onOpenChange={setOpenWorkspacePicker}
+        title="Add to Workspace"
+        description="Choose which workspace to append to."
+        confirmLabel="Add"
+        onConfirm={(workspaceId) => {
+          const append = String(pendingWorkspaceAppend || '').trim();
+          if (!append) {
+            setOpenWorkspacePicker(false);
+            return;
+          }
+
+          try {
+            const existing = loadWorkspaceProject(workspaceId);
+            const prevDoc = String(existing?.doc ?? '');
+            const nextDoc =
+              prevDoc.trim().length > 0
+                ? `${prevDoc.replace(/\s*$/, '')}\n\n${append}\n`
+                : `${append}\n`;
+
+            saveWorkspaceProject(workspaceId, {
+              doc: nextDoc,
+              messages: (existing?.messages ?? []) as any,
+              uiState: existing?.uiState ?? {},
+            });
+            setCurrentWorkspaceProjectId(workspaceId);
+
+            // Best-effort: keep in-memory state aligned so opening Workspace is instant.
+            try {
+              useAppStore.setState({ workspaceDoc: nextDoc, workspaceMessages: existing?.messages ?? [] } as any);
+            } catch {
+              // ignore
             }
 
-            if (k === 'proveThis') {
-              if (!showProveThis || typeof onProveThis !== 'function') return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  // Prevent the click from collapsing the current selection before we read it.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => onProveThis()}
-                  title="Prove this"
-                >
-                  <Sparkles className="h-4 w-4" />
-                </Button>
-              );
-            }
-
-            if (k === 'checkAgain') {
-              if (!showCheckAgain) return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleCheckAgain}
-                  disabled={isPending || !canCheckAgain}
-                  title={canCheckAgain ? 'Check again' : 'Check again (Proof only)'}
-                >
-                  <HelpCircle className="h-4 w-4" />
-                </Button>
-              );
-            }
-
-            if (k === 'editSelection') {
-              if (!showEditSelection || !onEditSelection) return null;
-              return (
-                <Button key={k} variant="ghost" size="icon" onClick={onEditSelection} title="Edit">
-                  <Edit className="h-4 w-4" />
-                </Button>
-              );
-            }
-
-            if (k === 'revise') {
-              if (!showRevise) return null;
-              return (
-                <Button
-                  key={k}
-                  variant="ghost"
-                  size="icon"
-                  onClick={onRevise}
-                  title="Revise statement"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-              );
-            }
-
-            return null;
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
+            setOpenWorkspacePicker(false);
+            toast({
+              title: 'Added to Workspace',
+              description: 'The selection was appended.',
+              action: (
+                <ToastAction altText="Open workspace" onClick={() => router.push('/workspace')}>
+                  Open workspace
+                </ToastAction>
+              ),
+            });
+          } catch (e: any) {
+            toast({
+              title: 'Failed to add to Workspace',
+              description: e?.message || 'Unexpected error.',
+              variant: 'destructive',
+            });
+          }
+        }}
+      />
+    </>
   );
 }
