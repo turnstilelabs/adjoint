@@ -12,11 +12,15 @@ function stripDelimiters(s: string): string {
 }
 
 function normalizeQuotesAndSpaces(s: string): string {
+    // Preserve line breaks so we can reliably extract a single equation from multi-line selections.
+    // (We still normalize intra-line whitespace.)
     return String(s ?? '')
+        .replace(/\r\n/g, '\n')
         .replace(/\u00A0/g, ' ')
         .replace(/[“”]/g, '"')
         .replace(/[’]/g, "'")
-        .replace(/\s+/g, ' ')
+        .replace(/[\t\f\v ]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
         .trim();
 }
 

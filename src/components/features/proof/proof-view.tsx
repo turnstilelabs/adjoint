@@ -10,11 +10,13 @@ import { RefreshCw, Pencil, Info } from 'lucide-react';
 import { openFeedback } from '@/components/feedback/feedback-widget';
 import { KatexRenderer } from '@/components/katex-renderer';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { RejectionPanel } from '@/components/features/proof/rejection-panel';
 
 export default function ProofView() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isLeaving, setIsLeaving] = useState(false);
   const deriveErrorTitle = (code?: string | null, msg?: string | null) => {
     switch (code) {
       case 'MODEL_AUTH_INVALID': return 'Model credentials issue';
@@ -45,6 +47,10 @@ export default function ProofView() {
     retry,
     editProblem,
     pendingSuggestion,
+    pendingRejection,
+    clearRejection,
+    startProof,
+    startExploreFromFailedProof,
     acceptSuggestedChange,
     clearSuggestion,
   } = useAppStore((s) => ({
@@ -57,9 +63,15 @@ export default function ProofView() {
     retry: s.retry,
     editProblem: s.editProblem,
     pendingSuggestion: s.pendingSuggestion,
+    pendingRejection: s.pendingRejection,
+    clearRejection: s.clearRejection,
+    startProof: s.startProof,
+    startExploreFromFailedProof: s.startExploreFromFailedProof,
     acceptSuggestedChange: s.acceptSuggestedChange,
     clearSuggestion: s.clearSuggestion,
   }));
+
+  const macros = useAppStore((s) => s.proofRenderMacros);
 
   const hasProof = !!proof();
   const q = (searchParams?.get('q') || '').trim();
@@ -69,10 +81,15 @@ export default function ProofView() {
   useEffect(() => {
     // Only redirect away from /prove when there is no active proof AND no explicit query.
     // If `q` exists, ProveClientPage will start the proof attempt in an effect shortly.
-    if (!q && !loading && !hasProof && !error && !pendingSuggestion) {
+    if (!q && !loading && !hasProof && !error && !pendingSuggestion && !pendingRejection) {
       router.replace('/');
     }
-  }, [q, loading, hasProof, error, pendingSuggestion, router]);
+  }, [q, loading, hasProof, error, pendingSuggestion, pendingRejection, router]);
+
+  // While navigating away (e.g. clicking “Edit”), stop rendering this page’s UI
+  // immediately to avoid a brief flash of the Prove loading screen.
+  // (Important: keep this after hooks to satisfy Rules of Hooks.)
+  if (isLeaving) return null;
 
   if (!loading && error) {
     return (
@@ -89,7 +106,14 @@ export default function ProofView() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Retry
                 </Button>
-                <Button variant="secondary" onClick={editProblem}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    editProblem();
+                    setIsLeaving(true);
+                    router.replace('/');
+                  }}
+                >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </Button>
@@ -160,7 +184,7 @@ export default function ProofView() {
               <div className="rounded-md border bg-muted/20 p-3">
                 <div className="text-xs uppercase tracking-wide text-foreground/60">Original statement</div>
                 <div className="mt-1">
-                  <KatexRenderer content={problem} />
+                  <KatexRenderer content={problem} macros={macros} />
                 </div>
               </div>
             ) : null}
@@ -170,7 +194,7 @@ export default function ProofView() {
                 The AI was unable to prove this statement and proposed an alternative formulation:
               </div>
               <div className="rounded-md border bg-background p-2">
-                <KatexRenderer content={pendingSuggestion.provedStatement} />
+                <KatexRenderer content={pendingSuggestion.provedStatement} macros={macros} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" onClick={acceptSuggestedChange} autoFocus>
@@ -185,6 +209,8 @@ export default function ProofView() {
                   onClick={() => {
                     clearSuggestion();
                     editProblem();
+                    setIsLeaving(true);
+                    router.replace('/');
                   }}
                 >
                   Edit
@@ -194,6 +220,51 @@ export default function ProofView() {
                 <div className="text-xs text-muted-foreground mt-2">{pendingSuggestion.explanation}</div>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Rejection can happen in an edge case where token streaming yields no `rawProof`
+  // (and thus no proofHistory entry), but we still have a rejection explanation.
+  // Previously this fell through to `return null` (blank screen). Render a safe
+  // rejection view instead.
+  if (!loading && pendingRejection && !hasProof) {
+    const p = (problem || '').trim();
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <Card className="w-full max-w-3xl border-primary/20">
+          <CardHeader>
+            <CardTitle>Could not prove statement</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {p ? (
+              <div className="rounded-md border bg-muted/20 p-3">
+                <div className="text-xs uppercase tracking-wide text-foreground/60">Statement</div>
+                <div className="mt-1">
+                  <KatexRenderer content={p} macros={macros} />
+                </div>
+              </div>
+            ) : null}
+
+            <RejectionPanel
+              explanation={pendingRejection.explanation}
+              onEdit={() => {
+                editProblem();
+                setIsLeaving(true);
+                router.replace('/');
+              }}
+              onRetry={async () => {
+                if (!p) return;
+                clearRejection();
+                await startProof(p, { force: true });
+              }}
+              onExplore={() => {
+                startExploreFromFailedProof();
+                router.push('/explore');
+              }}
+            />
           </CardContent>
         </Card>
       </div>

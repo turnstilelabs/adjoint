@@ -26,19 +26,43 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
 
     // When landing via /explore?... hydrate state.
     useEffect(() => {
+        const snapshot = useAppStore.getState();
         const trimmed = (q || '').trim();
 
-        if (trimmed) {
-            // Navigation with a query string: start a fresh explore session.
-            sentOnce.current = false; // allow auto-send for new seed
-            startExplore(trimmed);
+        // IMPORTANT: `?new=1` is a one-shot intent (“start a fresh session”).
+        // When navigating back/forward, we may revisit the same URL, but we should
+        // NOT wipe an existing thread.
+        if (isNew) {
+            const hasExistingThread =
+                (snapshot.exploreMessages?.length ?? 0) > 0 ||
+                Boolean((snapshot.exploreSeed || '').trim()) ||
+                snapshot.exploreArtifacts != null;
+
+            if (hasExistingThread) {
+                startExplore();
+            } else {
+                sentOnce.current = false;
+                newExplore();
+            }
             return;
         }
 
-        if (isNew) {
-            // Explicit: user requested a fresh empty explore session.
-            sentOnce.current = false;
-            newExplore();
+        if (trimmed) {
+            // Idempotent hydration:
+            // This effect must NOT depend on `seed`/`messagesLen`, otherwise it will re-run whenever
+            // the chat updates and cancel in-flight streams. Instead, read the current store snapshot.
+            const alreadyHaveSessionForThisSeed =
+                (snapshot.exploreSeed || '').trim() === trimmed &&
+                ((snapshot.exploreMessages?.length ?? 0) > 0 || snapshot.exploreArtifacts != null);
+
+            if (alreadyHaveSessionForThisSeed) {
+                startExplore();
+                return;
+            }
+
+            // Navigation with a query string: start a fresh explore session.
+            sentOnce.current = false; // allow auto-send for new seed
+            startExplore(trimmed);
             return;
         }
 
@@ -46,7 +70,9 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
         startExplore();
         // startExplore is stable from Zustand; q is our navigation input
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, isNew]);
+        // Intentionally do NOT depend on `seed`/`messagesLen` to avoid cancelling streams mid-flight.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [q, isNew, startExplore, newExplore]);
 
     useEffect(() => {
         // Auto-send a first exploration message when we have a seed and no prior messages.

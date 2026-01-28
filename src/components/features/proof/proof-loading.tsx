@@ -11,6 +11,7 @@ import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
 export function ProofLoading() {
   const router = useRouter();
   const problem = useAppStore((s) => s.problem);
+  const macros = useAppStore((s) => s.proofRenderMacros);
   const loading = useAppStore((s) => s.loading);
   const cancelProofAttempt = useAppStore((s) => s.cancelProofAttempt);
   const progressLog = useAppStore((s) => s.progressLog);
@@ -123,7 +124,7 @@ export function ProofLoading() {
                 'max-h-[32vh] overflow-y-auto pr-2'
               }
             >
-              <KatexRenderer content={problem} />
+              <KatexRenderer content={problem} macros={macros} />
             </div>
           ) : (
             <p>Loading problem statement...</p>
@@ -174,7 +175,7 @@ export function ProofLoading() {
             </div>
             {renderMath ? (
               <div className="prose max-w-full">
-                <KatexRenderer content={deferredLiveDraft || ''} fallbackOnError={false} />
+                <KatexRenderer content={deferredLiveDraft || ''} macros={macros} fallbackOnError={false} />
               </div>
             ) : (
               <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
@@ -189,7 +190,13 @@ export function ProofLoading() {
           variant="outline"
           onClick={() => {
             cancelProofAttempt();
-            router.push('/');
+            // If Prove was opened from Explore/Workspace/etc, prefer returning there.
+            // This preserves the user’s previous mode + in-memory state.
+            try {
+              router.back();
+            } catch {
+              router.push('/explore');
+            }
           }}
         >
           <X className="mr-2 h-4 w-4" />

@@ -8,9 +8,11 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { RejectionPanel } from '@/components/features/proof/rejection-panel';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
+  const macros = useAppStore((s) => s.proofRenderMacros);
   const startProof = useAppStore((s) => s.startProof);
   const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
@@ -41,7 +43,6 @@ function EditableProblemCard() {
 
       // UX: do not gate statement edits behind a “is this math?” classifier.
       // Let the prover pipeline decide how to handle the input.
-      console.debug('[UI][EditableProblemCard] calling startProof');
       setIsEditing(false);
       router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
     });
@@ -122,51 +123,22 @@ function EditableProblemCard() {
                 }
                 data-selection-enabled="1"
               >
-                <KatexRenderer content={problem} />
+                <KatexRenderer content={problem} macros={macros} />
               </div>
               {hasRejection && pendingRejection && (
-                <div className="mt-3 p-3 rounded-md border border-muted bg-background text-foreground shadow-sm">
-                  <div className="text-sm mb-2 font-medium">
-                    Could not prove the statement as written. It may be false or require stronger assumptions:
-                  </div>
-                  <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
-                    {/*
-                      IMPORTANT:
-                      Rejection explanations are predominantly prose. Using the global math auto-wrap heuristic here
-                      can accidentally wrap long English runs into math mode, which causes:
-                      - spaces to be ignored (words become glued)
-                      - math italics applied to letters
-                      We therefore render only explicitly-delimited math ($...$, $$...$$, \(\), \[\], fenced ```math).
-                    */}
-                    <KatexRenderer content={pendingRejection.explanation} autoWrap={false} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <Button size="sm" onClick={() => setIsEditing(true)}>
-                      Edit statement
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        clearRejection();
-                        await startProof(problem, { force: true });
-                      }}
-                    >
-                      Try again
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        // Seed explore chat with the original statement + streamed draft, then navigate.
-                        startExploreFromFailedProof();
-                        router.push('/explore');
-                      }}
-                    >
-                      Explore instead
-                    </Button>
-                  </div>
-                </div>
+                <RejectionPanel
+                  explanation={pendingRejection.explanation}
+                  onEdit={() => setIsEditing(true)}
+                  onRetry={async () => {
+                    clearRejection();
+                    await startProof(problem, { force: true });
+                  }}
+                  onExplore={() => {
+                    // Seed explore chat with the original statement + streamed draft, then navigate.
+                    startExploreFromFailedProof();
+                    router.push('/explore');
+                  }}
+                />
               )}
 
               {hasSuggestion && pendingSuggestion && (
@@ -176,7 +148,7 @@ function EditableProblemCard() {
                   </div>
 
                   <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
-                    <KatexRenderer content={pendingSuggestion.provedStatement} />
+                    <KatexRenderer content={pendingSuggestion.provedStatement} macros={macros} />
                   </div>
                   <div className="flex items-center gap-2 mt-3">
                     <Button size="sm" onClick={acceptSuggestedChange}>

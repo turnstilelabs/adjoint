@@ -390,7 +390,7 @@ export const explorationAssistantFlow = ai.defineFlow(
                                         // Some models occasionally echo a stale/incorrect turnId in the tool output.
                                         // We always override with the client-provided turnId when emitting the
                                         // artifacts chunk, so stale updates cannot be applied.
-                                        console.debug('[Explore][Flow] tool turnId mismatch (overridden)', {
+                                        console.info('[Explore][Flow] tool turnId mismatch (overridden)', {
                                             debugId,
                                             model: cand,
                                             toolTurnId: out.turnId,

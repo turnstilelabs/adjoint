@@ -98,6 +98,8 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
     return -1;
   };
 
+  const isWhitespace = (ch: string | undefined) => (ch ? /\s/.test(ch) : false);
+
   while (i < text.length) {
     if (text[i] === '\\' && i + 1 < text.length) {
       buf += text[i + 1];
@@ -125,8 +127,26 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
     }
 
     if (text[i] === '*') {
+      // Hardening: avoid treating stray/streaming asterisks as italics.
+      // We only allow *italic* when:
+      // - next char is not whitespace
+      // - previous char is not whitespace (reduces cases like "** Normalization**" being mis-parsed)
+      // - the closing '*' is followed by a non-'*' (so we don't consume a '*' from a bold closer)
+      if (isWhitespace(text[i + 1]) || isWhitespace(text[i - 1])) {
+        buf += '*';
+        i += 1;
+        continue;
+      }
+
       const end = readUntil('*', i + 1);
       if (end !== -1) {
+        // If the closing '*' is immediately followed by another '*', this is almost certainly
+        // a bold marker boundary ("**") and we should not treat it as italics.
+        if (text[end + 1] === '*') {
+          buf += '*';
+          i += 1;
+          continue;
+        }
         flush();
         const inner = text.slice(i + 1, end);
         nodes.push(

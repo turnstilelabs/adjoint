@@ -105,11 +105,21 @@ function SingleStatementCarousel({
     onActiveStatementChange?: (stmt: string) => void;
     editorRef?: React.Ref<EditableArtifactItemHandle>;
 }) {
-    // Normalize & flatten any multi-statement entries
-    // Display latest statements first.
-    const flat = items.flatMap(splitStatements);
+    // Normalize & flatten any multi-statement entries.
+    const flat = React.useMemo(
+        () => items.flatMap((s) => splitStatements(String(s ?? ''))).map((s) => s.trim()).filter(Boolean),
+        [items],
+    );
     const [index, setIndex] = React.useState(0);
     const count = flat.length;
+
+    // Clamp index when items change (especially after deletion).
+    React.useEffect(() => {
+        setIndex((prev) => {
+            if (!count) return 0;
+            return Math.max(0, Math.min(prev, count - 1));
+        });
+    }, [count]);
 
     const original = (flat[index] ?? '').trim();
     const current = (edits[original] ?? original).trim();

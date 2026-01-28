@@ -70,7 +70,8 @@ function MessageSuggestionSection({ message }: { message: Message }) {
           </div>
           {diff.length > 0 && (
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={onAccept}>
+              {/* Primary CTA: make hover/focus states clearly visible */}
+              <Button variant="default" size="sm" onClick={onAccept}>
                 <ThumbsUp className="mr-2" /> Accept Proposed Changes
               </Button>
               <Button variant="ghost" size="sm" onClick={onDecline}>

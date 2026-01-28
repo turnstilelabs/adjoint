@@ -81,23 +81,14 @@ export function ProofGraphView() {
 
   // Trigger graph generation when entering graph view and data is missing.
   useEffect(() => {
-    console.debug('[UI][Graph] effect fired', {
-      viewMode,
-      hasGraph: !!proof.graphData,
-      isGeneratingGraph,
-      steps: proof.sublemmas?.length ?? 0,
-      proofType: (proof as any)?.type,
-    });
     if (viewMode !== 'graph') return;
     if (proof.graphData || isGeneratingGraph) return;
     if (!proof.sublemmas || proof.sublemmas.length === 0) return;
 
     startGeneratingGraph(async () => {
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][Graph] calling generateProofGraphAction steps=', proof.sublemmas.length);
       const result = await generateProofGraphForGoalAction(useAppStore.getState().problem || '', proof.sublemmas);
       const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      console.debug('[UI][Graph] graph call done ms=', t1 - t0, 'ok=', (result as any)?.success === true);
       if ((result as any)?.success === true) {
         const { nodes, edges } = result as { success: true } & GenerateProofGraphOutput;
         updateCurrentProofMeta({
@@ -123,7 +114,6 @@ export function ProofGraphView() {
         });
       } else {
         updateCurrentProofMeta({ graphData: undefined });
-        console.debug('[UI][Graph] graph call failed error=', (result as any)?.error);
         const fallback = 'Adjoint’s connection to the model was interrupted, please go back and retry.';
         const code = showModelError(toast, (result as any)?.error, goBack, 'Graph error');
         if (!code) {

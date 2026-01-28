@@ -4,7 +4,6 @@ import { Button } from './ui/button';
 import { LogoSmall } from './logo-small';
 import {
   FileDown,
-  FilePlus,
   History,
   MessageCircle,
   ListTree,
@@ -30,10 +29,13 @@ import {
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  createWorkspaceProject,
+  getCurrentWorkspaceProjectId,
+  loadWorkspaceProject,
   saveWorkspaceProject,
   setCurrentWorkspaceProjectId,
 } from '@/lib/persistence/workspace-projects';
+import { ToastAction } from '@/components/ui/toast';
+import { WorkspacePickerDialog } from '@/components/workspace/workspace-picker-dialog';
 
 export function ProofSidebar() {
   const router = useRouter();
@@ -59,8 +61,7 @@ export function ProofSidebar() {
   }, []);
 
   const [openAnalyzeConfirm, setOpenAnalyzeConfirm] = useState(false);
-  const [openAddToWorkspaceConfirm, setOpenAddToWorkspaceConfirm] = useState(false);
-  const [openSaveAsWorkspaceConfirm, setOpenSaveAsWorkspaceConfirm] = useState(false);
+  const [openAddToWorkspacePicker, setOpenAddToWorkspacePicker] = useState(false);
 
   const proof = useAppStore((s) => s.proof());
   const view = useAppStore((s) => s.view);
@@ -81,7 +82,6 @@ export function ProofSidebar() {
   const isAnalyzingProof = useAppStore((s) => s.isAnalyzingProof);
   const runDecomposition = useAppStore((s) => s.runDecomposition);
   const hasUserEditedStructuredForCurrentRaw = useAppStore((s) => s.hasUserEditedStructuredForCurrentRaw);
-  const goToWorkspace = useAppStore((s) => s.goToWorkspace);
 
   const onClickLogo = () => {
     // Phase 1 routing: preserve in-memory state, just navigate home.
@@ -191,8 +191,10 @@ export function ProofSidebar() {
     const curRaw = (useAppStore.getState().rawProof || '').trim();
 
     const lines: string[] = [];
+    // Wrap the inserted content in comment markers (so it’s easy to find/remove later).
+    lines.push('% --- Imported from Prove mode ---');
+
     if (curProblem) {
-      lines.push('% --- Imported from Prove mode ---');
       lines.push('% Statement');
       lines.push(curProblem);
       lines.push('');
@@ -201,6 +203,8 @@ export function ProofSidebar() {
     if (curView === 'raw') {
       lines.push('% Raw proof');
       lines.push(curRaw || '');
+      lines.push('');
+      lines.push('% --- End import from Prove mode ---');
       return lines.join('\n').trim();
     }
 
@@ -210,6 +214,8 @@ export function ProofSidebar() {
     if (!steps.length) {
       // fallback: if no steps, still include raw
       lines.push(curRaw || '');
+      lines.push('');
+      lines.push('% --- End import from Prove mode ---');
       return lines.join('\n').trim();
     }
 
@@ -223,10 +229,21 @@ export function ProofSidebar() {
       lines.push('');
     }
 
+    lines.push('% --- End import from Prove mode ---');
+
     return lines.join('\n').trim();
   };
 
-  const onConfirmAddToWorkspace = () => {
+  const appendToWorkspaceDoc = (prevDoc: string, append: string) => {
+    const prev = String(prevDoc ?? '');
+    const a = String(append ?? '').trim();
+    if (!a) return prev;
+    return prev.trim().length > 0
+      ? `${prev.replace(/\s*$/, '')}\n\n${a}\n`
+      : `${a}\n`;
+  };
+
+  const onConfirmAddToWorkspace = (workspaceId: string) => {
     try {
       const snippet = buildWorkspaceSnippetFromCurrentProof();
       if (!snippet.trim()) {
@@ -236,54 +253,62 @@ export function ProofSidebar() {
         });
         return;
       }
-      goToWorkspace({ from: 'proof', append: snippet });
-      router.push('/workspace');
-      toast({
-        title: 'Added to Workspace',
-        description: 'The current proof was appended to your workspace draft.',
-      });
-    } catch (e: any) {
-      toast({
-        title: 'Failed to add to Workspace',
-        description: e?.message || 'Unexpected error.',
-        variant: 'destructive',
-      });
-    }
-  };
 
-  const onConfirmSaveAsWorkspaceProject = () => {
-    try {
-      const snippet = buildWorkspaceSnippetFromCurrentProof();
-      if (!snippet.trim()) {
+      const targetId = String(workspaceId || '').trim();
+      if (!targetId) {
         toast({
-          title: 'Nothing to save',
-          description: 'Generate or edit a proof first.',
+          title: 'No Workspace selected',
+          description: 'Create a Workspace first, then try again.',
+          variant: 'destructive',
         });
         return;
       }
 
-      const titleBase = (useAppStore.getState().problem || '').trim();
-      const title = titleBase ? titleBase.slice(0, 80) : 'Proof attempt';
+      // Prefer in-memory doc/messages if we're appending to the currently-selected workspace,
+      // because localStorage autosave is debounced and might lag behind.
+      const curId = getCurrentWorkspaceProjectId();
+      const state = useAppStore.getState();
+      const isCurrent = curId && curId === targetId;
 
-      const meta = createWorkspaceProject({ title, kind: 'project' });
-      saveWorkspaceProject(meta.id, {
-        doc: snippet + '\n',
-        messages: [],
-        uiState: {
-          isChatOpen: false,
-          rightPanelTab: 'chat',
-          rightPanelWidth: 448,
-        },
+      const persisted = loadWorkspaceProject(targetId);
+      const baseDoc =
+        isCurrent && (state.workspaceDoc || '').trim().length > 0
+          ? String(state.workspaceDoc || '')
+          : String(persisted?.doc || '');
+      const baseMessages =
+        isCurrent && (state.workspaceMessages || []).length > 0
+          ? (state.workspaceMessages as any)
+          : ((persisted?.messages ?? []) as any);
+      const uiState = persisted?.uiState ?? {};
+
+      const nextDoc = appendToWorkspaceDoc(baseDoc, snippet);
+      saveWorkspaceProject(targetId, {
+        doc: nextDoc,
+        messages: baseMessages,
+        uiState,
       });
-      setCurrentWorkspaceProjectId(meta.id);
-      router.push('/workspace');
+      setCurrentWorkspaceProjectId(targetId);
+
+      // Also update in-memory state so Workspace opens immediately with the right doc.
+      // (Route hydration only applies when the store is empty.)
+      useAppStore.setState({
+        workspaceDoc: nextDoc,
+        workspaceMessages: baseMessages,
+      } as any);
+
+      setOpenAddToWorkspacePicker(false);
       toast({
-        title: 'Saved to Workspace',
-        description: 'Created a new Workspace project from the current proof.',
+        title: 'Added to Workspace',
+        description: 'The current proof was appended.',
+        action: (
+          <ToastAction altText="Open workspace" onClick={() => router.push('/workspace')}>
+            Open workspace
+          </ToastAction>
+        ),
       });
     } catch (e: any) {
       toast({
-        title: 'Failed to save to Workspace',
+        title: 'Failed to add to Workspace',
         description: e?.message || 'Unexpected error.',
         variant: 'destructive',
       });
@@ -318,8 +343,8 @@ export function ProofSidebar() {
   const addToWorkspaceDisabled =
     !((rawProof || '').trim()) && (!proof || (proof.sublemmas?.length ?? 0) === 0);
 
-  // Prover mode (Proof view) should not show the "Add to workspace" CTA.
-  const showAddToWorkspaceCta = view !== 'proof';
+  // Only show this CTA in Prover mode.
+  const showAddToWorkspaceCta = view === 'proof';
 
   return (
     <>
@@ -421,7 +446,7 @@ export function ProofSidebar() {
               variant="ghost"
               size="icon"
               title="Add to Workspace"
-              onClick={() => setOpenAddToWorkspaceConfirm(true)}
+              onClick={() => setOpenAddToWorkspacePicker(true)}
               disabled={addToWorkspaceDisabled}
               className={hoverHint === 'workspace' ? 'ring-1 ring-primary/25' : undefined}
             >
@@ -429,17 +454,6 @@ export function ProofSidebar() {
               <span className="sr-only">Add to Workspace</span>
             </Button>
           )}
-          <Button
-            data-proof-action="workspace-save"
-            variant="ghost"
-            size="icon"
-            title="Save as Workspace project"
-            onClick={() => setOpenSaveAsWorkspaceConfirm(true)}
-            disabled={addToWorkspaceDisabled}
-          >
-            <FilePlus />
-            <span className="sr-only">Save as Workspace project</span>
-          </Button>
           <Button
             data-proof-action="export"
             variant="ghost"
@@ -491,50 +505,17 @@ export function ProofSidebar() {
       </AlertDialog>
 
       {showAddToWorkspaceCta && (
-        <AlertDialog open={openAddToWorkspaceConfirm} onOpenChange={setOpenAddToWorkspaceConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Add this proof to Workspace?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will append the current proof ({viewMode === 'raw' ? 'raw' : 'structured'}) to your current workspace draft.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setOpenAddToWorkspaceConfirm(false);
-                  onConfirmAddToWorkspace();
-                }}
-              >
-                Add
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <WorkspacePickerDialog
+          open={openAddToWorkspacePicker}
+          onOpenChange={setOpenAddToWorkspacePicker}
+          title="Add to Workspace"
+          description="Choose which workspace to append the current proof."
+          confirmLabel="Add"
+          onConfirm={(workspaceId) => {
+            onConfirmAddToWorkspace(workspaceId);
+          }}
+        />
       )}
-
-      <AlertDialog open={openSaveAsWorkspaceConfirm} onOpenChange={setOpenSaveAsWorkspaceConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Save as a new Workspace project?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will create a new project in Workspace containing the current proof.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setOpenSaveAsWorkspaceConfirm(false);
-                onConfirmSaveAsWorkspaceProject();
-              }}
-            >
-              Save
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
     </>
   );

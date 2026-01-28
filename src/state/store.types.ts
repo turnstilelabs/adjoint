@@ -109,6 +109,8 @@ export type StoreData = {
   errorDetails: string | null;
   errorCode: string | null;
   isChatOpen: boolean;
+  /** Prove-mode chat panel width (px). Used for desktop resizable right sidebar. */
+  proofChatPanelWidth: number;
   isHistoryOpen: boolean;
   viewMode: 'raw' | 'structured' | 'graph';
   proofHistory: ProofVersion[];
@@ -141,6 +143,9 @@ export type StoreData = {
   // Live draft streaming (token-level)
   liveDraft: string;
   isDraftStreaming: boolean;
+
+  /** KaTeX macros used for rendering in Prover mode (typically carried over from Workspace). */
+  proofRenderMacros: Record<string, string>;
 
   // Whole-proof analysis UI state
   isAnalyzingProof: boolean;
@@ -252,7 +257,6 @@ export interface AppState extends StoreData {
   bumpExploreTurnId: () => number;
   getExploreTurnId: () => number;
   setExploreCancelCurrent: (cancel: (() => void) | null) => void;
-  promoteToProof: (statement: string) => Promise<void>;
   startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
@@ -269,6 +273,7 @@ export interface AppState extends StoreData {
 
   // UI actions
   setIsChatOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setProofChatPanelWidth: (widthPx: number) => void;
   setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setViewMode: (mode: 'raw' | 'structured' | 'graph') => void;
   toggleStructuredView: () => void;

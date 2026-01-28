@@ -396,7 +396,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t0 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug('[UI][AppStore] attemptProof(start, non-stream) len=', trimmed.length);
       const attempt = opts?.force
         ? await attemptProofActionForce(trimmed)
         : await attemptProofAction(trimmed);
@@ -405,12 +404,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const t1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug(
-        '[UI][AppStore] attemptProof done ms=',
-        t1 - t0,
-        'success=',
-        (attempt as any)?.success,
-      );
 
       if (!(attempt as any)?.success) {
         set((s: AppState) =>
@@ -451,12 +444,6 @@ export const createProofSlice = (
       if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
       const d1 =
         typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-      console.debug(
-        '[UI][AppStore] decomposeRawProof done ms=',
-        d1 - d0,
-        'success=',
-        (decomp as any)?.success,
-      );
 
       if (!(decomp as any)?.success) {
         // Decomposition is not fatal in the new split-phase UX.
@@ -1088,6 +1075,7 @@ export const createProofSlice = (
       errorDetails: null,
       errorCode: null,
       pendingSuggestion: null,
+      pendingRejection: null,
     }));
 
   },
@@ -1635,9 +1623,40 @@ export const createProofSlice = (
 
   snapshotStructuredEdit: (updates) => {
     const cur = (get() as AppState).proof();
-    if (!cur || cur.type !== 'structured') {
-      // Not in structured mode; fall back to updating current.
-      (get() as AppState).updateCurrentProofVersion({ ...updates, userEdited: true });
+    // Robust behavior:
+    // - If we're currently on a structured version, snapshot as a new structured minor version.
+    // - If we're currently on a raw version (common when accepting chat-proposed changes),
+    //   still create a structured version attached to the current raw baseMajor and switch the UI
+    //   to Structured view so the user sees the result immediately.
+    if (!cur) return;
+
+    if (cur.type !== 'structured') {
+      const nextSublemmas = (updates as any)?.sublemmas as Sublemma[] | undefined;
+      if (!Array.isArray(nextSublemmas) || nextSublemmas.length === 0) {
+        // No structured payload; fall back to the generic updater.
+        (get() as AppState).updateCurrentProofVersion({ ...updates, userEdited: true });
+        return;
+      }
+
+      const history = (get() as AppState).proofHistory;
+      const baseMajor =
+        ((get() as AppState).getCurrentRawBaseMajor && (get() as AppState).getCurrentRawBaseMajor()) ||
+        (getMaxRawMajor(history) || 1);
+
+      const structuredVersion = makeStructuredVersion(
+        history,
+        baseMajor,
+        nextSublemmas,
+        {
+          provedStatement: (updates as any)?.structured?.provedStatement,
+          normalizedProof:
+            (updates as any)?.structured?.normalizedProof || (updates as any)?.content || '',
+        },
+        { userEdited: true, derived: false },
+      );
+
+      (get() as AppState).addProofVersion(structuredVersion as any);
+      set({ viewMode: 'structured' });
       return;
     }
 

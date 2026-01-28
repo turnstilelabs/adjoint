@@ -32,6 +32,7 @@ export const initialState: StoreData = {
   errorCode: null,
   // proof display UI defaults
   isChatOpen: false,
+  proofChatPanelWidth: 448,
   isHistoryOpen: false,
   viewMode: 'raw',
   // proof review/history defaults
@@ -55,6 +56,8 @@ export const initialState: StoreData = {
   cancelCurrent: null,
   liveDraft: '',
   isDraftStreaming: false,
+
+  proofRenderMacros: {},
 
   isAnalyzingProof: false,
   analyzeProofRunId: 0,

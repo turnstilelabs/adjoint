@@ -51,6 +51,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         workspaceDraftNonce: state.workspaceDraftNonce,
         isWorkspaceChatOpen: state.isWorkspaceChatOpen,
         lastViewBeforeWorkspace: state.lastViewBeforeWorkspace,
+
+        // IMPORTANT: preserve Explore session too.
+        // Users often enter Prove from Explore and expect Cancel to return to Explore
+        // with the chat + extracted artifacts intact.
+        exploreHasSession: state.exploreHasSession,
+        exploreSeed: state.exploreSeed,
+        exploreMessages: state.exploreMessages,
+        exploreArtifacts: state.exploreArtifacts,
+        exploreArtifactEdits: state.exploreArtifactEdits,
+        exploreTurnId: state.exploreTurnId,
+        cancelExploreCurrent: state.cancelExploreCurrent,
       };
 
       // Return to a safe “home” UI state. (RouteViewSync will set `view` appropriately

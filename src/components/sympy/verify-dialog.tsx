@@ -18,6 +18,30 @@ type VerifyDialogInput = {
     selectionText: string;
 };
 
+function countEquals(s: string): number {
+    const m = String(s || '').match(/=/g);
+    return m ? m.length : 0;
+}
+
+function pickFirstEquationLine(raw: string): string {
+    const lines = String(raw || '')
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    return lines.find((l) => l.includes('=')) || '';
+}
+
+function splitEquation(line: string): { lhs: string; rhs: string } | null {
+    const s = String(line || '').trim();
+    const idx = s.indexOf('=');
+    if (idx < 0) return null;
+    const lhs = s.slice(0, idx).trim();
+    const rhs = s.slice(idx + 1).trim();
+    if (!lhs || !rhs) return null;
+    return { lhs, rhs };
+}
+
 function truthBadgeVariant(truth: string | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
     if (truth === 'true') return 'default';
     if (truth === 'false') return 'destructive';
@@ -151,6 +175,32 @@ export function VerifyDialogController() {
             setError(msg);
             toast({ title: 'Verify failed', description: msg, variant: 'destructive' });
             return;
+        }
+
+        // Guardrail: multi-line / multi-equation selections often get interpreted as a single
+        // verify spec with extra '=' in rhs, which SymPy can't parse. In that case, fall back to
+        // verifying just the *first* equation in the selection.
+        if (s.op === 'verify' || s.op === 'solve') {
+            const raw = String(input.selectionText || input.selectionLatex || '').trim();
+            const multiEq = countEquals(raw) > 1 || raw.includes('\n');
+            const specLooksBroken =
+                countEquals((s as any).lhs) > 0 || countEquals((s as any).rhs) > 0;
+
+            if (multiEq || specLooksBroken) {
+                const first = pickFirstEquationLine(raw);
+                const eq = splitEquation(first);
+                if (eq) {
+                    // Prefer verify (safe default).
+                    const corrected: SymPySpec = { op: 'verify', lhs: eq.lhs, rhs: eq.rhs } as any;
+                    s = corrected;
+                    // Inform user non-intrusively.
+                    toast({
+                        title: 'Multiple equations selected',
+                        description: 'Verifying the first equation only. Select a single line to verify a different one.',
+                        variant: 'default',
+                    });
+                }
+            }
         }
         setSpec(s);
 

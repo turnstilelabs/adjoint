@@ -886,6 +886,7 @@ export function SublemmaItem({
           copyText={copyText || selection.text}
           canCheckAgain={selection.target === 'proof'}
           lemmaStatement={statement}
+          showAddToWorkspace={true}
         />
       )}
       <AccordionItem

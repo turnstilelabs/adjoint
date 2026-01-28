@@ -4,6 +4,40 @@ import type { AppState } from '@/state/store.types';
 import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import type { Message } from '@/components/chat/interactive-chat';
 
+const mergeExploreArtifactsAppend = (
+  prev: ExploreArtifacts | null,
+  next: ExploreArtifacts | null,
+): ExploreArtifacts | null => {
+  if (!prev) return next;
+  if (!next) return prev;
+
+  const prevCandidates = Array.isArray(prev.candidateStatements) ? prev.candidateStatements : [];
+  const nextCandidates = Array.isArray(next.candidateStatements) ? next.candidateStatements : [];
+
+  // Append new candidates to the end (preserve existing order), dedupe by trimmed string.
+  const seen = new Set(prevCandidates.map((s) => String(s ?? '').trim()).filter(Boolean));
+  const mergedCandidates = [...prevCandidates];
+  for (const c of nextCandidates) {
+    const t = String(c ?? '').trim();
+    if (!t) continue;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    mergedCandidates.push(t);
+  }
+
+  // Merge per-statement artifacts; prefer next for overlapping keys.
+  // NOTE: statementArtifacts is keyed by the statement string, so we only keep the exact keys.
+  const mergedStatementArtifacts: ExploreArtifacts['statementArtifacts'] = {
+    ...(prev.statementArtifacts || {}),
+    ...(next.statementArtifacts || {}),
+  };
+
+  return {
+    candidateStatements: mergedCandidates,
+    statementArtifacts: mergedStatementArtifacts,
+  };
+};
+
 export const createExploreSlice = (
   set: any,
   get: any,
@@ -19,7 +53,6 @@ export const createExploreSlice = (
   | 'bumpExploreTurnId'
   | 'getExploreTurnId'
   | 'setExploreCancelCurrent'
-  | 'promoteToProof'
   | 'startExploreFromFailedProof'
 > => ({
   startExplore: (seed?: string) => {
@@ -95,7 +128,10 @@ export const createExploreSlice = (
     }
   },
 
-  setExploreArtifacts: (artifacts) => set({ exploreArtifacts: artifacts }),
+  setExploreArtifacts: (artifacts) =>
+    set((state: AppState) => ({
+      exploreArtifacts: mergeExploreArtifactsAppend(state.exploreArtifacts, artifacts ?? null),
+    })),
 
   deleteExploreCandidateStatement: (statement: string) => {
     const s = String(statement ?? '').trim();
@@ -177,12 +213,6 @@ export const createExploreSlice = (
   getExploreTurnId: () => get().exploreTurnId,
 
   setExploreCancelCurrent: (cancel) => set({ cancelExploreCurrent: cancel }),
-
-  // Routing handles transitions to /prove. Keep this action for now to avoid type churn;
-  // UI should no longer call it.
-  promoteToProof: async (_statement: string) => {
-    return;
-  },
 
   startExploreFromFailedProof: () => {
     const problem = (get().problem || '').trim();

@@ -15,6 +15,7 @@ export default function RawProofView() {
     const rawProof = useAppStore((s) => s.rawProof);
     const setRawProof = useAppStore((s) => s.setRawProof);
     const decomposeError = useAppStore((s) => s.decomposeError);
+    const macros = useAppStore((s) => s.proofRenderMacros);
     const editNonce = useAppStore((s) => s.rawProofEditNonce);
     const requestRawProofEdit = useAppStore((s) => s.requestRawProofEdit);
     const [isEditing, setIsEditing] = useState(false);
@@ -288,6 +289,7 @@ export default function RawProofView() {
                     canCheckAgain={false}
                     showCheckAgain={false}
                     showRevise={false}
+                    showAddToWorkspace={true}
                     showEditSelection={true}
                     onEditSelection={() => {
                         // Enter edit mode and place caret near the selected text.
@@ -353,7 +355,7 @@ export default function RawProofView() {
                             id="raw-proof-preview"
                             className="katex-wrap"
                         >
-                            <AdjointProse content={rawProof} />
+                            <AdjointProse content={rawProof} macros={macros} />
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground">Click anywhere to start editing the proof.</p>
