@@ -1088,6 +1088,7 @@ export const createProofSlice = (
       errorDetails: null,
       errorCode: null,
       pendingSuggestion: null,
+      pendingRejection: null,
     }));
 
   },
@@ -1635,9 +1636,40 @@ export const createProofSlice = (
 
   snapshotStructuredEdit: (updates) => {
     const cur = (get() as AppState).proof();
-    if (!cur || cur.type !== 'structured') {
-      // Not in structured mode; fall back to updating current.
-      (get() as AppState).updateCurrentProofVersion({ ...updates, userEdited: true });
+    // Robust behavior:
+    // - If we're currently on a structured version, snapshot as a new structured minor version.
+    // - If we're currently on a raw version (common when accepting chat-proposed changes),
+    //   still create a structured version attached to the current raw baseMajor and switch the UI
+    //   to Structured view so the user sees the result immediately.
+    if (!cur) return;
+
+    if (cur.type !== 'structured') {
+      const nextSublemmas = (updates as any)?.sublemmas as Sublemma[] | undefined;
+      if (!Array.isArray(nextSublemmas) || nextSublemmas.length === 0) {
+        // No structured payload; fall back to the generic updater.
+        (get() as AppState).updateCurrentProofVersion({ ...updates, userEdited: true });
+        return;
+      }
+
+      const history = (get() as AppState).proofHistory;
+      const baseMajor =
+        ((get() as AppState).getCurrentRawBaseMajor && (get() as AppState).getCurrentRawBaseMajor()) ||
+        (getMaxRawMajor(history) || 1);
+
+      const structuredVersion = makeStructuredVersion(
+        history,
+        baseMajor,
+        nextSublemmas,
+        {
+          provedStatement: (updates as any)?.structured?.provedStatement,
+          normalizedProof:
+            (updates as any)?.structured?.normalizedProof || (updates as any)?.content || '',
+        },
+        { userEdited: true, derived: false },
+      );
+
+      (get() as AppState).addProofVersion(structuredVersion as any);
+      set({ viewMode: 'structured' });
       return;
     }
 
