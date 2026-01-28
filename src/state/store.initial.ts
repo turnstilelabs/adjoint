@@ -57,6 +57,8 @@ export const initialState: StoreData = {
   liveDraft: '',
   isDraftStreaming: false,
 
+  proofRenderMacros: {},
+
   isAnalyzingProof: false,
   analyzeProofRunId: 0,
 

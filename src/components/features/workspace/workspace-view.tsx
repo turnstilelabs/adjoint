@@ -62,6 +62,7 @@ import {
   setCurrentWorkspaceProjectId,
   type WorkspaceProjectMeta,
 } from '@/lib/persistence/workspace-projects';
+import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView, keymap } from '@codemirror/view';
@@ -840,6 +841,13 @@ export default function WorkspaceView() {
             onPromote={(statement: string) => {
               const s = (statement || '').trim();
               if (!s) return;
+              // Carry Workspace macros into Prover rendering.
+              try {
+                const macros = extractKatexMacrosFromLatexDocument(doc || '');
+                useAppStore.setState({ proofRenderMacros: macros } as any);
+              } catch {
+                // ignore
+              }
               router.push(`/prove?q=${encodeURIComponent(s)}`);
             }}
             isExtracting={Boolean(workspaceInsightsIsExtracting)}
@@ -1239,6 +1247,13 @@ export default function WorkspaceView() {
                         if (!payload) return;
                         setIsProveOpen(false);
                         clearSelection();
+                        // Carry Workspace macros into Prover rendering.
+                        try {
+                          const macros = extractKatexMacrosFromLatexDocument(doc || '');
+                          useAppStore.setState({ proofRenderMacros: macros } as any);
+                        } catch {
+                          // ignore
+                        }
                         // Switch to dedicated prover mode.
                         router.push(`/prove?q=${encodeURIComponent(payload)}`);
                       }}

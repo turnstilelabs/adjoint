@@ -144,6 +144,9 @@ export type StoreData = {
   liveDraft: string;
   isDraftStreaming: boolean;
 
+  /** KaTeX macros used for rendering in Prover mode (typically carried over from Workspace). */
+  proofRenderMacros: Record<string, string>;
+
   // Whole-proof analysis UI state
   isAnalyzingProof: boolean;
   analyzeProofRunId: number;

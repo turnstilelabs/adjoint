@@ -71,6 +71,8 @@ export default function ProofView() {
     clearSuggestion: s.clearSuggestion,
   }));
 
+  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
+
   const hasProof = !!proof();
   const q = (searchParams?.get('q') || '').trim();
 
@@ -182,7 +184,7 @@ export default function ProofView() {
               <div className="rounded-md border bg-muted/20 p-3">
                 <div className="text-xs uppercase tracking-wide text-foreground/60">Original statement</div>
                 <div className="mt-1">
-                  <KatexRenderer content={problem} />
+                  <KatexRenderer content={problem} macros={macros} />
                 </div>
               </div>
             ) : null}
@@ -192,7 +194,7 @@ export default function ProofView() {
                 The AI was unable to prove this statement and proposed an alternative formulation:
               </div>
               <div className="rounded-md border bg-background p-2">
-                <KatexRenderer content={pendingSuggestion.provedStatement} />
+                <KatexRenderer content={pendingSuggestion.provedStatement} macros={macros} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" onClick={acceptSuggestedChange} autoFocus>
@@ -241,7 +243,7 @@ export default function ProofView() {
               <div className="rounded-md border bg-muted/20 p-3">
                 <div className="text-xs uppercase tracking-wide text-foreground/60">Statement</div>
                 <div className="mt-1">
-                  <KatexRenderer content={p} />
+                  <KatexRenderer content={p} macros={macros} />
                 </div>
               </div>
             ) : null}

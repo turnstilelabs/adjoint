@@ -23,6 +23,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
   const router = useRouter();
   const [openWorkspacePicker, setOpenWorkspacePicker] = useState(false);
   const view = useAppStore((s) => s.view);
+  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
   const setWorkspaceDoc = useAppStore((s) => (s as any).setWorkspaceDoc);
   const setWorkspaceMessages = useAppStore((s) => (s as any).setWorkspaceMessages);
 
@@ -97,7 +98,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
         )}
-        <KatexRenderer content={message.content} autoWrap={autoWrapMath} />
+        <KatexRenderer content={message.content} autoWrap={autoWrapMath} macros={view === 'proof' ? macros : undefined} />
 
         {showAttemptProof && (
           <div className="mt-4 flex gap-2">

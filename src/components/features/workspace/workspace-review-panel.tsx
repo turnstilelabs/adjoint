@@ -641,6 +641,12 @@ export function WorkspaceReviewPanel() {
                                 }
 
                                 // Jump to the prover/proof page with the inferred context.
+                                // Carry Workspace macros into Prover rendering.
+                                try {
+                                  useAppStore.setState({ proofRenderMacros: macros } as any);
+                                } catch {
+                                  // ignore
+                                }
                                 router.push(`/prove?q=${encodeURIComponent(payload)}`);
                               }}
                             >

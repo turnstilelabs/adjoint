@@ -20,6 +20,7 @@ import { AlertCircle, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 function ProofValidationFooter() {
     const proof = useAppStore((s) => s.proof());
     const isAnalyzingProof = useAppStore((s) => s.isAnalyzingProof);
+    const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
 
     const alertRef = useRef<HTMLDivElement | null>(null);
     const [isOpen, setIsOpen] = useState(true);
@@ -103,7 +104,7 @@ function ProofValidationFooter() {
                                 )}
                                 <AlertDescription>
                                     <div className="rounded-md border-l-2 pl-3 py-2 bg-muted/30 border-primary/50 text-sm font-mono text-foreground/90">
-                                        <KatexRenderer content={result.feedback} />
+                                        <KatexRenderer content={result.feedback} macros={macros} />
                                     </div>
                                     <div className="mt-2 text-xs text-muted-foreground">Automated analysis generated</div>
                                 </AlertDescription>

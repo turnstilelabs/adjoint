@@ -11,6 +11,7 @@ import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
 export function ProofLoading() {
   const router = useRouter();
   const problem = useAppStore((s) => s.problem);
+  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
   const loading = useAppStore((s) => s.loading);
   const cancelProofAttempt = useAppStore((s) => s.cancelProofAttempt);
   const progressLog = useAppStore((s) => s.progressLog);
@@ -123,7 +124,7 @@ export function ProofLoading() {
                 'max-h-[32vh] overflow-y-auto pr-2'
               }
             >
-              <KatexRenderer content={problem} />
+              <KatexRenderer content={problem} macros={macros} />
             </div>
           ) : (
             <p>Loading problem statement...</p>
@@ -174,7 +175,7 @@ export function ProofLoading() {
             </div>
             {renderMath ? (
               <div className="prose max-w-full">
-                <KatexRenderer content={deferredLiveDraft || ''} fallbackOnError={false} />
+                <KatexRenderer content={deferredLiveDraft || ''} macros={macros} fallbackOnError={false} />
               </div>
             ) : (
               <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">

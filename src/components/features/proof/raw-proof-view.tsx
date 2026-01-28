@@ -15,6 +15,7 @@ export default function RawProofView() {
     const rawProof = useAppStore((s) => s.rawProof);
     const setRawProof = useAppStore((s) => s.setRawProof);
     const decomposeError = useAppStore((s) => s.decomposeError);
+    const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
     const editNonce = useAppStore((s) => s.rawProofEditNonce);
     const requestRawProofEdit = useAppStore((s) => s.requestRawProofEdit);
     const [isEditing, setIsEditing] = useState(false);
@@ -354,7 +355,7 @@ export default function RawProofView() {
                             id="raw-proof-preview"
                             className="katex-wrap"
                         >
-                            <AdjointProse content={rawProof} />
+                            <AdjointProse content={rawProof} macros={macros} />
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground">Click anywhere to start editing the proof.</p>

@@ -12,6 +12,7 @@ import { RejectionPanel } from '@/components/features/proof/rejection-panel';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
+  const macros = useAppStore((s) => (s as any).proofRenderMacros as Record<string, string>);
   const startProof = useAppStore((s) => s.startProof);
   const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
@@ -123,7 +124,7 @@ function EditableProblemCard() {
                 }
                 data-selection-enabled="1"
               >
-                <KatexRenderer content={problem} />
+                <KatexRenderer content={problem} macros={macros} />
               </div>
               {hasRejection && pendingRejection && (
                 <RejectionPanel
@@ -148,7 +149,7 @@ function EditableProblemCard() {
                   </div>
 
                   <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
-                    <KatexRenderer content={pendingSuggestion.provedStatement} />
+                    <KatexRenderer content={pendingSuggestion.provedStatement} macros={macros} />
                   </div>
                   <div className="flex items-center gap-2 mt-3">
                     <Button size="sm" onClick={acceptSuggestedChange}>
