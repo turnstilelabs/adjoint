@@ -16,8 +16,6 @@ import { RouteViewSync } from '@/components/route-view-sync';
 export default function ProveClientPage({ q }: { q?: string }) {
     const startProof = useAppStore((s) => s.startProof);
     const resumeProof = useAppStore((s) => s.resumeProof);
-    const existingProblem = useAppStore((s) => s.problem);
-    const proofHistoryLen = useAppStore((s) => s.proofHistory.length);
 
     // Avoid restarting on re-render.
     const startedRef = useRef<string | null>(null);
@@ -25,7 +23,23 @@ export default function ProveClientPage({ q }: { q?: string }) {
     useEffect(() => {
         const trimmed = (q || '').trim();
         if (trimmed) {
-            // If we already started for this exact query, no-op.
+            // Idempotent hydration:
+            // When navigating back/forward, the page remounts but we want to keep the existing
+            // in-memory proof session instead of re-running the prover.
+            const snapshot = useAppStore.getState();
+            const alreadyHaveSessionForThisQuery =
+                (snapshot.problem || '').trim() === trimmed &&
+                (snapshot.loading ||
+                    (snapshot.proofHistory?.length ?? 0) > 0 ||
+                    !!snapshot.pendingSuggestion ||
+                    !!snapshot.pendingRejection);
+
+            if (alreadyHaveSessionForThisQuery) {
+                resumeProof();
+                return;
+            }
+
+            // If we already started for this exact query in this component instance, no-op.
             if (startedRef.current === trimmed) return;
             startedRef.current = trimmed;
             void startProof(trimmed);
@@ -34,7 +48,8 @@ export default function ProveClientPage({ q }: { q?: string }) {
 
         // No query param: just ensure we're in proof mode.
         // If we have no existing proof state, ProofView will show its empty/loading state.
-        if (existingProblem || proofHistoryLen > 0) {
+        const snapshot = useAppStore.getState();
+        if ((snapshot.problem || '').trim() || (snapshot.proofHistory?.length ?? 0) > 0) {
             resumeProof();
         } else {
             // Still mark the view for UI branching.
@@ -45,7 +60,10 @@ export default function ProveClientPage({ q }: { q?: string }) {
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q]);
+        // Intentionally do NOT depend on proof state (problem/history/etc.) to avoid re-triggering
+        // startProof due to state changes during the run.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [q, resumeProof, startProof]);
 
     return (
         <AppViewport>
