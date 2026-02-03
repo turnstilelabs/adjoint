@@ -1,25 +1,8 @@
 import type { Metadata } from 'next';
-import { Toaster } from '@/components/ui/toaster';
 import { Inter, Poppins, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css';
-import FeedbackWidget from '@/components/feedback/feedback-widget';
-import dynamic from 'next/dynamic';
-
-// IMPORTANT: keep app/layout chunk small.
-// These are client-heavy and can cause dev chunk load timeouts if bundled into layout.
-const WarmupClient = dynamic(
-  () => import('@/components/warmup-client').then((m) => m.WarmupClient),
-  { ssr: false },
-);
-const GlobalSelectionOverlay = dynamic(
-  () => import('@/components/global-selection-overlay').then((m) => m.GlobalSelectionOverlay),
-  { ssr: false },
-);
-const VerifyDialogController = dynamic(
-  () => import('@/components/sympy/verify-dialog').then((m) => m.VerifyDialogController),
-  { ssr: false },
-);
+import { ClientGlobals } from '@/app/client-globals';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -68,13 +51,8 @@ export default function RootLayout({
         ) : null}
       </head>
       <body className="font-body antialiased">
-        <WarmupClient />
         {children}
-        <GlobalSelectionOverlay />
-        <VerifyDialogController />
-        {/* Global, non-intrusive feedback widget */}
-        <FeedbackWidget />
-        <Toaster />
+        <ClientGlobals />
       </body>
     </html>
   );

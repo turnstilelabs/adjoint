@@ -107,7 +107,9 @@ export function ChatMarkdownContent({
                             {children}
                         </a>
                     ),
-                    code: ({ className, children, inline }) => {
+                    code: (props: any) => {
+                        const { className, children } = props || {};
+                        const inline = Boolean((props as any)?.inline);
                         const txt = stripTrailingNewline(String(children ?? ''));
                         if (inline) {
                             return (
