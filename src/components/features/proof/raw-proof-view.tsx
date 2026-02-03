@@ -5,7 +5,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/state/app-store';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { KatexRenderer } from '@/components/katex-renderer';
-import { Pencil } from 'lucide-react';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import AdjointProse from '@/components/adjoint-prose';
 import { selectionRangeToLatex } from '@/lib/selection-to-latex';
@@ -17,7 +16,6 @@ export default function RawProofView() {
     const decomposeError = useAppStore((s) => s.decomposeError);
     const macros = useAppStore((s) => s.proofRenderMacros);
     const editNonce = useAppStore((s) => s.rawProofEditNonce);
-    const requestRawProofEdit = useAppStore((s) => s.requestRawProofEdit);
     const [isEditing, setIsEditing] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const pendingCaretRef = useRef<null | { index: number; textSnapshot: string }>(null);
@@ -337,19 +335,6 @@ export default function RawProofView() {
                     role="textbox"
                     aria-label="Raw proof preview"
                 >
-                    <button
-                        type="button"
-                        aria-label="Edit raw proof"
-                        title="Edit"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            requestRawProofEdit();
-                        }}
-                        className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md border bg-background/80 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:text-foreground"
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </button>
                     {rawProof.trim() ? (
                         <div
                             id="raw-proof-preview"
