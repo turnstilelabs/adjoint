@@ -6,9 +6,79 @@ import { cn } from '@/lib/utils';
 
 type Block =
     | { type: 'heading'; level: 1 | 2 | 3; text: string }
+    | { type: 'quote'; text: string }
+    | { type: 'code'; language: string | null; code: string }
     | { type: 'ul'; items: string[] }
     | { type: 'ol'; items: string[] }
     | { type: 'para'; text: string };
+
+type InlineSeg =
+    | { type: 'text'; text: string }
+    | { type: 'code'; text: string };
+
+function splitInlineCode(input: string): InlineSeg[] {
+    const s = String(input ?? '');
+    const out: InlineSeg[] = [];
+
+    // Simple backtick parsing (no nesting). Good enough for chat.
+    // If there is an unmatched backtick, we treat it as plain text.
+    let i = 0;
+    while (i < s.length) {
+        const start = s.indexOf('`', i);
+        if (start < 0) {
+            out.push({ type: 'text', text: s.slice(i) });
+            break;
+        }
+        const end = s.indexOf('`', start + 1);
+        if (end < 0) {
+            out.push({ type: 'text', text: s.slice(i) });
+            break;
+        }
+        if (start > i) out.push({ type: 'text', text: s.slice(i, start) });
+        out.push({ type: 'code', text: s.slice(start + 1, end) });
+        i = end + 1;
+    }
+    return out;
+}
+
+function InlineText({
+    text,
+    autoWrapMath,
+    macros,
+}: {
+    text: string;
+    autoWrapMath?: boolean;
+    macros?: Record<string, string>;
+}) {
+    const segs = useMemo(() => splitInlineCode(text), [text]);
+
+    return (
+        <>
+            {segs.map((seg, idx) => {
+                if (seg.type === 'code') {
+                    return (
+                        <code
+                            key={idx}
+                            className="mx-0.5 rounded bg-muted/50 px-1.5 py-0.5 font-code text-[0.85em] text-foreground/90"
+                        >
+                            {seg.text}
+                        </code>
+                    );
+                }
+
+                return (
+                    <KatexRenderer
+                        key={idx}
+                        content={seg.text}
+                        inline
+                        autoWrap={autoWrapMath ?? true}
+                        macros={macros}
+                    />
+                );
+            })}
+        </>
+    );
+}
 
 function parseBlocks(input: string): Block[] {
     const s = String(input ?? '').replace(/\r\n/g, '\n');
@@ -33,6 +103,40 @@ function parseBlocks(input: string): Block[] {
             const level = Math.min(3, Math.max(1, h[1].length)) as 1 | 2 | 3;
             blocks.push({ type: 'heading', level, text: (h[2] ?? '').trim() });
             i++;
+            continue;
+        }
+
+        // Fenced code block ```lang
+        const fence = line.match(/^\s*```\s*([a-zA-Z0-9_+-]+)?\s*$/);
+        if (fence) {
+            const language = (fence[1] ?? '').trim() || null;
+            i++;
+            const buf: string[] = [];
+            while (i < lines.length) {
+                const l = lines[i] ?? '';
+                if (/^\s*```\s*$/.test(l)) {
+                    i++;
+                    break;
+                }
+                buf.push(l);
+                i++;
+            }
+            blocks.push({ type: 'code', language, code: buf.join('\n').replace(/\s+$/, '') });
+            continue;
+        }
+
+        // Blockquote (> ...)
+        const q = line.match(/^\s*>\s?(.*)$/);
+        if (q) {
+            const buf: string[] = [];
+            while (i < lines.length) {
+                const l = lines[i] ?? '';
+                const m = l.match(/^\s*>\s?(.*)$/);
+                if (!m) break;
+                buf.push(String(m[1] ?? ''));
+                i++;
+            }
+            blocks.push({ type: 'quote', text: buf.join('\n').trimEnd() });
             continue;
         }
 
@@ -72,6 +176,8 @@ function parseBlocks(input: string): Block[] {
             const l = lines[i] ?? '';
             if (isBlank(l)) break;
             if (/^(#{1,3})\s+/.test(l)) break;
+            if (/^\s*```/.test(l)) break;
+            if (/^\s*>\s?/.test(l)) break;
             if (/^\s*[-*]\s+/.test(l)) break;
             if (/^\s*\d+\.\s+/.test(l)) break;
             buf.push(l);
@@ -109,8 +215,36 @@ export function ChatContent({
                                 : 'text-sm font-medium';
                     return (
                         <Tag key={idx} className={cn(cls, 'leading-snug')}>
-                            <KatexRenderer content={b.text} inline autoWrap={autoWrapMath ?? true} macros={macros} />
+                            <InlineText text={b.text} autoWrapMath={autoWrapMath} macros={macros} />
                         </Tag>
+                    );
+                }
+
+                if (b.type === 'quote') {
+                    return (
+                        <blockquote
+                            key={idx}
+                            className="rounded-md border-l-2 border-border/60 bg-muted/20 px-3 py-2 text-foreground/85"
+                        >
+                            <div className="whitespace-pre-wrap leading-relaxed">
+                                <InlineText text={b.text} autoWrapMath={autoWrapMath} macros={macros} />
+                            </div>
+                        </blockquote>
+                    );
+                }
+
+                if (b.type === 'code') {
+                    return (
+                        <div key={idx} className="relative">
+                            {b.language && (
+                                <div className="absolute right-2 top-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    {b.language}
+                                </div>
+                            )}
+                            <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed">
+                                <code className="font-code text-foreground/90">{b.code}</code>
+                            </pre>
+                        </div>
                     );
                 }
 
@@ -119,7 +253,7 @@ export function ChatContent({
                         <ul key={idx} className="list-disc pl-5 space-y-1">
                             {b.items.map((it, j) => (
                                 <li key={j} className="min-w-0">
-                                    <KatexRenderer content={it} inline autoWrap={autoWrapMath ?? true} macros={macros} />
+                                    <InlineText text={it} autoWrapMath={autoWrapMath} macros={macros} />
                                 </li>
                             ))}
                         </ul>
@@ -131,7 +265,7 @@ export function ChatContent({
                         <ol key={idx} className="list-decimal pl-5 space-y-1">
                             {b.items.map((it, j) => (
                                 <li key={j} className="min-w-0">
-                                    <KatexRenderer content={it} inline autoWrap={autoWrapMath ?? true} macros={macros} />
+                                    <InlineText text={it} autoWrapMath={autoWrapMath} macros={macros} />
                                 </li>
                             ))}
                         </ol>
@@ -140,9 +274,9 @@ export function ChatContent({
 
                 // paragraph
                 return (
-                    <p key={idx} className="leading-relaxed">
-                        <KatexRenderer content={b.text} inline autoWrap={autoWrapMath ?? true} macros={macros} />
-                    </p>
+                    <div key={idx} className="whitespace-pre-wrap leading-relaxed">
+                        <InlineText text={b.text} autoWrapMath={autoWrapMath} macros={macros} />
+                    </div>
                 );
             })}
         </div>
