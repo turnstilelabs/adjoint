@@ -540,7 +540,8 @@ export default function WorkspaceView() {
     const fullHeight = EditorView.theme({
       '&': { height: '100%' },
       '.cm-scroller': { overflow: 'auto' },
-      '.cm-content': { minHeight: '100%' },
+      // Ensure the last line can scroll above the bottom border.
+      '.cm-content': { minHeight: '100%', paddingBottom: '6rem' },
     });
     return [
       latex,
@@ -1102,7 +1103,7 @@ export default function WorkspaceView() {
       </aside>
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3 flex flex-col">
           {/* Top-left project header */}
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0 flex items-center gap-2">
@@ -1152,7 +1153,7 @@ export default function WorkspaceView() {
           </div>
 
           {isReviewMode ? (
-            <div className="h-full rounded-lg border bg-background overflow-hidden">
+            <div className="flex-1 min-h-0 rounded-lg border bg-background overflow-hidden">
               <WorkspaceReviewPanel />
             </div>
           ) : (
@@ -1162,7 +1163,7 @@ export default function WorkspaceView() {
               </div>
               <div
                 className={cn(
-                  'h-full rounded-lg border bg-background overflow-hidden',
+                  'flex-1 min-h-0 rounded-lg border bg-background overflow-hidden',
                   isEditorDragOver ? 'ring-2 ring-primary/40 border-primary/30' : '',
                 )}
                 data-local-selection="1"

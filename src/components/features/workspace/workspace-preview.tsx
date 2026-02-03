@@ -105,6 +105,28 @@ function extractDocumentBody(raw: string): { body: string; hasPreamble: boolean 
 function normalizeLatexStructureForPreview(input: string): string {
   let s = String(input ?? '');
 
+  // Strip LaTeX comments from preview.
+  // We remove everything from an unescaped % to end-of-line.
+  // (Escaped \% is preserved.)
+  s = s
+    .split(/\r?\n/)
+    .map((line) => {
+      let out = '';
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '%') {
+          const prev = i > 0 ? line[i - 1] : '';
+          if (prev !== '\\') {
+            // comment starts here; drop rest of line
+            break;
+          }
+        }
+        out += ch;
+      }
+      return out;
+    })
+    .join('\n');
+
   // Turn sectioning commands into readable headings.
   // Keep it simple: render as plain text with spacing.
   s = s.replace(/\\section\*\{([^}]*)\}/g, (_m, title) => `\n\n## ${title}\n\n`);
