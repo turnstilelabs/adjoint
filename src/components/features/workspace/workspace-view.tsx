@@ -718,15 +718,43 @@ export default function WorkspaceView() {
 
   const onImport = async (file: File) => {
     const contents = await file.text();
-    // Append import by default (keeps existing draft).
-    // Separate with blank lines to avoid accidental macro/paragraph collisions.
-    setDoc((prev) => {
-      const a = String(prev ?? '').trimEnd();
-      const b = String(contents ?? '').trim();
-      if (!a) return b;
-      if (!b) return a;
-      return `${a}\n\n${b}\n`;
-    });
+    const imported = String(contents ?? '').trim();
+    if (!imported) return;
+
+    const view = cmRef.current?.view;
+
+    const computeInsertion = (docText: string, pos: number, chunk: string) => {
+      // Insert with some spacing so imported files don't smash into surrounding text.
+      const before = docText.slice(0, pos);
+      const after = docText.slice(pos);
+      const needsLeadingNewline = before.length > 0 && !before.endsWith('\n');
+      const needsExtraLeadingBlank = before.length > 0 && !before.endsWith('\n\n');
+      const needsTrailingNewline = after.length > 0 && !after.startsWith('\n');
+
+      const lead = before.length === 0 ? '' : needsLeadingNewline ? '\n\n' : needsExtraLeadingBlank ? '\n' : '';
+      const tail = needsTrailingNewline ? '\n\n' : after.length > 0 ? '' : '\n';
+      return `${lead}${chunk}${tail}`;
+    };
+
+    if (view) {
+      // Insert at cursor (or selection end) without overwriting selection.
+      const sel = view.state.selection.main;
+      const pos = sel.to;
+      const docText = view.state.doc.toString();
+      const insert = computeInsertion(docText, pos, imported);
+
+      view.dispatch({
+        changes: { from: pos, to: pos, insert },
+        selection: { anchor: pos + insert.length },
+      });
+      view.focus();
+      return;
+    }
+
+    // Fallback (legacy textarea): append at end.
+    const prev = String(useAppStore.getState().workspaceDoc ?? '');
+    const next = prev.trimEnd().length === 0 ? imported : `${prev.trimEnd()}\n\n${imported}\n`;
+    setDoc(next);
   };
 
   const onExport = () => {
