@@ -938,10 +938,17 @@ export default function WorkspaceView() {
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
+            // Reset input value immediately so selecting the same file again retriggers onChange,
+            // even if the user re-opens the picker quickly.
+            try {
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              // Also clear the event target for robustness.
+              (e.target as HTMLInputElement).value = '';
+            } catch {
+              // ignore
+            }
+
             await onImport(f);
-            // Reset input value so selecting the same file again retriggers onChange.
-            // Note: after an await, React may have nulled the synthetic event.
-            if (fileInputRef.current) fileInputRef.current.value = '';
           }}
         />
 
@@ -955,7 +962,15 @@ export default function WorkspaceView() {
             variant="ghost"
             size="icon"
             title="Import"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              // Ensure the next selection always fires onChange (even if same file).
+              try {
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              } catch {
+                // ignore
+              }
+              fileInputRef.current?.click();
+            }}
             className={hoverHint === 'import' ? 'ring-1 ring-primary/25' : undefined}
           >
             <FileUp />
