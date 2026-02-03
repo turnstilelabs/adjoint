@@ -777,6 +777,7 @@ export const createProofSlice = (
         let finished = false;
         let gotDelta = false;
         let gotModelStart = false;
+        let sawModelEnd = false;
 
         // Some browsers/environments can leave EventSource "hanging" without firing `error`.
         // Add a small watchdog: if we don't see any meaningful event quickly, fall back.
@@ -855,6 +856,7 @@ export const createProofSlice = (
         es.addEventListener('model.end', () => {
           if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
+          sawModelEnd = true;
           // Draft complete, but we intentionally do NOT reveal it yet.
           // We first wait for classification (event: done) so we can show
           // PROVED_VARIANT suggestions *before* showing a tentative proof.
@@ -886,18 +888,32 @@ export const createProofSlice = (
             } catch { }
             return;
           }
-          if (finished) return;
-          finished = true;
-          clearWatchdog();
+          // IMPORTANT:
+          // The server may emit `server-error` after `model.end` (e.g. classification hiccup)
+          // and still follow up with a final `done` event (see API route behavior).
+          // In that case we should NOT abort+retry, otherwise the user may see a different
+          // proof than the one they just watched stream.
           let friendly = 'Token stream failed.';
           let detail: string | null = null;
           let code: string | null = null;
           try {
             const data = JSON.parse(ev.data || '{}');
-            if (data?.error) friendly = data.error; // already friendly from server
+            if (data?.error) friendly = data.error;
             if (data?.detail) detail = data.detail;
             if (data?.code) code = data.code;
           } catch { }
+
+          // If the draft already completed, keep the stream open and wait for `done`.
+          if (sawModelEnd) {
+            set({ errorDetails: detail, errorCode: code });
+            appendLog(friendly);
+            appendLog('Finalizing streamed draft...');
+            return;
+          }
+
+          if (finished) return;
+          finished = true;
+          clearWatchdog();
           try {
             es.close();
           } catch { }
@@ -1043,6 +1059,27 @@ export const createProofSlice = (
             es.close();
           } catch { }
           set({ cancelCurrent: null, isDraftStreaming: false });
+          // If the user already saw the full draft stream, prefer showing that draft
+          // rather than retrying (retrying can yield a different proof).
+          if (sawModelEnd) {
+            const draft = String((get() as AppState).liveDraft || '').trim();
+            if (draft.length > 0) {
+              appendLog('Connection lost after draft completion. Showing streamed draft...');
+              const rawVersion = makeRawVersion((get() as AppState).proofHistory, draft);
+              set((state: AppState) => ({
+                loading: false,
+                viewMode: 'raw',
+                rawProof: draft,
+                decomposeError: null,
+                isDecomposing: false,
+                proofHistory: [...state.proofHistory, rawVersion],
+                activeVersionIdx: state.proofHistory.length,
+              }));
+              lastSavedRaw = draft;
+              return;
+            }
+          }
+
           appendLog('Token stream connection lost. Falling back to metadata stream...');
           runMetadataSSE();
         };
