@@ -17,6 +17,8 @@ import {
   FileUp,
   Sparkles,
   X,
+  Square,
+  Send,
   Eye,
   Pencil,
   Maximize2,
@@ -32,6 +34,7 @@ import { WorkspaceReviewPanel } from '@/components/features/workspace/workspace-
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
+import { pickWaitingMessage } from '@/components/chat/waitingMessages';
 import {
   Dialog,
   DialogContent,
@@ -587,14 +590,40 @@ export default function WorkspaceView() {
   }, [draftNonce]);
 
   const send = useSendWorkspaceThreadMessage();
-  const [isSending, startSending] = useTransition();
+  const [, startSending] = useTransition();
+  const cancelWorkspaceChatCurrent = useAppStore((s) => s.cancelWorkspaceChatCurrent);
+  const setWorkspaceChatCancelCurrent = useAppStore((s) => s.setWorkspaceChatCancelCurrent);
 
   const handleSend = () => {
     const trimmed = chatInput.trim();
     if (!trimmed) return;
 
+    // If a stream is in-flight, don't start another one.
+    if (cancelWorkspaceChatCurrent) return;
+
+    // Cancel any in-flight workspace chat stream before starting a new one.
+    try {
+      useAppStore.getState().cancelWorkspaceChatCurrent?.();
+    } catch {
+      // ignore
+    }
+
+    const controller = new AbortController();
+    setWorkspaceChatCancelCurrent(() => {
+      try {
+        if (!controller.signal.aborted) controller.abort();
+      } catch {
+        // ignore
+      }
+    });
+
     const userMsg: Message = { role: 'user', content: trimmed };
-    const typing: Message = { role: 'assistant', content: '', isTyping: true };
+    const typing: Message = {
+      role: 'assistant',
+      content: '',
+      isTyping: true,
+      waitingMessage: pickWaitingMessage(),
+    };
 
     const history = [...messages, userMsg]
       .slice(-8)
@@ -641,6 +670,13 @@ export default function WorkspaceView() {
               ),
             );
 
+            // Clear cancel handle (stream ended / aborted).
+            try {
+              setWorkspaceChatCancelCurrent(null);
+            } catch {
+              // ignore
+            }
+
             // Auto-extract insights after the assistant finishes.
             try {
               const latest = useAppStore.getState().workspaceMessages;
@@ -663,8 +699,15 @@ export default function WorkspaceView() {
                   : m,
               ),
             );
+
+            try {
+              setWorkspaceChatCancelCurrent(null);
+            } catch {
+              // ignore
+            }
           },
         },
+        { abortSignal: controller.signal },
       );
     });
 
@@ -803,7 +846,7 @@ export default function WorkspaceView() {
               className="relative"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!isSending) handleSend();
+                if (!cancelWorkspaceChatCurrent) handleSend();
               }}
             >
               <Textarea
@@ -813,23 +856,41 @@ export default function WorkspaceView() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (!isSending) handleSend();
+                    if (!cancelWorkspaceChatCurrent) handleSend();
                   }
                 }}
                 placeholder={
                   selectionContext ? 'Ask about the selected excerpt…' : 'Ask about this draft…'
                 }
                 rows={1}
-                className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
+                className="w-full rounded-lg pl-4 pr-40 py-3 text-base resize-none focus-visible:ring-primary"
               />
-              <Button
-                type="submit"
-                size="sm"
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-                disabled={isSending}
-              >
-                Send
-              </Button>
+
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (cancelWorkspaceChatCurrent) {
+                      try {
+                        cancelWorkspaceChatCurrent?.();
+                      } catch {
+                        // ignore
+                      }
+                      return;
+                    }
+                    handleSend();
+                  }}
+                  aria-label={cancelWorkspaceChatCurrent ? 'Stop generating' : 'Send message'}
+                >
+                  {cancelWorkspaceChatCurrent ? (
+                    <Square className="h-5 w-5" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
             </form>
           </div>
         </>

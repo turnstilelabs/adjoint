@@ -100,10 +100,32 @@ export const useAppStore = create<AppState>((set, get) => ({
         cancel();
       } catch { }
     }
+
+    const cancelChat = get().cancelChatCurrent || null;
+    if (cancelChat) {
+      try {
+        cancelChat();
+      } catch { }
+    }
+
     const cancelExplore = get().cancelExploreCurrent || null;
     if (cancelExplore) {
       try {
         cancelExplore();
+      } catch { }
+    }
+
+    const cancelWorkspace = get().cancelWorkspaceCurrent || null;
+    if (cancelWorkspace) {
+      try {
+        cancelWorkspace();
+      } catch { }
+    }
+
+    const cancelWorkspaceChat = get().cancelWorkspaceChatCurrent || null;
+    if (cancelWorkspaceChat) {
+      try {
+        cancelWorkspaceChat();
       } catch { }
     }
     set((state) => ({

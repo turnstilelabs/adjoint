@@ -7,6 +7,7 @@ import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-as
 import type { ExplorationAssistantEvent } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import type { WorkspaceAssistantEvent } from '@/ai/workspace-assistant/workspace-assistant.schemas';
 import { useToast } from '@/hooks/use-toast';
+import { pickWaitingMessage } from '@/components/chat/waitingMessages';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -31,20 +32,6 @@ export const useSendExploreMessage = () => {
     const getExploreTurnId = useAppStore((s) => s.getExploreTurnId);
     const setExploreCancelCurrent = useAppStore((s) => s.setExploreCancelCurrent);
     const { toast } = useToast();
-
-    const WAITING_MESSAGES = [
-        'Integrating ideas…',
-        'Factoring in the details…',
-        'Taking it to the next step…',
-    ] as const;
-
-    const pickWaitingMessage = () => {
-        try {
-            return WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)];
-        } catch {
-            return WAITING_MESSAGES[0];
-        }
-    };
 
     // Avoid streaming huge payloads.
     const MAX_BASIS_LEN = 4000;

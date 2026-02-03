@@ -67,6 +67,9 @@ export type StoreData = {
   lastProblem: string | null;
   messages: Message[];
 
+  /** Cancel the current in-flight Proof chat (right sidebar) streaming request (if any). */
+  cancelChatCurrent?: (() => void) | null;
+
   /** Draft text prefilled into the proof-mode chat input (used by global selection toolbar). */
   chatDraft: string;
   /** Bumped to request focus/apply of chatDraft. */
@@ -183,6 +186,8 @@ export type StoreData = {
   };
   workspaceTurnId: number;
   cancelWorkspaceCurrent?: (() => void) | null;
+  /** Cancel the current in-flight Workspace chat streaming request (if any). */
+  cancelWorkspaceChatCurrent?: (() => void) | null;
 };
 
 export interface AppState extends StoreData {
@@ -199,6 +204,9 @@ export interface AppState extends StoreData {
 
   /** Prefill + focus the explore-mode chat input. */
   setExploreDraft: (text: string) => void;
+
+  /** Set/cancel the in-flight Proof chat stream. */
+  setChatCancelCurrent: (cancel: (() => void) | null) => void;
 
   // Workspace actions
   startWorkspace: (seed?: string) => void;
@@ -238,6 +246,9 @@ export interface AppState extends StoreData {
   bumpWorkspaceTurnId: () => number;
   getWorkspaceTurnId: () => number;
   setWorkspaceCancelCurrent: (cancel: (() => void) | null) => void;
+
+  /** Set/cancel the in-flight Workspace chat stream (separate from Insights extraction). */
+  setWorkspaceChatCancelCurrent: (cancel: (() => void) | null) => void;
 
   // Explore navigation / state
   startExplore: (seed?: string) => void;

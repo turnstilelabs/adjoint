@@ -3,7 +3,7 @@
 import { Textarea } from '@/components/ui/textarea';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
 import { useAppStore } from '@/state/app-store';
 
@@ -11,6 +11,7 @@ export function ExploreChatInput() {
     const sendMessage = useSendExploreMessage();
     const [isSendingMessage, setIsSendingMessage] = useState(false);
     const [input, setInput] = useState('');
+    const cancelExploreCurrent = useAppStore((s) => s.cancelExploreCurrent);
     const draft = useAppStore((s) => s.exploreDraft);
     const draftNonce = useAppStore((s) => s.exploreDraftNonce);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -42,6 +43,13 @@ export function ExploreChatInput() {
         const trimmed = input.trim();
         if (!trimmed) return;
 
+        // Cancel any in-flight request so we don't overlap streams.
+        try {
+            cancelExploreCurrent?.();
+        } catch {
+            // ignore
+        }
+
         // Note: we intentionally do NOT open the chooser here.
         // If this is a proof request, the send hook will:
         //   1) run extract-only (to ensure a statement exists)
@@ -55,6 +63,8 @@ export function ExploreChatInput() {
         }
     };
 
+    const isStreaming = Boolean(cancelExploreCurrent);
+
 
     return (
         <div className="p-4 border-t bg-background">
@@ -62,7 +72,7 @@ export function ExploreChatInput() {
                 className="relative"
                 onSubmit={(e) => {
                     e.preventDefault();
-                    if (!isSendingMessage) handleSend();
+                    if (!isStreaming) handleSend();
                 }}
             >
                 <Textarea
@@ -73,23 +83,35 @@ export function ExploreChatInput() {
                         // Enter sends; Shift+Enter inserts newline.
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
-                            if (!isSendingMessage) handleSend();
+                            if (!isStreaming) handleSend();
                         }
                     }}
                     placeholder="Explore a statement, ask for examples/counterexamples, refine assumptions…"
                     rows={1}
-                    className="w-full rounded-lg pl-4 pr-12 py-3 text-base resize-none focus-visible:ring-primary"
+                    className="w-full rounded-lg pl-4 pr-32 py-3 text-base resize-none focus-visible:ring-primary"
                 />
-                <Button
-                    type="submit"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                    disabled={isSendingMessage}
-                    aria-label="Send message"
-                >
-                    <Send className="h-5 w-5" />
-                </Button>
+
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            if (isStreaming) {
+                                try {
+                                    cancelExploreCurrent?.();
+                                } catch {
+                                    // ignore
+                                }
+                                return;
+                            }
+                            void handleSend();
+                        }}
+                        aria-label={isStreaming ? 'Stop generating' : 'Send message'}
+                    >
+                        {isStreaming ? <Square className="h-5 w-5" /> : <Send className="h-5 w-5" />}
+                    </Button>
+                </div>
             </form>
         </div>
     );

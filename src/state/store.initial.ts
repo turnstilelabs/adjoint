@@ -9,6 +9,8 @@ export const initialState: StoreData = {
   lastProblem: null,
   messages: [],
 
+  cancelChatCurrent: null,
+
   chatDraft: '',
   chatDraftNonce: 0,
 
@@ -83,4 +85,5 @@ export const initialState: StoreData = {
   },
   workspaceTurnId: 0,
   cancelWorkspaceCurrent: null,
+  cancelWorkspaceChatCurrent: null,
 };
