@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react';
 
 import { Message } from '@/components/chat/interactive-chat';
-import { ChatContent } from '@/components/chat/chat-content';
+import { ChatMarkdownContent } from '@/components/chat/chat-markdown-content';
 import ChatTypingIndicator from '@/components/chat/chat-typing-indicator';
 import MessageSuggestionSection from '@/components/chat/message/message-suggestion-section';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
         )}
-        <ChatContent
+        <ChatMarkdownContent
           content={message.content}
           autoWrapMath={autoWrapMath}
           macros={view === 'proof' ? macros : undefined}
