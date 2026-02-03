@@ -718,7 +718,15 @@ export default function WorkspaceView() {
 
   const onImport = async (file: File) => {
     const contents = await file.text();
-    setDoc(contents);
+    // Append import by default (keeps existing draft).
+    // Separate with blank lines to avoid accidental macro/paragraph collisions.
+    setDoc((prev) => {
+      const a = String(prev ?? '').trimEnd();
+      const b = String(contents ?? '').trim();
+      if (!a) return b;
+      if (!b) return a;
+      return `${a}\n\n${b}\n`;
+    });
   };
 
   const onExport = () => {
