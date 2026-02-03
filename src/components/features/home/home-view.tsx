@@ -173,7 +173,7 @@ export default function HomeView() {
                 router.push('/explore?new=1');
               }}
             >
-              Start exploring
+              New exploration
             </Button>
             {hasExploreSession && (
               <Button

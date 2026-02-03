@@ -5,7 +5,7 @@ import { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-assista
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent } from '@/components/ui/card';
-import { Info, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Info, Loader2, Pencil, Trash2, RefreshCw, Square, X } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { EditableArtifactItem, type EditableArtifactItemHandle } from '@/components/explore/editable-artifact-item';
 import { splitStatements } from '@/lib/split-statements';
@@ -14,6 +14,12 @@ type Props = {
     artifacts: ExploreArtifacts | null;
     onPromote: (statement: string) => void;
     isExtracting?: boolean;
+
+    /** Optional extraction controls (Explore mode only). */
+    extractionPaused?: boolean;
+    onPauseExtraction?: () => void;
+    onRefreshExtraction?: () => void;
+    onClose?: () => void;
 
     /** Optional overrides so this panel can be reused outside Explore mode (e.g. Workspace Insights). */
     edits?: {
@@ -214,6 +220,10 @@ export function ArtifactsPanel({
     artifacts,
     onPromote,
     isExtracting,
+    extractionPaused,
+    onPauseExtraction,
+    onRefreshExtraction,
+    onClose,
     edits: editsOverride,
     setEdit: setEditOverride,
 }: Props) {
@@ -242,8 +252,60 @@ export function ArtifactsPanel({
         counterexamples: [],
     };
 
+    const showControls = Boolean(onPauseExtraction || onRefreshExtraction || onClose);
+
     return (
         <div className="h-full flex flex-col">
+            {showControls && (
+                <div className="p-3 border-b bg-background flex items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                        {isExtracting
+                            ? 'Extracting…'
+                            : extractionPaused
+                                ? 'Extraction paused'
+                                : 'Candidate extraction'}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {/* Single toggle icon: Stop while extracting, Extract (refresh) otherwise */}
+                        {isExtracting ? (
+                            onPauseExtraction ? (
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={onPauseExtraction}
+                                    aria-label="Stop extraction"
+                                    title="Stop extraction"
+                                >
+                                    <Square className="h-4 w-4" />
+                                </Button>
+                            ) : null
+                        ) : onRefreshExtraction ? (
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={onRefreshExtraction}
+                                aria-label="Extract statements"
+                                title="Extract statements"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                        ) : null}
+
+                        {onClose && (
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={onClose}
+                                aria-label="Close panel"
+                                title="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
             <div className="flex-1 min-h-0 overflow-auto">
                 <Section
                     title="Candidate Statements"

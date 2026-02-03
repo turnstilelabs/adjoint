@@ -115,6 +115,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       } catch { }
     }
 
+    const cancelExploreExtraction = get().cancelExploreExtractionCurrent || null;
+    if (cancelExploreExtraction) {
+      try {
+        cancelExploreExtraction();
+      } catch { }
+    }
+
     const cancelWorkspace = get().cancelWorkspaceCurrent || null;
     if (cancelWorkspace) {
       try {

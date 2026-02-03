@@ -33,17 +33,10 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
         // When navigating back/forward, we may revisit the same URL, but we should
         // NOT wipe an existing thread.
         if (isNew) {
-            const hasExistingThread =
-                (snapshot.exploreMessages?.length ?? 0) > 0 ||
-                Boolean((snapshot.exploreSeed || '').trim()) ||
-                snapshot.exploreArtifacts != null;
-
-            if (hasExistingThread) {
-                startExplore();
-            } else {
-                sentOnce.current = false;
-                newExplore();
-            }
+            // Explicit user intent: always start a fresh, empty exploration.
+            // (Home CTA: “New exploration”.)
+            sentOnce.current = false;
+            newExplore();
             return;
         }
 

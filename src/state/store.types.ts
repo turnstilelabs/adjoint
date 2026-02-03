@@ -86,6 +86,12 @@ export type StoreData = {
   exploreSeed: string | null;
   exploreMessages: Message[];
   exploreArtifacts: ExploreArtifacts | null;
+  /** Right panel visibility for Explore candidate extraction. */
+  isExploreArtifactsOpen: boolean;
+  /** Whether an extract-only job is currently running. */
+  exploreIsExtracting: boolean;
+  /** If true, auto-extraction is paused until the user manually resumes/relaunches. */
+  exploreExtractionPaused: boolean;
   /**
    * User edits overlay for extracted artifacts.
    * Keyed by the original extracted string -> edited string.
@@ -106,6 +112,8 @@ export type StoreData = {
   };
   exploreTurnId: number;
   cancelExploreCurrent?: (() => void) | null;
+  /** Cancel the current in-flight Explore extraction stream (extract-only), separate from chat. */
+  cancelExploreExtractionCurrent?: (() => void) | null;
 
   loading: boolean;
   error: string | null;
@@ -268,6 +276,10 @@ export interface AppState extends StoreData {
   bumpExploreTurnId: () => number;
   getExploreTurnId: () => number;
   setExploreCancelCurrent: (cancel: (() => void) | null) => void;
+  setExploreExtractionCancelCurrent: (cancel: (() => void) | null) => void;
+  setExploreIsExtracting: (extracting: boolean) => void;
+  setExploreExtractionPaused: (paused: boolean) => void;
+  setIsExploreArtifactsOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;

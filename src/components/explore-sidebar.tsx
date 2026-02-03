@@ -9,12 +9,26 @@ import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BookOpen, Code2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAppStore } from '@/state/app-store';
+
+function CurlyBracesIcon() {
+    return (
+        <span
+            aria-hidden
+            className="font-mono text-[14px] leading-none text-muted-foreground group-hover:text-foreground"
+        >
+            {'{}'}
+        </span>
+    );
+}
 
 export function ExploreSidebar() {
     const router = useRouter();
     const [openLiterature, setOpenLiterature] = React.useState(false);
     const [openCode, setOpenCode] = React.useState(false);
     const [openProve, setOpenProve] = React.useState(false);
+    const isArtifactsOpen = useAppStore((s) => s.isExploreArtifactsOpen);
+    const setIsArtifactsOpen = useAppStore((s) => s.setIsExploreArtifactsOpen);
 
     return (
         <TooltipProvider>
@@ -33,6 +47,21 @@ export function ExploreSidebar() {
                 </Link>
 
                 <div className="flex flex-col items-center gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                size="icon"
+                                variant={isArtifactsOpen ? 'secondary' : 'ghost'}
+                                onClick={() => setIsArtifactsOpen((prev) => !prev)}
+                                aria-label={isArtifactsOpen ? 'Close candidate extraction' : 'Open candidate extraction'}
+                                className="group"
+                            >
+                                <CurlyBracesIcon />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">Candidate extraction</TooltipContent>
+                    </Tooltip>
+
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button size="icon" variant="ghost" onClick={() => setOpenLiterature(true)} aria-label="Literature search">
