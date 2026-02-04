@@ -9,6 +9,11 @@ const UNLOCK_COOKIE_NAME = 'adjoint_unlocked_v2';
 // Short-lived cookie for deep-link return after unlocking.
 const NEXT_AFTER_UNLOCK_COOKIE_NAME = 'adjoint_next_after_unlock';
 
+// Keep this cookie safely below typical header limits.
+// This cookie is only used to redirect after unlocking; if it is too long,
+// we fall back to a safe route rather than risking header/cookie overflows.
+const MAX_NEXT_AFTER_UNLOCK_CHARS = 1500;
+
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -68,7 +73,15 @@ export function middleware(request: NextRequest) {
     // Preserve full path + query string so unlock can return you to the deep link.
     // Use the raw request URL to avoid any NextURL normalization quirks.
     const u = new URL(request.url);
-    const next = `${u.pathname}${u.search}` || '/';
+    let next = `${u.pathname}${u.search}` || '/';
+
+    // If the deep link is massive (e.g. /prove?q=<very long>), do not store it in a cookie.
+    // Storing huge values can exceed proxy/header limits and break navigation.
+    if (next.length > MAX_NEXT_AFTER_UNLOCK_CHARS) {
+        // Preserve the route (mode) but drop the massive query string.
+        // (Users can re-enter the statement after unlocking.)
+        next = u.pathname || '/';
+    }
 
     const url = request.nextUrl.clone();
     url.pathname = '/unlock';

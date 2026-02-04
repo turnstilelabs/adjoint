@@ -75,16 +75,18 @@ export default function ProofView() {
 
   const hasProof = !!proof();
   const q = (searchParams?.get('q') || '').trim();
+  const sid = (searchParams?.get('sid') || '').trim();
 
   // If the user lands on /prove without an active proof (e.g. after a cancel/reset),
   // redirect to home without flashing an intermediate empty state.
   useEffect(() => {
     // Only redirect away from /prove when there is no active proof AND no explicit query.
     // If `q` exists, ProveClientPage will start the proof attempt in an effect shortly.
-    if (!q && !loading && !hasProof && !error && !pendingSuggestion && !pendingRejection) {
+    // If `sid` exists, ProveClientPage will load the statement from sessionStorage.
+    if (!q && !sid && !loading && !hasProof && !error && !pendingSuggestion && !pendingRejection) {
       router.replace('/');
     }
-  }, [q, loading, hasProof, error, pendingSuggestion, pendingRejection, router]);
+  }, [q, sid, loading, hasProof, error, pendingSuggestion, pendingRejection, router]);
 
   // While navigating away (e.g. clicking “Edit”), stop rendering this page’s UI
   // immediately to avoid a brief flash of the Prove loading screen.
