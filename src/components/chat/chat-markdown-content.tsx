@@ -9,6 +9,23 @@ type Segment =
     | { type: 'text'; content: string }
     | { type: 'code'; language: string | null; code: string };
 
+type TextLine = { kind: 'heading'; level: number; text: string } | { kind: 'text'; text: string };
+
+function parseTextLines(input: string): TextLine[] {
+    const s = String(input ?? '').replace(/\r\n/g, '\n');
+    const lines = s.split('\n');
+    const out: TextLine[] = [];
+    for (const ln of lines) {
+        const m = ln.match(/^(#{2,6})\s+(.*)$/);
+        if (m) {
+            out.push({ kind: 'heading', level: m[1].length, text: (m[2] ?? '').trim() });
+        } else {
+            out.push({ kind: 'text', text: ln });
+        }
+    }
+    return out;
+}
+
 function splitFencedCodeBlocks(input: string): Segment[] {
     const s = String(input ?? '').replace(/\r\n/g, '\n');
     const out: Segment[] = [];
@@ -76,10 +93,34 @@ export function ChatMarkdownContent({
                 const txt = String(seg.content ?? '').trimEnd();
                 if (!txt) return null;
 
+                const lines = parseTextLines(txt);
+
                 return (
-                    <div key={`text-${i}`} className="whitespace-pre-wrap leading-relaxed">
-                        {/* Match proof statement rendering: feed full block to KatexRenderer */}
-                        <KatexRenderer content={txt} macros={macros} />
+                    <div key={`text-${i}`} className="space-y-2">
+                        {lines.map((l, j) => {
+                            if (l.kind === 'heading') {
+                                const cls =
+                                    l.level === 2
+                                        ? 'text-base font-semibold'
+                                        : l.level === 3
+                                            ? 'text-sm font-semibold'
+                                            : 'text-sm font-medium';
+                                return (
+                                    <div key={`h-${i}-${j}`} className={cn(cls, 'mt-2')}>
+                                        <KatexRenderer content={l.text} macros={macros} inline />
+                                    </div>
+                                );
+                            }
+                            // Normal text line: preserve line breaks and wrap.
+                            return (
+                                <div
+                                    key={`t-${i}-${j}`}
+                                    className="whitespace-pre-wrap leading-relaxed"
+                                >
+                                    <KatexRenderer content={l.text} macros={macros} />
+                                </div>
+                            );
+                        })}
                     </div>
                 );
             })}

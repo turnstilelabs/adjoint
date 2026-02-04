@@ -20,32 +20,32 @@ const replaceHeading = (name: string, level: number) => {
 function normalizeEnvironments(input: string) {
     let s = input;
 
-    // Claim environment
-    s = s.replace(
-        /\\begin\{claim\}([\s\S]*?)\\end\{claim\}/g,
-        (_m, body) => {
-            const inner = String(body || '').trim();
-            return `\n\n> **Claim.**\n>\n> ${inner.replace(/\n/g, '\n> ')}\n\n`;
-        },
-    );
+    const envToQuote = (env: 'claim' | 'lemma' | 'proposition', label: string) => {
+        const re = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
+        s = s.replace(re, (_m, body) => {
+            let inner = String(body || '').trim();
 
-    // Lemma environment
-    s = s.replace(
-        /\\begin\{lemma\}([\s\S]*?)\\end\{lemma\}/g,
-        (_m, body) => {
-            const inner = String(body || '').trim();
-            return `\n\n> **Lemma.**\n>\n> ${inner.replace(/\n/g, '\n> ')}\n\n`;
-        },
-    );
+            // Pull out an optional \label{...} so it doesn't render as raw TeX.
+            let id: string | null = null;
+            inner = inner.replace(/\\label\{([^}]*)\}/g, (_m2, g1) => {
+                const t = String(g1 || '').trim();
+                if (t) id = t;
+                return '';
+            });
+            inner = inner.replace(/^\s*\n+|\n+\s*$/g, '').trim();
 
-    // Proposition environment
-    s = s.replace(
-        /\\begin\{proposition\}([\s\S]*?)\\end\{proposition\}/g,
-        (_m, body) => {
-            const inner = String(body || '').trim();
-            return `\n\n> **Proposition.**\n>\n> ${inner.replace(/\n/g, '\n> ')}\n\n`;
-        },
-    );
+            const title = id ? `${label} (${id})` : label;
+            const quoted = inner
+                ? inner.split('\n').map((ln) => `> ${ln}`).join('\n')
+                : '> (empty)';
+
+            return `\n\n> **${title}.**\n>\n${quoted}\n\n`;
+        });
+    };
+
+    envToQuote('claim', 'Claim');
+    envToQuote('lemma', 'Lemma');
+    envToQuote('proposition', 'Proposition');
 
     return s;
 }
@@ -57,8 +57,9 @@ export function formatProofStreamText(input: string): string {
     let s = String(input ?? '');
 
     // De-duplicate some common model glitches like "f:[0,1]2→R≥0f:[0,1]2→R≥0" by collapsing
-    // immediate repeated tokens separated only by whitespace.
-    s = s.replace(/(\S.{0,60}?)(\1)/g, '$1');
+    // immediate repeated runs (no whitespace between them).
+    // Keep this conservative to avoid harming legitimate short repetitions.
+    s = s.replace(/(\S{10,160})(?:\1){1,}/g, '$1');
 
     // Sectioning -> headings
     s = replaceHeading('section', 3)(s);
@@ -67,6 +68,9 @@ export function formatProofStreamText(input: string): string {
 
     // Environments -> blockquotes
     s = normalizeEnvironments(s);
+
+    // Remove standalone labels that might appear outside environments.
+    s = s.replace(/^\s*\\label\{[^}]*\}\s*$/gm, '');
 
     // Ensure headings start on their own line (helps markdown renderers)
     s = s.replace(/\n?(#{2,6}\s+)/g, '\n$1');
