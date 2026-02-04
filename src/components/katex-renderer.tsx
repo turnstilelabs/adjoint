@@ -101,9 +101,22 @@ function renderInlineEmphasis(text: string, keyPrefix: string): React.ReactNode[
   const isWhitespace = (ch: string | undefined) => (ch ? /\s/.test(ch) : false);
 
   while (i < text.length) {
+    // IMPORTANT:
+    // Preserve TeX backslashes in plain text.
+    // We only treat backslash as an escape for a very small subset of Markdown-ish characters.
+    // Otherwise, strings like "\\lambda" or "\\mathcal" get corrupted into "lambda"/"mathcal"
+    // when we fall back to text rendering.
     if (text[i] === '\\' && i + 1 < text.length) {
-      buf += text[i + 1];
-      i += 2;
+      const next = text[i + 1];
+      // Allow escaping of literal markers.
+      if (next === '*' || next === '_' || next === '~' || next === '`') {
+        buf += next;
+        i += 2;
+        continue;
+      }
+      // Preserve the backslash for TeX commands and most other sequences.
+      buf += '\\';
+      i += 1;
       continue;
     }
 
