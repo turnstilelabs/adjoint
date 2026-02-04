@@ -1,13 +1,23 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/state/app-store';
 import { ExploreChatMessages } from '@/components/explore/explore-chat-messages';
 import { ExploreChatInput } from '@/components/explore/explore-chat-input';
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
-import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
+import { useExtractExploreArtifacts } from '@/components/explore/useExtractExploreArtifacts';
+import { ExploreSidebar } from '@/components/explore-sidebar';
+import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
 
-function ResizableExploreLayout({ children }: { children: React.ReactNode }) {
+function ResizableExploreLayout({
+    children,
+    hasAside,
+}: {
+    children: React.ReactNode;
+    /** Whether the right pane is present. When false, left content uses full width. */
+    hasAside: boolean;
+}) {
     const [width, setWidth] = useState<number>(420); // px
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -31,12 +41,15 @@ function ResizableExploreLayout({ children }: { children: React.ReactNode }) {
         window.addEventListener('mouseup', onUp);
     };
 
+    const arr = children instanceof Array ? children : [children];
+    const left = arr[0];
+    const aside = arr[2];
+
     return (
         <div ref={containerRef} className="flex-1 min-h-0 flex items-stretch gap-3">
-            {/* Left content passed as first child, then handle, then aside wrapper */}
-            {children instanceof Array ? (
+            {left}
+            {hasAside && (
                 <>
-                    {children[0]}
                     {/* Handle */}
                     <div
                         onMouseDown={onMouseDown}
@@ -44,11 +57,9 @@ function ResizableExploreLayout({ children }: { children: React.ReactNode }) {
                         title="Drag to resize"
                     />
                     <div style={{ width }} className="min-h-0">
-                        {children[2]}
+                        {aside}
                     </div>
                 </>
-            ) : (
-                children
             )}
         </div>
     );
@@ -73,18 +84,19 @@ function ResizableAside({ children }: { children: React.ReactNode }) {
     );
 }
 
-import { ExploreSidebar } from '@/components/explore-sidebar';
-import { AttemptProofChooser } from '@/components/explore/attempt-proof-chooser';
-import { useRouter } from 'next/navigation';
-
 export default function ExploreView() {
     const router = useRouter();
     const [openAttemptProof, setOpenAttemptProof] = useState(false);
     const artifacts = useAppStore((s) => s.exploreArtifacts);
     const exploreMessages = useAppStore((s) => s.exploreMessages);
     const exploreSeed = useAppStore((s) => s.exploreSeed);
-    const sendExploreMessage = useSendExploreMessage();
-    const [isExtracting, setIsExtracting] = useState(false);
+    const extractExploreArtifacts = useExtractExploreArtifacts();
+    const isExtracting = useAppStore((s) => s.exploreIsExtracting);
+    const isPaused = useAppStore((s) => s.exploreExtractionPaused);
+    const isArtifactsOpen = useAppStore((s) => s.isExploreArtifactsOpen);
+    const setIsArtifactsOpen = useAppStore((s) => s.setIsExploreArtifactsOpen);
+    const setPaused = useAppStore((s) => s.setExploreExtractionPaused);
+    const cancelExtraction = useAppStore((s) => s.cancelExploreExtractionCurrent);
 
     const lastMsgIsTyping = Boolean(exploreMessages[exploreMessages.length - 1]?.isTyping);
 
@@ -95,29 +107,42 @@ export default function ExploreView() {
         const hasAnyText = [...exploreMessages].some((m) => (m.content || '').trim().length > 0) || Boolean(exploreSeed?.trim());
         if (!hasAnyText) return;
         if (isExtracting) return;
+        if (isPaused) return;
         // Avoid running extraction while the assistant is still streaming.
         // This prevents redundant /api/explore calls and reduces perceived latency.
         if (lastMsgIsTyping) return;
 
         const t = window.setTimeout(async () => {
-            try {
-                setIsExtracting(true);
-                // Prefer the last user message; otherwise fall back to the seed.
-                const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
-                const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
-                await sendExploreMessage(basis || 'Extract artifacts from the conversation.', {
-                    suppressUser: true,
-                    displayAs: '',
-                    extractOnly: true,
-                });
-            } finally {
-                setIsExtracting(false);
-            }
+            // Prefer the last user message; otherwise fall back to the seed.
+            const lastUserMsg = [...exploreMessages].reverse().find((m) => m.role === 'user')?.content;
+            const basis = (lastUserMsg ?? exploreSeed ?? '').trim();
+            await extractExploreArtifacts({
+                request: basis || 'Extract artifacts from the conversation.',
+                history: exploreMessages,
+                seed: exploreSeed,
+            });
         }, 700);
 
         return () => window.clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [exploreMessages.length, exploreSeed, lastMsgIsTyping]);
+    }, [exploreMessages.length, exploreSeed, lastMsgIsTyping, isPaused, isExtracting, extractExploreArtifacts]);
+
+    const refreshExtraction = async () => {
+        // Relaunch: unpause and run immediately.
+        try {
+            setPaused(false);
+        } catch {
+            // ignore
+        }
+        const lastUserMsg = [...useAppStore.getState().exploreMessages].reverse().find((m) => m.role === 'user')?.content;
+        const seed = useAppStore.getState().exploreSeed;
+        const basis = (lastUserMsg ?? seed ?? '').trim();
+        await extractExploreArtifacts({
+            request: basis || 'Extract artifacts from the conversation.',
+            history: useAppStore.getState().exploreMessages,
+            seed,
+        });
+    };
 
     // Allow deleting a single candidate statement from the UI.
     useEffect(() => {
@@ -149,24 +174,37 @@ export default function ExploreView() {
                 <div className="mx-auto w-full max-w-6xl p-2 md:p-4 pb-0 gap-3 flex-1 min-h-0 flex flex-col">
                     {/* Header intentionally minimized to let content start higher */}
 
-                    <ResizableExploreLayout>
+                    <ResizableExploreLayout hasAside={isArtifactsOpen}>
                         <section className="min-h-0 flex-1 flex flex-col border rounded-lg bg-background overflow-hidden">
                             <ExploreChatMessages />
                             <ExploreChatInput />
                         </section>
 
-                        {/* Handle injected by layout; keeping component for clarity */}
+                        {/* Child 1 is unused; keep placeholder to preserve previous shape */}
                         <ResizableHandle onMouseDown={() => { /* handled by parent */ }} />
 
-                        <ResizableAside>
-                            <ArtifactsPanel
-                                artifacts={artifacts}
-                                onPromote={(statement: string) =>
-                                    router.push(`/prove?q=${encodeURIComponent(statement)}`)
-                                }
-                                isExtracting={isExtracting}
-                            />
-                        </ResizableAside>
+                        {isArtifactsOpen ? (
+                            <ResizableAside>
+                                <ArtifactsPanel
+                                    artifacts={artifacts}
+                                    onPromote={(statement: string) =>
+                                        router.push(`/prove?q=${encodeURIComponent(statement)}`)
+                                    }
+                                    isExtracting={isExtracting}
+                                    extractionPaused={isPaused}
+                                    onPauseExtraction={() => {
+                                        try {
+                                            cancelExtraction?.();
+                                        } catch {
+                                            // ignore
+                                        }
+                                        setPaused(true);
+                                    }}
+                                    onRefreshExtraction={() => void refreshExtraction()}
+                                    onClose={() => setIsArtifactsOpen(false)}
+                                />
+                            </ResizableAside>
+                        ) : null}
                     </ResizableExploreLayout>
                 </div>
             </main>

@@ -17,6 +17,8 @@ import {
   FileUp,
   Sparkles,
   X,
+  Square,
+  Send,
   Eye,
   Pencil,
   Maximize2,
@@ -32,6 +34,7 @@ import { WorkspaceReviewPanel } from '@/components/features/workspace/workspace-
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
+import { pickWaitingMessage } from '@/components/chat/waitingMessages';
 import {
   Dialog,
   DialogContent,
@@ -537,7 +540,8 @@ export default function WorkspaceView() {
     const fullHeight = EditorView.theme({
       '&': { height: '100%' },
       '.cm-scroller': { overflow: 'auto' },
-      '.cm-content': { minHeight: '100%' },
+      // Ensure the last line can scroll above the bottom border.
+      '.cm-content': { minHeight: '100%', paddingBottom: '6rem' },
     });
     return [
       latex,
@@ -587,14 +591,40 @@ export default function WorkspaceView() {
   }, [draftNonce]);
 
   const send = useSendWorkspaceThreadMessage();
-  const [isSending, startSending] = useTransition();
+  const [, startSending] = useTransition();
+  const cancelWorkspaceChatCurrent = useAppStore((s) => s.cancelWorkspaceChatCurrent);
+  const setWorkspaceChatCancelCurrent = useAppStore((s) => s.setWorkspaceChatCancelCurrent);
 
   const handleSend = () => {
     const trimmed = chatInput.trim();
     if (!trimmed) return;
 
+    // If a stream is in-flight, don't start another one.
+    if (cancelWorkspaceChatCurrent) return;
+
+    // Cancel any in-flight workspace chat stream before starting a new one.
+    try {
+      useAppStore.getState().cancelWorkspaceChatCurrent?.();
+    } catch {
+      // ignore
+    }
+
+    const controller = new AbortController();
+    setWorkspaceChatCancelCurrent(() => {
+      try {
+        if (!controller.signal.aborted) controller.abort();
+      } catch {
+        // ignore
+      }
+    });
+
     const userMsg: Message = { role: 'user', content: trimmed };
-    const typing: Message = { role: 'assistant', content: '', isTyping: true };
+    const typing: Message = {
+      role: 'assistant',
+      content: '',
+      isTyping: true,
+      waitingMessage: pickWaitingMessage(),
+    };
 
     const history = [...messages, userMsg]
       .slice(-8)
@@ -641,6 +671,13 @@ export default function WorkspaceView() {
               ),
             );
 
+            // Clear cancel handle (stream ended / aborted).
+            try {
+              setWorkspaceChatCancelCurrent(null);
+            } catch {
+              // ignore
+            }
+
             // Auto-extract insights after the assistant finishes.
             try {
               const latest = useAppStore.getState().workspaceMessages;
@@ -663,8 +700,15 @@ export default function WorkspaceView() {
                   : m,
               ),
             );
+
+            try {
+              setWorkspaceChatCancelCurrent(null);
+            } catch {
+              // ignore
+            }
           },
         },
+        { abortSignal: controller.signal },
       );
     });
 
@@ -675,7 +719,43 @@ export default function WorkspaceView() {
 
   const onImport = async (file: File) => {
     const contents = await file.text();
-    setDoc(contents);
+    const imported = String(contents ?? '').trim();
+    if (!imported) return;
+
+    const view = cmRef.current?.view;
+
+    const computeInsertion = (docText: string, pos: number, chunk: string) => {
+      // Insert with some spacing so imported files don't smash into surrounding text.
+      const before = docText.slice(0, pos);
+      const after = docText.slice(pos);
+      const needsLeadingNewline = before.length > 0 && !before.endsWith('\n');
+      const needsExtraLeadingBlank = before.length > 0 && !before.endsWith('\n\n');
+      const needsTrailingNewline = after.length > 0 && !after.startsWith('\n');
+
+      const lead = before.length === 0 ? '' : needsLeadingNewline ? '\n\n' : needsExtraLeadingBlank ? '\n' : '';
+      const tail = needsTrailingNewline ? '\n\n' : after.length > 0 ? '' : '\n';
+      return `${lead}${chunk}${tail}`;
+    };
+
+    if (view) {
+      // Insert at cursor (or selection end) without overwriting selection.
+      const sel = view.state.selection.main;
+      const pos = sel.to;
+      const docText = view.state.doc.toString();
+      const insert = computeInsertion(docText, pos, imported);
+
+      view.dispatch({
+        changes: { from: pos, to: pos, insert },
+        selection: { anchor: pos + insert.length },
+      });
+      view.focus();
+      return;
+    }
+
+    // Fallback (legacy textarea): append at end.
+    const prev = String(useAppStore.getState().workspaceDoc ?? '');
+    const next = prev.trimEnd().length === 0 ? imported : `${prev.trimEnd()}\n\n${imported}\n`;
+    setDoc(next);
   };
 
   const onExport = () => {
@@ -803,7 +883,7 @@ export default function WorkspaceView() {
               className="relative"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!isSending) handleSend();
+                if (!cancelWorkspaceChatCurrent) handleSend();
               }}
             >
               <Textarea
@@ -813,23 +893,41 @@ export default function WorkspaceView() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if (!isSending) handleSend();
+                    if (!cancelWorkspaceChatCurrent) handleSend();
                   }
                 }}
                 placeholder={
                   selectionContext ? 'Ask about the selected excerpt…' : 'Ask about this draft…'
                 }
                 rows={1}
-                className="w-full rounded-lg pl-4 pr-24 py-3 text-base resize-none focus-visible:ring-primary"
+                className="w-full rounded-lg pl-4 pr-40 py-3 text-base resize-none focus-visible:ring-primary"
               />
-              <Button
-                type="submit"
-                size="sm"
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-                disabled={isSending}
-              >
-                Send
-              </Button>
+
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (cancelWorkspaceChatCurrent) {
+                      try {
+                        cancelWorkspaceChatCurrent?.();
+                      } catch {
+                        // ignore
+                      }
+                      return;
+                    }
+                    handleSend();
+                  }}
+                  aria-label={cancelWorkspaceChatCurrent ? 'Stop generating' : 'Send message'}
+                >
+                  {cancelWorkspaceChatCurrent ? (
+                    <Square className="h-5 w-5" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
             </form>
           </div>
         </>
@@ -877,10 +975,17 @@ export default function WorkspaceView() {
           onChange={async (e) => {
             const f = e.target.files?.[0];
             if (!f) return;
+            // Reset input value immediately so selecting the same file again retriggers onChange,
+            // even if the user re-opens the picker quickly.
+            try {
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              // Also clear the event target for robustness.
+              (e.target as HTMLInputElement).value = '';
+            } catch {
+              // ignore
+            }
+
             await onImport(f);
-            // Reset input value so selecting the same file again retriggers onChange.
-            // Note: after an await, React may have nulled the synthetic event.
-            if (fileInputRef.current) fileInputRef.current.value = '';
           }}
         />
 
@@ -894,7 +999,15 @@ export default function WorkspaceView() {
             variant="ghost"
             size="icon"
             title="Import"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              // Ensure the next selection always fires onChange (even if same file).
+              try {
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              } catch {
+                // ignore
+              }
+              fileInputRef.current?.click();
+            }}
             className={hoverHint === 'import' ? 'ring-1 ring-primary/25' : undefined}
           >
             <FileUp />
@@ -990,7 +1103,7 @@ export default function WorkspaceView() {
       </aside>
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3">
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-3 flex flex-col">
           {/* Top-left project header */}
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0 flex items-center gap-2">
@@ -1040,7 +1153,7 @@ export default function WorkspaceView() {
           </div>
 
           {isReviewMode ? (
-            <div className="h-full rounded-lg border bg-background overflow-hidden">
+            <div className="flex-1 min-h-0 rounded-lg border bg-background overflow-hidden">
               <WorkspaceReviewPanel />
             </div>
           ) : (
@@ -1050,7 +1163,7 @@ export default function WorkspaceView() {
               </div>
               <div
                 className={cn(
-                  'h-full rounded-lg border bg-background overflow-hidden',
+                  'flex-1 min-h-0 rounded-lg border bg-background overflow-hidden',
                   isEditorDragOver ? 'ring-2 ring-primary/40 border-primary/30' : '',
                 )}
                 data-local-selection="1"

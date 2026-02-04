@@ -53,6 +53,10 @@ export const createExploreSlice = (
   | 'bumpExploreTurnId'
   | 'getExploreTurnId'
   | 'setExploreCancelCurrent'
+  | 'setExploreExtractionCancelCurrent'
+  | 'setExploreIsExtracting'
+  | 'setExploreExtractionPaused'
+  | 'setIsExploreArtifactsOpen'
   | 'startExploreFromFailedProof'
 > => ({
   startExplore: (seed?: string) => {
@@ -62,6 +66,16 @@ export const createExploreSlice = (
       try {
         cancel();
       } catch { }
+    }
+
+    // Cancel any in-flight explore extraction
+    const cancelExtract = get().cancelExploreExtractionCurrent || null;
+    if (cancelExtract) {
+      try {
+        cancelExtract();
+      } catch {
+        // ignore
+      }
     }
 
     const trimmed = seed?.trim() ? seed.trim() : null;
@@ -74,6 +88,11 @@ export const createExploreSlice = (
         exploreSeed: trimmed,
         exploreMessages: [],
         exploreArtifacts: null,
+        // UX: hide by default on entry.
+        isExploreArtifactsOpen: false,
+        exploreIsExtracting: false,
+        exploreExtractionPaused: false,
+        cancelExploreExtractionCurrent: null,
         exploreArtifactEdits: {
           candidateStatements: {},
           perStatement: {},
@@ -90,6 +109,8 @@ export const createExploreSlice = (
       exploreSeed: get().exploreSeed,
       exploreMessages: get().exploreMessages.length ? get().exploreMessages : [],
       exploreArtifacts: get().exploreArtifacts,
+      // UX: hide by default on entry.
+      isExploreArtifactsOpen: false,
     });
   },
 
@@ -104,12 +125,27 @@ export const createExploreSlice = (
       }
     }
 
+    // Cancel any in-flight explore extraction
+    const cancelExtract = get().cancelExploreExtractionCurrent || null;
+    if (cancelExtract) {
+      try {
+        cancelExtract();
+      } catch {
+        // ignore
+      }
+    }
+
     set({
       view: 'explore',
       exploreHasSession: true,
       exploreSeed: null,
       exploreMessages: [],
       exploreArtifacts: null,
+      // UX: hide by default on entry.
+      isExploreArtifactsOpen: false,
+      exploreIsExtracting: false,
+      exploreExtractionPaused: false,
+      cancelExploreExtractionCurrent: null,
       exploreArtifactEdits: {
         candidateStatements: {},
         perStatement: {},
@@ -214,6 +250,20 @@ export const createExploreSlice = (
 
   setExploreCancelCurrent: (cancel) => set({ cancelExploreCurrent: cancel }),
 
+  setExploreExtractionCancelCurrent: (cancel) => set({ cancelExploreExtractionCurrent: cancel }),
+
+  setExploreIsExtracting: (extracting) => set({ exploreIsExtracting: Boolean(extracting) }),
+
+  setExploreExtractionPaused: (paused) => set({ exploreExtractionPaused: Boolean(paused) }),
+
+  setIsExploreArtifactsOpen: (open) => {
+    if (typeof open === 'function') {
+      set((state: AppState) => ({ isExploreArtifactsOpen: open(state.isExploreArtifactsOpen) }));
+    } else {
+      set({ isExploreArtifactsOpen: Boolean(open) });
+    }
+  },
+
   startExploreFromFailedProof: () => {
     const problem = (get().problem || '').trim();
     const original = (get().lastProblem || '').trim();
@@ -235,6 +285,11 @@ export const createExploreSlice = (
       exploreSeed: userContent || null,
       exploreMessages: seededMessages,
       exploreArtifacts: null,
+      // UX: hide by default on entry.
+      isExploreArtifactsOpen: false,
+      exploreIsExtracting: false,
+      exploreExtractionPaused: false,
+      cancelExploreExtractionCurrent: null,
       exploreArtifactEdits: {
         candidateStatements: {},
         perStatement: {},

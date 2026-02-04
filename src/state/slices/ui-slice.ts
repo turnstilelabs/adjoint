@@ -10,6 +10,7 @@ export const createUiSlice = (
   | 'goHome'
   | 'setChatDraft'
   | 'setExploreDraft'
+  | 'setChatCancelCurrent'
   | 'setIsChatOpen'
   | 'setProofChatPanelWidth'
   | 'setIsHistoryOpen'
@@ -35,6 +36,8 @@ export const createUiSlice = (
       exploreDraftNonce: (s.exploreDraftNonce || 0) + 1,
     }));
   },
+
+  setChatCancelCurrent: (cancel) => set({ cancelChatCurrent: cancel }),
 
   // UI actions
   setIsChatOpen: (open) => {

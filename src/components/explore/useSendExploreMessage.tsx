@@ -7,6 +7,7 @@ import type { ExploreArtifacts } from '@/ai/exploration-assistant/exploration-as
 import type { ExplorationAssistantEvent } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import type { WorkspaceAssistantEvent } from '@/ai/workspace-assistant/workspace-assistant.schemas';
 import { useToast } from '@/hooks/use-toast';
+import { pickWaitingMessage } from '@/components/chat/waitingMessages';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -21,6 +22,18 @@ const unwrapStreamEvent = <T extends { type: string }>(raw: unknown): T | null =
     return null;
 };
 
+const isAbortLike = (e: unknown): boolean => {
+    if (!e || typeof e !== 'object') return false;
+    const anyE = e as any;
+    const name = String(anyE?.name ?? '');
+    const msg = String(anyE?.message ?? '');
+    return (
+        name === 'AbortError' ||
+        msg === 'The operation was aborted.' ||
+        /aborted|aborterror/i.test(msg)
+    );
+};
+
 export const useSendExploreMessage = () => {
     const exploreMessages = useAppStore((s) => s.exploreMessages);
     const seed = useAppStore((s) => s.exploreSeed);
@@ -31,20 +44,6 @@ export const useSendExploreMessage = () => {
     const getExploreTurnId = useAppStore((s) => s.getExploreTurnId);
     const setExploreCancelCurrent = useAppStore((s) => s.setExploreCancelCurrent);
     const { toast } = useToast();
-
-    const WAITING_MESSAGES = [
-        'Integrating ideas…',
-        'Factoring in the details…',
-        'Taking it to the next step…',
-    ] as const;
-
-    const pickWaitingMessage = () => {
-        try {
-            return WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)];
-        } catch {
-            return WAITING_MESSAGES[0];
-        }
-    };
 
     // Avoid streaming huge payloads.
     const MAX_BASIS_LEN = 4000;
@@ -72,40 +71,61 @@ export const useSendExploreMessage = () => {
             },
         });
 
-        for await (const raw of runner.stream) {
-            const evt = unwrapStreamEvent<ExplorationAssistantEvent>(raw);
+        try {
+            for await (const raw of runner.stream) {
+                const evt = unwrapStreamEvent<ExplorationAssistantEvent>(raw);
 
-            if (evt?.type === 'artifacts') {
-                if (evt.turnId === getExploreTurnId()) {
-                    setExploreArtifacts(evt.artifacts);
+                if (evt?.type === 'artifacts') {
+                    if (evt.turnId === getExploreTurnId()) {
+                        setExploreArtifacts(evt.artifacts);
+                    }
+                }
+
+                // Fallback error handling for non-schema error shapes.
+                // (Some providers/layers may emit `{ error, code, detail }`.)
+                const maybeErr: AnyRecord | null = isRecord(raw)
+                    ? (raw as AnyRecord)
+                    : isRecord((raw as AnyRecord | undefined)?.message)
+                        ? ((raw as AnyRecord).message as AnyRecord)
+                        : null;
+
+                const rawError = maybeErr ? (maybeErr['error'] ?? maybeErr['code']) : null;
+
+                if (evt?.type === 'error' || rawError) {
+                    const msg =
+                        (evt?.type === 'error' && evt.message) ||
+                        (maybeErr
+                            ? String(maybeErr['message'] ?? maybeErr['error'] ?? 'Explore extraction failed.')
+                            : 'Explore extraction failed.');
+
+                    // Extraction interruptions are common when navigating or cancelling.
+                    // Don't show a red destructive toast; and avoid noise for abort-like cases.
+                    if (!/interrupted|abort|aborted|network|stream/i.test(msg)) {
+                        toast({
+                            title: 'Explore extraction issue',
+                            description: msg,
+                            variant: 'default',
+                        });
+                    }
                 }
             }
 
-            // Fallback error handling for non-schema error shapes.
-            // (Some providers/layers may emit `{ error, code, detail }`.)
-            const maybeErr: AnyRecord | null = isRecord(raw)
-                ? (raw as AnyRecord)
-                : isRecord((raw as AnyRecord | undefined)?.message)
-                    ? ((raw as AnyRecord).message as AnyRecord)
-                    : null;
-
-            const rawError = maybeErr ? (maybeErr['error'] ?? maybeErr['code']) : null;
-
-            if (evt?.type === 'error' || rawError) {
-                const msg =
-                    (evt?.type === 'error' && evt.message) ||
-                    (maybeErr
-                        ? String(maybeErr['message'] ?? maybeErr['error'] ?? 'Explore extraction failed.')
-                        : 'Explore extraction failed.');
+            await runner.output;
+        } catch (e: unknown) {
+            // If this extraction was cancelled/interrupted, ignore.
+            if (!isAbortLike(e)) {
+                // eslint-disable-next-line no-console
+                console.warn('[Explore] extraction stream error', e);
                 toast({
-                    title: 'Explore extraction failed',
-                    description: msg,
-                    variant: 'destructive',
+                    title: 'Explore extraction issue',
+                    description:
+                        (e && typeof e === 'object' && 'message' in e && typeof (e as { message?: unknown }).message === 'string'
+                            ? (e as { message: string }).message
+                            : null) || 'Explore extraction failed.',
+                    variant: 'default',
                 });
             }
         }
-
-        await runner.output;
     };
 
     return async (

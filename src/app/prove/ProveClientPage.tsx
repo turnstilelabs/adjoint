@@ -9,11 +9,12 @@ import { RouteViewSync } from '@/components/route-view-sync';
 /**
  * Client-side Prove route body.
  *
- * Phase 1 routing: URL represents "mode + entry statement".
- * - /prove?q=... starts a fresh proof run for that statement.
- * - /prove (no q) resumes the current in-memory proof state if present.
+ * Routing:
+ * - /prove?q=... starts a fresh proof run for that statement (small payloads).
+ * - /prove?sid=... loads the statement from sessionStorage (large payloads, in-app navigation).
+ * - /prove (no q/sid) resumes the current in-memory proof state if present.
  */
-export default function ProveClientPage({ q }: { q?: string }) {
+export default function ProveClientPage({ q, sid }: { q?: string; sid?: string }) {
     const startProof = useAppStore((s) => s.startProof);
     const resumeProof = useAppStore((s) => s.resumeProof);
 
@@ -22,6 +23,39 @@ export default function ProveClientPage({ q }: { q?: string }) {
 
     useEffect(() => {
         const trimmed = (q || '').trim();
+        const sidTrimmed = (sid || '').trim();
+
+        // Large payload path: load the actual statement from sessionStorage.
+        // This is local-only (per-tab) and is intended for in-app navigation.
+        if (!trimmed && sidTrimmed) {
+            try {
+                // Dynamic import keeps this file minimal and avoids SSR pitfalls.
+                // (This is a client component, but we still want to keep boundaries clean.)
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                (async () => {
+                    const { loadRoutePayload } = await import('@/lib/route-payload');
+                    const fromStorage = loadRoutePayload(sidTrimmed);
+                    const statement = (fromStorage || '').trim();
+                    if (!statement) {
+                        // Payload missing/expired: just ensure view is set; ProofView will handle empty state.
+                        try {
+                            useAppStore.setState({ view: 'proof' });
+                        } catch {
+                            // ignore
+                        }
+                        return;
+                    }
+                    // Mirror normal q=... path.
+                    if (startedRef.current === statement) return;
+                    startedRef.current = statement;
+                    void startProof(statement);
+                })();
+            } catch {
+                // ignore
+            }
+            return;
+        }
+
         if (trimmed) {
             // Idempotent hydration:
             // When navigating back/forward, the page remounts but we want to keep the existing
@@ -63,7 +97,7 @@ export default function ProveClientPage({ q }: { q?: string }) {
         // Intentionally do NOT depend on proof state (problem/history/etc.) to avoid re-triggering
         // startProof due to state changes during the run.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, resumeProof, startProof]);
+    }, [q, sid, resumeProof, startProof]);
 
     return (
         <AppViewport>

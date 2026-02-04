@@ -11,6 +11,10 @@ import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from './ui/alert';
 import { useAppStore } from '@/state/app-store';
+import {
+  ROUTE_PAYLOAD_MAX_QUERY_CHARS,
+  storeRoutePayload,
+} from '@/lib/route-payload';
 
 export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
   const lastProblem = useAppStore((s) => s.lastProblem);
@@ -32,14 +36,54 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
 
   const runExplore = () => {
     const trimmed = (problem || '').trim();
-    const url = trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : '/explore?new=1';
-    router.push(url);
+    if (!trimmed) {
+      router.push('/explore?new=1');
+      return;
+    }
+
+    // Default: avoid putting the statement in the URL at all.
+    // (sessionStorage is per-tab; shareable links are a separate feature.)
+    const sid = storeRoutePayload(trimmed);
+    if (sid) {
+      router.push(`/explore?sid=${encodeURIComponent(sid)}`);
+      return;
+    }
+
+    // Fallback if sessionStorage is unavailable: use q for small payloads.
+    if (trimmed.length <= ROUTE_PAYLOAD_MAX_QUERY_CHARS) {
+      router.push(`/explore?q=${encodeURIComponent(trimmed)}`);
+      return;
+    }
+
+    // Last resort: if it's huge and storage failed, still navigate without a seed.
+    router.push('/explore?new=1');
   };
 
   const runProve = async () => {
     const trimmed = validate(problem);
     if (!trimmed) return;
-    router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
+
+    // Default: avoid putting the statement in the URL at all.
+    // (sessionStorage is per-tab; shareable links are a separate feature.)
+    const sid = storeRoutePayload(trimmed);
+    if (sid) {
+      router.push(`/prove?sid=${encodeURIComponent(sid)}`);
+      return;
+    }
+
+    // Fallback if sessionStorage is unavailable: use q for small payloads.
+    if (trimmed.length <= ROUTE_PAYLOAD_MAX_QUERY_CHARS) {
+      router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
+      return;
+    }
+
+    // If it's huge and storage failed, refuse to navigate with a massive URL.
+    toast({
+      title: 'Could not start proof',
+      description:
+        'This statement is too long to place in the URL, and session storage is unavailable in this browser context.',
+      variant: 'destructive',
+    });
   };
 
   const runCurrentMode = () => {

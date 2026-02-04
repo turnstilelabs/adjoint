@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react';
 
 import { Message } from '@/components/chat/interactive-chat';
-import { KatexRenderer } from '@/components/katex-renderer';
+import { ChatMarkdownContent } from '@/components/chat/chat-markdown-content';
 import ChatTypingIndicator from '@/components/chat/chat-typing-indicator';
 import MessageSuggestionSection from '@/components/chat/message/message-suggestion-section';
 import { Button } from '@/components/ui/button';
@@ -98,7 +98,11 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
         {message.role === 'assistant' && (
           <div className="text-xs text-muted-foreground mb-1 font-medium">The Adjoint</div>
         )}
-        <KatexRenderer content={message.content} autoWrap={autoWrapMath} macros={view === 'proof' ? macros : undefined} />
+        <ChatMarkdownContent
+          content={message.content}
+          autoWrapMath={autoWrapMath}
+          macros={view === 'proof' ? macros : undefined}
+        />
 
         {showAttemptProof && (
           <div className="mt-4 flex gap-2">

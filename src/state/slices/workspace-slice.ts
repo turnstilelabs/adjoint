@@ -31,6 +31,7 @@ export const createWorkspaceSlice = (
   | 'bumpWorkspaceTurnId'
   | 'getWorkspaceTurnId'
   | 'setWorkspaceCancelCurrent'
+  | 'setWorkspaceChatCancelCurrent'
 > => ({
   startWorkspace: (seed?: string) => {
     const prevView = get().view;
@@ -314,4 +315,6 @@ export const createWorkspaceSlice = (
   getWorkspaceTurnId: () => get().workspaceTurnId,
 
   setWorkspaceCancelCurrent: (cancel) => set({ cancelWorkspaceCurrent: cancel }),
+
+  setWorkspaceChatCancelCurrent: (cancel) => set({ cancelWorkspaceChatCurrent: cancel }),
 });

@@ -28,12 +28,21 @@ export type WorkspaceThreadSendHandlers = {
     onError?: (message: string) => void;
 };
 
+export type WorkspaceThreadSendOptions = {
+    abortSignal?: AbortSignal;
+};
+
 // Streams a response for a workspace thread.
 export function useSendWorkspaceThreadMessage() {
-    return async (input: WorkspaceThreadSendInput, handlers?: WorkspaceThreadSendHandlers) => {
+    return async (
+        input: WorkspaceThreadSendInput,
+        handlers?: WorkspaceThreadSendHandlers,
+        opts?: WorkspaceThreadSendOptions,
+    ) => {
         try {
             const runner = streamFlow<typeof workspaceAssistantFlow>({
                 url: '/api/workspace-chat',
+                ...(opts?.abortSignal ? { abortSignal: opts.abortSignal } : {}),
                 // appRoute expects the flow input shape directly (see /api/chat and /api/explore usage).
                 input,
             });
@@ -47,6 +56,16 @@ export function useSendWorkspaceThreadMessage() {
             await runner.output;
             handlers?.onDone?.();
         } catch (e: unknown) {
+            const isAbort =
+                e &&
+                typeof e === 'object' &&
+                ('name' in e || 'message' in e) &&
+                (((e as { name?: unknown }).name as any) === 'AbortError' ||
+                    ((e as { message?: unknown }).message as any) === 'The operation was aborted.');
+            if (isAbort) {
+                handlers?.onDone?.();
+                return;
+            }
             const message =
                 e && typeof e === 'object' && 'message' in e && typeof (e as { message?: unknown }).message === 'string'
                     ? (e as { message: string }).message

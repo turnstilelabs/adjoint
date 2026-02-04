@@ -13,7 +13,15 @@ import { RouteViewSync } from '@/components/route-view-sync';
  * We keep this separate from `app/explore/page.tsx` so the page itself can be a
  * Server Component (avoids Next.js build-time `useSearchParams()` CSR bailout).
  */
-export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: boolean }) {
+export default function ExploreClientPage({
+    q,
+    sid,
+    isNew,
+}: {
+    q?: string;
+    sid?: string;
+    isNew?: boolean;
+}) {
     const view = useAppStore((s) => s.view);
     const startExplore = useAppStore((s) => s.startExplore);
     const newExplore = useAppStore((s) => s.newExplore);
@@ -28,6 +36,7 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
     useEffect(() => {
         const snapshot = useAppStore.getState();
         const trimmed = (q || '').trim();
+        const sidTrimmed = (sid || '').trim();
 
         // IMPORTANT: `?new=1` is a one-shot intent (“start a fresh session”).
         // When navigating back/forward, we may revisit the same URL, but we should
@@ -43,6 +52,27 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
             } else {
                 sentOnce.current = false;
                 newExplore();
+            }
+            return;
+        }
+
+        // Large payload path: load seed from sessionStorage.
+        if (!trimmed && sidTrimmed) {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                (async () => {
+                    const { loadRoutePayload } = await import('@/lib/route-payload');
+                    const fromStorage = loadRoutePayload(sidTrimmed);
+                    const seed = (fromStorage || '').trim();
+                    if (!seed) {
+                        startExplore();
+                        return;
+                    }
+                    sentOnce.current = false;
+                    startExplore(seed);
+                })();
+            } catch {
+                startExplore();
             }
             return;
         }
@@ -72,7 +102,7 @@ export default function ExploreClientPage({ q, isNew }: { q?: string; isNew?: bo
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // Intentionally do NOT depend on `seed`/`messagesLen` to avoid cancelling streams mid-flight.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, isNew, startExplore, newExplore]);
+    }, [q, sid, isNew, startExplore, newExplore]);
 
     useEffect(() => {
         // Auto-send a first exploration message when we have a seed and no prior messages.

@@ -10,6 +10,7 @@ import {
   decomposeRawProofAction,
   generateProofGraphForGoalAction,
 } from '@/app/actions';
+import { ROUTE_PAYLOAD_MAX_QUERY_CHARS } from '@/lib/route-payload';
 
 // Autosave debounce timer (module-level so multiple components share it)
 let rawAutosaveTimer: number | null = null;
@@ -346,6 +347,23 @@ export const createProofSlice = (
     const trimmed = problem.trim();
     if (!trimmed) return;
 
+    // Streaming uses EventSource with a `?problem=...` query param.
+    // Large statements can create very long URLs which may crash browsers or exceed proxy limits.
+    // For safety, we fall back to the non-streaming server action path for large inputs.
+    const shouldUseStreaming = (text: string) => {
+      try {
+        // Use a conservative heuristic.
+        // - encodeURIComponent can expand significantly (e.g. LaTeX, unicode)
+        // - we keep a margin under typical ~2k-8k limits.
+        const encLen = encodeURIComponent(text).length;
+        const rawLen = text.length;
+        const max = ROUTE_PAYLOAD_MAX_QUERY_CHARS;
+        return rawLen <= max && encLen <= max * 2;
+      } catch {
+        return false;
+      }
+    };
+
     // Begin a new proof attempt and capture a run id for cancellation/late events.
     const myRun = ((get() as AppState).proofAttemptRunId || 0) + 1;
 
@@ -552,7 +570,14 @@ export const createProofSlice = (
     };
 
     // Try token streaming first; fallback to metadata-only SSE, then non-streaming
-    if (typeof window !== 'undefined' && 'EventSource' in window) {
+    const hasEventSource = typeof window !== 'undefined' && 'EventSource' in window;
+    const canUseEventSource = hasEventSource && shouldUseStreaming(trimmed);
+    const shouldTryPostStream = typeof window !== 'undefined' && !canUseEventSource;
+
+    // Intentionally do not log transport switching (GET EventSource vs POST streaming).
+    // It's an internal implementation detail and should not surface in the user-facing progress log.
+
+    if (canUseEventSource) {
       const runMetadataSSE = async () => {
         try {
           if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
@@ -777,6 +802,7 @@ export const createProofSlice = (
         let finished = false;
         let gotDelta = false;
         let gotModelStart = false;
+        let sawModelEnd = false;
 
         // Some browsers/environments can leave EventSource "hanging" without firing `error`.
         // Add a small watchdog: if we don't see any meaningful event quickly, fall back.
@@ -855,6 +881,7 @@ export const createProofSlice = (
         es.addEventListener('model.end', () => {
           if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
           clearWatchdog();
+          sawModelEnd = true;
           // Draft complete, but we intentionally do NOT reveal it yet.
           // We first wait for classification (event: done) so we can show
           // PROVED_VARIANT suggestions *before* showing a tentative proof.
@@ -886,18 +913,32 @@ export const createProofSlice = (
             } catch { }
             return;
           }
-          if (finished) return;
-          finished = true;
-          clearWatchdog();
+          // IMPORTANT:
+          // The server may emit `server-error` after `model.end` (e.g. classification hiccup)
+          // and still follow up with a final `done` event (see API route behavior).
+          // In that case we should NOT abort+retry, otherwise the user may see a different
+          // proof than the one they just watched stream.
           let friendly = 'Token stream failed.';
           let detail: string | null = null;
           let code: string | null = null;
           try {
             const data = JSON.parse(ev.data || '{}');
-            if (data?.error) friendly = data.error; // already friendly from server
+            if (data?.error) friendly = data.error;
             if (data?.detail) detail = data.detail;
             if (data?.code) code = data.code;
           } catch { }
+
+          // If the draft already completed, keep the stream open and wait for `done`.
+          if (sawModelEnd) {
+            set({ errorDetails: detail, errorCode: code });
+            appendLog(friendly);
+            appendLog('Finalizing streamed draft...');
+            return;
+          }
+
+          if (finished) return;
+          finished = true;
+          clearWatchdog();
           try {
             es.close();
           } catch { }
@@ -1043,6 +1084,27 @@ export const createProofSlice = (
             es.close();
           } catch { }
           set({ cancelCurrent: null, isDraftStreaming: false });
+          // If the user already saw the full draft stream, prefer showing that draft
+          // rather than retrying (retrying can yield a different proof).
+          if (sawModelEnd) {
+            const draft = String((get() as AppState).liveDraft || '').trim();
+            if (draft.length > 0) {
+              appendLog('Connection lost after draft completion. Showing streamed draft...');
+              const rawVersion = makeRawVersion((get() as AppState).proofHistory, draft);
+              set((state: AppState) => ({
+                loading: false,
+                viewMode: 'raw',
+                rawProof: draft,
+                decomposeError: null,
+                isDecomposing: false,
+                proofHistory: [...state.proofHistory, rawVersion],
+                activeVersionIdx: state.proofHistory.length,
+              }));
+              lastSavedRaw = draft;
+              return;
+            }
+          }
+
           appendLog('Token stream connection lost. Falling back to metadata stream...');
           runMetadataSSE();
         };
@@ -1050,7 +1112,249 @@ export const createProofSlice = (
         appendLog('Token streaming not available. Falling back to metadata stream...');
         await runMetadataSSE();
       }
+    } else if (shouldTryPostStream) {
+      // POST streaming path: keep token-by-token experience for large statements,
+      // without putting the problem into the URL.
+      const controller = new AbortController();
+      set({
+        cancelCurrent: () => {
+          try {
+            controller.abort();
+          } catch {
+            // ignore
+          }
+        },
+      });
+
+      try {
+        const { consumeSSEStream } = await import('@/lib/sse-client');
+        set({ isDraftStreaming: true, liveDraft: '' });
+
+        const res = await fetch('/api/proof/attempt-stream-post', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem: trimmed }),
+          signal: controller.signal,
+        });
+
+        let sawModelEnd = false;
+        let gotDelta = false;
+        let finished = false;
+
+        await consumeSSEStream(
+          res,
+          (ev) => {
+            if (((get() as AppState).proofAttemptRunId || 0) !== myRun) {
+              try {
+                controller.abort();
+              } catch {
+                // ignore
+              }
+              return;
+            }
+            if (finished) return;
+
+            const name = ev.event;
+            const dataStr = ev.data || '{}';
+
+            // Keepalives are handled by the parser.
+            if (name === 'model.start') {
+              try {
+                const data = JSON.parse(dataStr);
+                appendLog(`Using ${data?.provider}/${data?.model}...`);
+              } catch {
+                // ignore
+              }
+              return;
+            }
+            if (name === 'model.delta') {
+              try {
+                const data = JSON.parse(dataStr);
+                const t = data?.text || '';
+                if (t) {
+                  if (!gotDelta) {
+                    appendLog('Receiving model output...');
+                    gotDelta = true;
+                  }
+                  set((s: AppState) => ({ liveDraft: s.liveDraft + t }));
+                }
+              } catch {
+                // ignore
+              }
+              return;
+            }
+            if (name === 'model.end') {
+              sawModelEnd = true;
+              set({ isDraftStreaming: false });
+              appendLog('Proof draft completed....');
+              appendLog('Classifying draft...');
+              return;
+            }
+            if (name === 'classify.result') {
+              try {
+                const d = JSON.parse(dataStr);
+                const st = d?.status;
+                if (st === 'PROVED_VARIANT') {
+                  appendLog('Proof generated for a revised statement....');
+                } else if (st === 'FAILED') {
+                  appendLog("Draft doesn't prove the statement as written. Showing explanation...");
+                }
+              } catch {
+                // ignore
+              }
+              return;
+            }
+            if (name === 'server-error') {
+              // Mirror EventSource behavior: if error after model.end, keep going and let done settle.
+              let friendly = 'Token stream failed.';
+              let detail: string | null = null;
+              let code: string | null = null;
+              try {
+                const d = JSON.parse(dataStr);
+                if (d?.error) friendly = d.error;
+                if (d?.detail) detail = d.detail;
+                if (d?.code) code = d.code;
+              } catch {
+                // ignore
+              }
+
+              if (sawModelEnd) {
+                set({ errorDetails: detail, errorCode: code });
+                appendLog(friendly);
+                appendLog('Finalizing streamed draft...');
+                return;
+              }
+
+              finished = true;
+              set({
+                cancelCurrent: null,
+                isDraftStreaming: false,
+                errorDetails: detail,
+                errorCode: code,
+              });
+              appendLog(friendly + ' Retrying...');
+              // Fall back to non-streaming for resilience.
+              void runNonStreaming();
+              return;
+            }
+            if (name === 'done') {
+              finished = true;
+              try {
+                const data = JSON.parse(dataStr);
+                const attempt = data?.attempt;
+                if (!attempt) {
+                  set({ loading: false, error: 'Malformed stream response.' });
+                  return;
+                }
+
+                set({
+                  attemptSummary: {
+                    status: attempt.status,
+                    finalStatement: attempt.finalStatement ?? null,
+                    variantType: attempt.variantType ?? null,
+                    explanation: attempt.explanation || '',
+                  },
+                });
+
+                const raw = ((attempt.rawProof || (get() as AppState).liveDraft) ?? '').trim();
+
+                if (attempt.status === 'PROVED_VARIANT') {
+                  const suggested = (attempt.finalStatement || '').trim();
+                  if (suggested) {
+                    set({
+                      loading: false,
+                      pendingSuggestion: {
+                        suggested,
+                        variantType:
+                          (attempt.variantType as 'WEAKENING' | 'OPPOSITE') || 'WEAKENING',
+                        provedStatement: suggested,
+                        sublemmas: [],
+                        explanation: attempt.explanation || '',
+                        rawProof: raw || undefined,
+                        normalizedProof: undefined,
+                      },
+                    });
+                  } else {
+                    const rawVersion = makeRawVersion((get() as AppState).proofHistory, raw);
+                    set((state: AppState) => ({
+                      loading: false,
+                      viewMode: 'raw',
+                      rawProof: raw,
+                      decomposeError: null,
+                      isDecomposing: false,
+                      proofHistory: [...state.proofHistory, rawVersion],
+                      activeVersionIdx: state.proofHistory.length,
+                    }));
+                    lastSavedRaw = raw;
+                  }
+                  return;
+                }
+
+                if (raw.length > 0) {
+                  const rawVersion = makeRawVersion((get() as AppState).proofHistory, raw);
+                  set((state: AppState) => ({
+                    loading: false,
+                    viewMode: 'raw',
+                    rawProof: raw,
+                    decomposeError: null,
+                    isDecomposing: false,
+                    proofHistory: [...state.proofHistory, rawVersion],
+                    activeVersionIdx: state.proofHistory.length,
+                    pendingRejection:
+                      attempt.status === 'FAILED'
+                        ? { explanation: attempt.explanation || 'No details provided.' }
+                        : null,
+                  }));
+                  lastSavedRaw = raw;
+
+                  // Auto-decompose once revealed (same as EventSource path)
+                  try {
+                    const alreadyDecomposed =
+                      ((get() as AppState).decomposedRaw || '').trim() === raw;
+                    if (!alreadyDecomposed && raw.length >= 10) {
+                      void (get() as AppState).runDecomposition();
+                    }
+                  } catch {
+                    // ignore
+                  }
+                } else {
+                  set({
+                    loading: false,
+                    pendingRejection:
+                      attempt.status === 'FAILED'
+                        ? { explanation: attempt.explanation || 'No details provided.' }
+                        : null,
+                  });
+                }
+              } catch (e) {
+                set({
+                  loading: false,
+                  error: e instanceof Error ? e.message : 'Unexpected error.',
+                });
+              } finally {
+                set({ cancelCurrent: null, isDraftStreaming: false });
+              }
+            }
+          },
+          { signal: controller.signal },
+        );
+
+        // If the stream ended without a final `done` event and we weren't cancelled,
+        // fall back to the non-streaming path to avoid leaving the UI stuck.
+        if (!finished && !controller.signal.aborted) {
+          appendLog('Connection ended unexpectedly. Retrying...');
+          set({ cancelCurrent: null, isDraftStreaming: false });
+          await runNonStreaming();
+        }
+      } catch (e: any) {
+        set({ cancelCurrent: null, isDraftStreaming: false });
+        appendLog(
+          (e?.message || 'Connection lost.') + ' Retrying...',
+        );
+        await runNonStreaming();
+      }
     } else {
+      appendLog('Streaming not available. Retrying...');
       await runNonStreaming();
     }
   },
