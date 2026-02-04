@@ -48,7 +48,17 @@ export function ProofLoading() {
   // Derive whether the model name has been displayed in the progress log.
   const hasModelName = !!(progressLog || []).some((l) => typeof l === 'string' && l.startsWith('Using '));
   const hasFirstToken = (liveDraft || '').length > 0;
-  const showTrivia = loading && hasModelName && !hasFirstToken;
+  const showTriviaBeforeTokens = loading && hasModelName && !hasFirstToken;
+
+  // If the streamed draft is finished and we are in the classify phase, show trivia again.
+  // (Classification can take a while and the user otherwise stares at a static log line.)
+  const isClassifying =
+    loading &&
+    hasFirstToken &&
+    !isDraftStreaming &&
+    !!(progressLog || []).some((l) => typeof l === 'string' && /Classifying draft/.test(l));
+
+  const shouldShowTrivia = showTriviaBeforeTokens || isClassifying;
 
   // Rendering KaTeX on every token can be expensive; defer updates slightly to keep UI responsive.
   const deferredLiveDraft = useDeferredValue(liveDraft);
@@ -87,7 +97,7 @@ export function ProofLoading() {
 
   // When trivia becomes eligible to show, start rotation every 10s.
   useEffect(() => {
-    if (!showTrivia) {
+    if (!shouldShowTrivia) {
       setTriviaVisible(false);
       return;
     }
@@ -99,15 +109,7 @@ export function ProofLoading() {
     }, 10000);
 
     return () => window.clearInterval(id);
-  }, [showTrivia]);
-
-  // When the first token arrives, fade/collapse trivia away quickly.
-  useEffect(() => {
-    if (!hasFirstToken) return;
-    // Give a small beat so users can register the transition.
-    const t = window.setTimeout(() => setTriviaVisible(false), 900);
-    return () => window.clearTimeout(t);
-  }, [hasFirstToken]);
+  }, [shouldShowTrivia]);
 
   const minutes = String(Math.floor(elapsedMs / 60000)).padStart(2, '0');
   const seconds = String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0');
@@ -149,8 +151,9 @@ export function ProofLoading() {
           </div>
         )}
 
-        {/* Trivia appears only after model is known and before first token arrives. */}
-        {showTrivia && !triviaLoadError && currentTrivia && (
+        {/* Trivia appears (a) after model is known and before first token arrives, and
+            (b) again during the classify phase once the draft is complete. */}
+        {shouldShowTrivia && !triviaLoadError && currentTrivia && (
           <div
             className={
               'mt-4 w-full flex justify-center transition-all duration-300 ease-out overflow-hidden ' +
