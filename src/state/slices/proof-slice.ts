@@ -409,6 +409,9 @@ export const createProofSlice = (
         s.proofAttemptRunId === myRun ? { progressLog: [...s.progressLog, line] } : ({} as any),
       );
 
+    // Classification timing (for observability)
+    const classifyStarts: Record<string, { ts: number; excerptChars?: number; timeoutMs?: number }> = {};
+
     // Fallback non-streaming implementation (existing behavior)
     const runNonStreaming = async () => {
       await new Promise((r) => setTimeout(r, 50));
@@ -904,6 +907,42 @@ export const createProofSlice = (
           } catch { }
         });
 
+        es.addEventListener('classify.start', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
+          clearWatchdog();
+          try {
+            const m = JSON.parse(ev.data || '{}');
+            const stage = String(m?.stage || 'unknown');
+            classifyStarts[stage] = { ts: Number(m?.ts) || Date.now(), excerptChars: m?.excerptChars, timeoutMs: m?.timeoutMs };
+            const extra =
+              typeof m?.excerptChars === 'number'
+                ? ` (excerpt ${m.excerptChars} chars, timeout ${m?.timeoutMs ?? '?'}ms)`
+                : '';
+            appendLog(`Classifying draft (${stage})...${extra}`);
+          } catch {
+            appendLog('Classifying draft...');
+          }
+        });
+
+        es.addEventListener('classify.end', (ev: MessageEvent) => {
+          if (((get() as AppState).proofAttemptRunId || 0) !== myRun) return;
+          clearWatchdog();
+          try {
+            const m = JSON.parse(ev.data || '{}');
+            const stage = String(m?.stage || 'unknown');
+            const dt = typeof m?.durationMs === 'number' ? m.durationMs : null;
+            const ok = Boolean(m?.ok);
+            const timedOut = Boolean(m?.timedOut);
+            const start = classifyStarts[stage]?.ts;
+            const inferred = start ? Date.now() - start : null;
+            const ms = dt ?? inferred;
+            const status = timedOut ? 'timeout' : ok ? 'ok' : 'error';
+            appendLog(`Classification ${stage}: ${status}${ms != null ? ` (${Math.round(ms)}ms)` : ''}`);
+          } catch {
+            // ignore
+          }
+        });
+
         // attempt-stream no longer performs decomposition server-side.
         // We do client-side decomposition only on explicit user request.
 
@@ -1200,6 +1239,40 @@ export const createProofSlice = (
                 } else if (st === 'FAILED') {
                   appendLog("Draft doesn't prove the statement as written. Showing explanation...");
                 }
+              } catch {
+                // ignore
+              }
+              return;
+            }
+
+            if (name === 'classify.start') {
+              try {
+                const m = JSON.parse(dataStr);
+                const stage = String(m?.stage || 'unknown');
+                classifyStarts[stage] = { ts: Number(m?.ts) || Date.now(), excerptChars: m?.excerptChars, timeoutMs: m?.timeoutMs };
+                const extra =
+                  typeof m?.excerptChars === 'number'
+                    ? ` (excerpt ${m.excerptChars} chars, timeout ${m?.timeoutMs ?? '?'}ms)`
+                    : '';
+                appendLog(`Classifying draft (${stage})...${extra}`);
+              } catch {
+                appendLog('Classifying draft...');
+              }
+              return;
+            }
+
+            if (name === 'classify.end') {
+              try {
+                const m = JSON.parse(dataStr);
+                const stage = String(m?.stage || 'unknown');
+                const dt = typeof m?.durationMs === 'number' ? m.durationMs : null;
+                const ok = Boolean(m?.ok);
+                const timedOut = Boolean(m?.timedOut);
+                const start = classifyStarts[stage]?.ts;
+                const inferred = start ? Date.now() - start : null;
+                const ms = dt ?? inferred;
+                const status = timedOut ? 'timeout' : ok ? 'ok' : 'error';
+                appendLog(`Classification ${stage}: ${status}${ms != null ? ` (${Math.round(ms)}ms)` : ''}`);
               } catch {
                 // ignore
               }
