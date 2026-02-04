@@ -5,6 +5,20 @@ import { SublemmaSchema } from './schemas';
 import { normalizeModelError } from '@/lib/model-error-core';
 import { env } from '@/env';
 
+function shrinkProofForClassification(raw: string, opts?: { headChars?: number; tailChars?: number }) {
+    const headChars = opts?.headChars ?? 6000;
+    const tailChars = opts?.tailChars ?? 6000;
+    const s = String(raw ?? '');
+    if (s.length <= headChars + tailChars + 200) return s;
+    const head = s.slice(0, headChars);
+    const tail = s.slice(Math.max(0, s.length - tailChars));
+    return [
+        head,
+        '\n\n[TRUNCATED: middle of proof omitted for speed]\n\n',
+        tail,
+    ].join('');
+}
+
 /**
  * Streaming flow that replicates the behavior of the existing attempt-stream API route,
  * emitting model token deltas and subsequent classification/decomposition phase events.
@@ -212,7 +226,15 @@ export async function attemptProofStreamOrchestrator(
     onChunk({ type: 'classify.start', ts: Date.now() });
     let attempt: AttemptSummary;
     try {
-        const result = await classifyProofDraft({ problem, rawProof: fullDraft });
+        // Heuristic classification: classify using only a head+tail excerpt of the proof.
+        // This keeps latency stable even when the streamed proof is very long.
+        const excerpt = shrinkProofForClassification(fullDraft);
+        const result = await classifyProofDraft({
+            problem,
+            rawProof:
+                'NOTE: The proof text may be truncated. If you are NOT fully confident the proof establishes the original statement as-is, do NOT return PROVED_AS_IS.\n\n' +
+                excerpt,
+        });
         onChunk({ type: 'classify.result', result });
         attempt = { ...result, rawProof: fullDraft || null };
     } catch (e: any) {
