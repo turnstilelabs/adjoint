@@ -7,6 +7,7 @@ export const initialState: StoreData = {
   lastViewBeforeWorkspace: null,
   problem: null,
   lastProblem: null,
+  originalProblem: null,
   messages: [],
 
   cancelChatCurrent: null,

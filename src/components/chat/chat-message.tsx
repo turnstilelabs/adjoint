@@ -15,8 +15,10 @@ import {
 } from '@/lib/persistence/workspace-projects';
 import { useAppStore } from '@/state/app-store';
 import { WorkspacePickerDialog } from '@/components/workspace/workspace-picker-dialog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChatTriviaCard } from '@/components/trivia/chat-trivia-card';
+import { useRotatingTrivia } from '@/components/trivia/useRotatingTrivia';
 
 function ChatMessage({ message, autoWrapMath = false }: { message: Message; autoWrapMath?: boolean }) {
   const { toast } = useToast();
@@ -29,6 +31,28 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
 
   const attemptProofAction = message.actions?.find((a) => a.type === 'attempt_proof');
   const showAttemptProof = Boolean(attemptProofAction);
+
+  // Trivia-in-chat UX:
+  // If a response takes > 15s and we still have no tokens, show rotating math trivia.
+  const hasAnyTokens = String(message.content ?? '').length > 0;
+  const shouldArmTriviaTimer = Boolean(message.isTyping) && !hasAnyTokens;
+  const [showTrivia, setShowTrivia] = useState(false);
+
+  useEffect(() => {
+    if (!shouldArmTriviaTimer) {
+      setShowTrivia(false);
+      return;
+    }
+
+    setShowTrivia(false);
+    const t = window.setTimeout(() => setShowTrivia(true), 15000);
+    return () => window.clearTimeout(t);
+  }, [shouldArmTriviaTimer]);
+
+  const { item: triviaItem } = useRotatingTrivia({
+    enabled: showTrivia,
+    rotateEveryMs: 10000,
+  });
 
   // This per-message “add to workspace” control is intended for Explore chat.
   // (Workspace chat already has its own workflow and icons.)
@@ -125,10 +149,18 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
               <div className="text-xs text-muted-foreground">{message.waitingMessage}</div>
             )}
             <ChatTypingIndicator />
-            <div className="mt-3">
-              <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
-              <div className="mt-1 h-2 w-64 bg-muted rounded animate-pulse" />
-            </div>
+
+            {/* For the first ~15s we keep the lightweight skeleton; then we swap in trivia. */}
+            {showTrivia && triviaItem ? (
+              <div className="mt-3">
+                <ChatTriviaCard item={triviaItem} />
+              </div>
+            ) : (
+              <div className="mt-3">
+                <div className="mt-1 h-2 w-40 bg-muted rounded animate-pulse" />
+                <div className="mt-1 h-2 w-64 bg-muted rounded animate-pulse" />
+              </div>
+            )}
           </div>
         )}
         <MessageSuggestionSection message={message} />

@@ -70,10 +70,21 @@ export async function GET(req: NextRequest) {
               );
               break;
             case 'classify.start':
-              write(sseEvent('classify.start', { ts: chunk.ts }));
+              write(sseEvent('classify.start', chunk.meta));
               break;
             case 'classify.result':
               write(sseEvent('classify.result', chunk.result));
+              break;
+            case 'classify.end':
+              write(
+                sseEvent('classify.end', {
+                  stage: chunk.stage,
+                  durationMs: chunk.durationMs,
+                  timedOut: chunk.timedOut,
+                  ok: chunk.ok,
+                  error: (chunk as any).error,
+                }),
+              );
               break;
             case 'decompose.start':
               write(sseEvent('decompose.start', { ts: chunk.ts }));
@@ -121,7 +132,7 @@ export async function GET(req: NextRequest) {
               error: e?.message || 'Unexpected error in attempt-stream.',
             }),
           );
-        } catch {}
+        } catch { }
         error(e);
       }
     },
