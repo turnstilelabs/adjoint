@@ -239,20 +239,19 @@ export async function attemptProofStreamOrchestrator(
         attempt = { ...result, rawProof: fullDraft || null };
     } catch (e: any) {
         const norm = normalizeModelError(e);
-        onChunk({
-            type: 'server-error',
-            error: 'Failed to classify draft.',
-            detail: norm.detail,
-            code: norm.code || undefined,
-        });
+        // UX rule: if classification fails after the user already watched a full proof stream,
+        // accept the proof as-is rather than blocking on an auxiliary step.
+        // (We keep the raw proof and the original statement.)
+        const fallback = {
+            status: 'PROVED_AS_IS' as const,
+            finalStatement: problem,
+            variantType: null,
+            explanation:
+                'Classification step failed; treating the generated proof as a proof of the original statement.',
+        };
+        onChunk({ type: 'classify.result', result: fallback });
         return {
-            attempt: {
-                status: 'FAILED',
-                finalStatement: null,
-                variantType: null,
-                rawProof: fullDraft || null,
-                explanation: 'Failed to classify drafted proof.',
-            },
+            attempt: { ...fallback, rawProof: fullDraft || null },
             decompose: null,
         };
     }

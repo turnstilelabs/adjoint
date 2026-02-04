@@ -128,6 +128,7 @@ function EditableProblemCard() {
               {hasRejection && pendingRejection && (
                 <RejectionPanel
                   explanation={pendingRejection.explanation}
+                  onDismiss={() => clearRejection()}
                   onEdit={() => setIsEditing(true)}
                   onRetry={async () => {
                     clearRejection();

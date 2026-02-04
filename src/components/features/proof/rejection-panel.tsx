@@ -10,11 +10,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
  */
 export function RejectionPanel({
     explanation,
+    onDismiss,
     onEdit,
     onRetry,
     onExplore,
 }: {
     explanation: string;
+    /** Optional: allow hiding the rejection panel if the user is happy with the displayed proof. */
+    onDismiss?: () => void;
     onEdit: () => void;
     onRetry: () => void | Promise<void>;
     onExplore: () => void;
@@ -47,6 +50,11 @@ export function RejectionPanel({
             </Accordion>
 
             <div className="flex flex-wrap items-center gap-2 mt-3">
+                {onDismiss ? (
+                    <Button size="sm" variant="secondary" onClick={onDismiss}>
+                        Keep proof
+                    </Button>
+                ) : null}
                 <Button size="sm" onClick={onEdit}>
                     Edit statement
                 </Button>
