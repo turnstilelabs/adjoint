@@ -32,7 +32,8 @@ export function RejectionPanel({
 
             <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="details" className="border-0">
-                    <AccordionTrigger className="py-2 text-sm">Show details</AccordionTrigger>
+                    {/* Place the chevron right after the label (not at the far right). */}
+                    <AccordionTrigger className="py-2 text-sm justify-start gap-2 [&>svg]:ml-0">Show details</AccordionTrigger>
                     <AccordionContent className="pb-0">
                         <div className="text-sm p-2 rounded-md bg-background border border-muted" data-selection-enabled="1">
                             {/*

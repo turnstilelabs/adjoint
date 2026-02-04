@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/state/app-store';
 import { TriviaCard } from '@/components/features/proof/trivia-card';
 import { shuffleTrivia, type MathTriviaItem } from '@/lib/math-trivia';
+import { ProofStreamMarkdown } from '@/components/proof/proof-stream-markdown';
 
 export function ProofLoading() {
   const router = useRouter();
@@ -175,7 +176,7 @@ export function ProofLoading() {
             </div>
             {renderMath ? (
               <div className="prose max-w-full">
-                <KatexRenderer content={deferredLiveDraft || ''} macros={macros} fallbackOnError={false} />
+                <ProofStreamMarkdown content={deferredLiveDraft || ''} macros={macros} />
               </div>
             ) : (
               <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
