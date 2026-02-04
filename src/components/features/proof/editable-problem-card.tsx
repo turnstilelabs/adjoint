@@ -9,10 +9,18 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { RejectionPanel } from '@/components/features/proof/rejection-panel';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { RotateCcw } from 'lucide-react';
 
 function EditableProblemCard() {
   const problem = useAppStore((s) => s.problem!);
   const macros = useAppStore((s) => s.proofRenderMacros);
+  const originalProblem = useAppStore((s) => s.originalProblem);
   const startProof = useAppStore((s) => s.startProof);
   const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
@@ -123,6 +131,31 @@ function EditableProblemCard() {
                 }
                 data-selection-enabled="1"
               >
+                {originalProblem ? (
+                  <div className="mb-2 flex items-center justify-end">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              // Toggle the textarea editor and prefill with the original.
+                              setValue(originalProblem);
+                              setIsEditing(true);
+                            }}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            <span>Original</span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Original statement</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ) : null}
                 <KatexRenderer content={problem} macros={macros} />
               </div>
               {hasRejection && pendingRejection && (

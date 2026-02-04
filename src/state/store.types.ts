@@ -65,6 +65,8 @@ export type StoreData = {
   lastViewBeforeWorkspace: View | null;
   problem: string | null;
   lastProblem: string | null;
+  /** When a PROVED_VARIANT is accepted, keep the original statement so the user can view it. */
+  originalProblem: string | null;
   messages: Message[];
 
   /** Cancel the current in-flight Proof chat (right sidebar) streaming request (if any). */

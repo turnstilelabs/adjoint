@@ -375,6 +375,7 @@ export const createProofSlice = (
       view: 'proof',
       problem: trimmed,
       lastProblem: trimmed,
+      originalProblem: null,
       messages: [],
       loading: true,
       error: null,
@@ -1399,6 +1400,8 @@ export const createProofSlice = (
     const s = (get() as AppState).pendingSuggestion;
     if (!s) return;
 
+    const original = ((get() as AppState).problem || '').trim();
+
     // When the suggestion is accepted, we reveal the tentative proof.
     // In streaming mode we might not have decomposed steps yet.
     const rawContent = (s.rawProof || '').trim();
@@ -1441,6 +1444,7 @@ export const createProofSlice = (
 
       set({
         problem: provedStatement,
+        originalProblem: original || null,
         pendingSuggestion: null,
         viewMode: 'raw',
         rawProof: rawContent,
@@ -1468,6 +1472,7 @@ export const createProofSlice = (
     // No steps available yet (streaming path): switch to raw immediately and decompose in background.
     set({
       problem: provedStatement,
+      originalProblem: original || null,
       pendingSuggestion: null,
       viewMode: 'raw',
       rawProof: rawContent,
