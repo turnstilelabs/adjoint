@@ -6,6 +6,7 @@ import ExploreView from '@/components/features/explore/explore-view';
 import { AppViewport } from '@/components/app-viewport';
 import { useSendExploreMessage } from '@/components/explore/useSendExploreMessage';
 import { RouteViewSync } from '@/components/route-view-sync';
+import { useRouter } from 'next/navigation';
 
 /**
  * Client-side Explore route body.
@@ -22,6 +23,7 @@ export default function ExploreClientPage({
     sid?: string;
     isNew?: boolean;
 }) {
+    const router = useRouter();
     const view = useAppStore((s) => s.view);
     const startExplore = useAppStore((s) => s.startExplore);
     const newExplore = useAppStore((s) => s.newExplore);
@@ -32,26 +34,28 @@ export default function ExploreClientPage({
     // Prevent auto-send from firing multiple times for the same navigation
     const sentOnce = useRef(false);
 
+    // Prevent hydration logic from re-running repeatedly (e.g. when searchParams change
+    // due to a local router.replace removing ?new=1).
+    const appliedRef = useRef(false);
+
     // When landing via /explore?... hydrate state.
     useEffect(() => {
+        if (appliedRef.current) return;
+        appliedRef.current = true;
+
         const snapshot = useAppStore.getState();
         const trimmed = (q || '').trim();
         const sidTrimmed = (sid || '').trim();
 
-        // IMPORTANT: `?new=1` is a one-shot intent (“start a fresh session”).
-        // When navigating back/forward, we may revisit the same URL, but we should
-        // NOT wipe an existing thread.
+        // IMPORTANT: `?new=1` must always start from a clean empty Explore session.
+        // We also immediately strip the one-shot param from the URL.
         if (isNew) {
-            const hasExistingThread =
-                (snapshot.exploreMessages?.length ?? 0) > 0 ||
-                Boolean((snapshot.exploreSeed || '').trim()) ||
-                snapshot.exploreArtifacts != null;
-
-            if (hasExistingThread) {
-                startExplore();
-            } else {
-                sentOnce.current = false;
-                newExplore();
+            sentOnce.current = false;
+            newExplore();
+            try {
+                router.replace('/explore');
+            } catch {
+                // ignore
             }
             return;
         }
@@ -102,7 +106,7 @@ export default function ExploreClientPage({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // Intentionally do NOT depend on `seed`/`messagesLen` to avoid cancelling streams mid-flight.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [q, sid, isNew, startExplore, newExplore]);
+    }, [q, sid, isNew, startExplore, newExplore, router]);
 
     useEffect(() => {
         // Auto-send a first exploration message when we have a seed and no prior messages.
