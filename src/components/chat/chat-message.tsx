@@ -74,7 +74,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
         }`}
     >
       <div
-        className={`group relative p-4 rounded-2xl break-words w-fit max-w-[85%] min-w-0 ${message.role === 'user'
+        className={`group relative p-4 rounded-2xl break-words max-w-[85%] min-w-0 overflow-x-auto ${message.role === 'user'
           ? 'bg-primary text-primary-foreground shadow-md'
           : 'bg-card border border-border shadow-sm'
           }`}
