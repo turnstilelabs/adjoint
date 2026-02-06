@@ -33,6 +33,7 @@ import { WorkspaceReviewPanel } from '@/components/features/workspace/workspace-
 import { ArtifactsPanel } from '@/components/explore/artifacts-panel';
 import { useExtractWorkspaceInsights } from '@/components/workspace/useExtractWorkspaceInsights';
 import { contextBeforeSelection, stripLatexPreambleAndMacros } from '@/lib/latex-context';
+import { parseArxivId } from '@/lib/arxiv';
 import { pickWaitingMessage } from '@/components/chat/waitingMessages';
 import {
   Dialog,
@@ -67,8 +68,9 @@ import {
 import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
-import { EditorView, keymap } from '@codemirror/view';
+import { Decoration, EditorView, WidgetType, keymap, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
+import { RangeSetBuilder } from '@codemirror/state';
 import { bracketMatching } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { StreamLanguage } from '@codemirror/language';
@@ -88,6 +90,105 @@ function CurlyBracesIcon() {
 }
 
 type Anchor = { top: number; left: number };
+
+type PendingArxivImport = {
+  urlOrId: string;
+  arxivId: string;
+  insertPos: number;
+};
+
+function ArxivImportWidget(opts: { urlOrId: string; from: number; to: number }) {
+  // This is only used in the CM widget DOM; keep it tiny.
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.title = 'Import LaTeX from arXiv';
+  btn.setAttribute('aria-label', 'Import LaTeX from arXiv');
+  btn.className =
+    'ml-1 inline-flex items-center justify-center rounded border border-muted/40 bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/20';
+  btn.textContent = '💡';
+  btn.addEventListener('mousedown', (e) => {
+    // prevent editor focus / selection changes
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      window.dispatchEvent(
+        new CustomEvent('adjoint:arxivImport', {
+          detail: { urlOrId: opts.urlOrId, from: opts.from, to: opts.to },
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  });
+  return btn;
+}
+
+function buildArxivImportPlugin() {
+  class BulbWidget extends WidgetType {
+    constructor(
+      private urlOrId: string,
+      private from: number,
+      private to: number,
+    ) {
+      super();
+    }
+    toDOM() {
+      return ArxivImportWidget({ urlOrId: this.urlOrId, from: this.from, to: this.to });
+    }
+    ignoreEvent() {
+      return true;
+    }
+  }
+
+  const ARXIV_URL_RE = /https?:\/\/arxiv\.org\/(?:abs|pdf)\/[\w.\/-]+/gi;
+
+  return ViewPlugin.fromClass(
+    class {
+      decorations: any;
+      constructor(view: EditorView) {
+        this.decorations = this.build(view);
+      }
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.build(update.view);
+        }
+      }
+      build(view: EditorView) {
+        const builder = new RangeSetBuilder<Decoration>();
+
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+          for (const m of text.matchAll(ARXIV_URL_RE)) {
+            const raw = String(m[0] ?? '').trim();
+            const idx = m.index ?? -1;
+            if (!raw || idx < 0) continue;
+            const parsed = parseArxivId(raw);
+            if (!parsed) continue;
+
+            const absFrom = from + idx;
+            const absTo = absFrom + raw.length;
+
+            // Place widget at end of URL.
+            const deco = Decoration.widget({
+              widget: new BulbWidget(raw, absFrom, absTo),
+              side: 1,
+            });
+            builder.add(absTo, absTo, deco);
+          }
+        }
+
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    },
+  );
+}
 
 function splitSelectionIntoStatementAndProof(selectionLatex: string): {
   statement: string;
@@ -175,7 +276,88 @@ export default function WorkspaceView() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
+  // arXiv import UI state
+  const [pendingArxiv, setPendingArxiv] = useState<PendingArxivImport | null>(null);
+  const [arxivDialogOpen, setArxivDialogOpen] = useState(false);
+  const [arxivIsImporting, setArxivIsImporting] = useState(false);
+
   const deleteTitle = (projectMeta?.title || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+
+  const openArxivConfirm = (opts: { urlOrId: string; insertPos: number }) => {
+    const parsed = parseArxivId(opts.urlOrId);
+    if (!parsed) return;
+    setPendingArxiv({ urlOrId: opts.urlOrId, arxivId: parsed.canonical, insertPos: opts.insertPos });
+    setArxivDialogOpen(true);
+  };
+
+  const importArxivNow = async () => {
+    if (!pendingArxiv) return;
+    const view = cmRef.current?.view;
+    if (!view) return;
+
+    setArxivIsImporting(true);
+    try {
+      const resp = await fetch('/api/arxiv/import-latex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urlOrId: pendingArxiv.urlOrId }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data?.ok) {
+        throw new Error(data?.error || `Import failed (HTTP ${resp.status})`);
+      }
+
+      const mainTex = String(data.mainTex ?? '').trim();
+      const mainFile = String(data.mainFile ?? '').trim() || 'main.tex';
+
+      if (!mainTex) throw new Error('Main TeX file was empty.');
+
+      const id = pendingArxiv.arxivId;
+      const block =
+        `\n\n% --- Imported from arXiv: ${id} (file: ${mainFile}) ---\n` +
+        `${mainTex}\n` +
+        `% --- End arXiv import ---\n`;
+
+      view.dispatch({
+        changes: { from: pendingArxiv.insertPos, to: pendingArxiv.insertPos, insert: block },
+        selection: { anchor: pendingArxiv.insertPos + block.length },
+      });
+      view.focus();
+
+      toast({ title: 'Imported from arXiv', description: `Inserted LaTeX for ${id}.` });
+      setArxivDialogOpen(false);
+
+    } catch (e: any) {
+      toast({
+        title: 'arXiv import failed',
+        description: e?.message || 'Could not import LaTeX from arXiv.',
+        variant: 'destructive',
+      });
+      setArxivDialogOpen(false);
+    } finally {
+      setArxivIsImporting(false);
+    }
+  };
+
+  // Listen to CodeMirror widget clicks.
+  useEffect(() => {
+    const onEvt = (evt: any) => {
+      const urlOrId = String(evt?.detail?.urlOrId ?? '').trim();
+      const to = Number(evt?.detail?.to ?? NaN);
+      if (!urlOrId || !Number.isFinite(to)) return;
+
+      // Insert below the URL: at end-of-line after the URL.
+      const view = cmRef.current?.view;
+      if (!view) return;
+      const line = view.state.doc.lineAt(to);
+      const insertPos = line.to;
+      openArxivConfirm({ urlOrId, insertPos });
+    };
+
+    window.addEventListener('adjoint:arxivImport', onEvt as any);
+    return () => window.removeEventListener('adjoint:arxivImport', onEvt as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // "Focus" state for expanding the chat panel into an overlay (match Prove mode UX).
   const [isChatFocused, setIsChatFocused] = useState(false);
@@ -560,6 +742,7 @@ export default function WorkspaceView() {
       bracketMatching(),
       closeBrackets(),
       keymap.of(closeBracketsKeymap),
+      buildArxivImportPlugin(),
       // Keep selection events in sync with the floating toolbar.
       EditorView.updateListener.of((v) => {
         if (v.selectionSet) updateSelectionFromCodeMirror();
@@ -1252,7 +1435,7 @@ export default function WorkspaceView() {
                   showProveThis={true}
                   showAddToReview={true}
                   // Put Verify before Ask AI (chat) in the selection toolbar.
-                  buttonOrder={['copy', 'addToReview', 'verify', 'proveThis', 'askAI']}
+                  buttonOrder={['copy', 'addToReview', 'importArxiv', 'verify', 'proveThis', 'askAI']}
                   onProveThis={() => openProveModalFromSelection()}
                   onAddToReview={({ selectionLatex }) => {
                     const view = cmRef.current?.view;
@@ -1293,6 +1476,17 @@ export default function WorkspaceView() {
                     setDraft(selection.text, { open: true });
                     setRightTab('chat');
                     setIsChatOpen(true);
+                  }}
+                  showImportArxiv={Boolean(parseArxivId(selection.text))}
+                  onImportArxiv={() => {
+                    const parsed = parseArxivId(selection.text);
+                    if (!parsed) return;
+
+                    const view = cmRef.current?.view;
+                    if (!view) return;
+                    const line = view.state.doc.lineAt(selection.end);
+                    const insertPos = line.to;
+                    openArxivConfirm({ urlOrId: selection.text, insertPos });
                   }}
                 />
               )}
@@ -1386,6 +1580,46 @@ export default function WorkspaceView() {
                       }}
                     >
                       Continue
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* arXiv import confirm dialog */}
+              <Dialog
+                open={arxivDialogOpen}
+                onOpenChange={(open) => {
+                  setArxivDialogOpen(open);
+                  if (!open) {
+                    setPendingArxiv(null);
+                    setArxivIsImporting(false);
+                  }
+                }}
+              >
+                <DialogContent className="sm:max-w-[720px]">
+                  <DialogHeader>
+                    <DialogTitle>Import LaTeX from arXiv?</DialogTitle>
+                  </DialogHeader>
+
+                  {pendingArxiv ? (
+                    <div className="space-y-3">
+                      <div className="text-sm text-muted-foreground">
+                        This will download the arXiv source bundle and insert the main <code>.tex</code> file
+                        below the link.
+                      </div>
+                      <div className="rounded-md border bg-muted/20 p-2 text-sm font-mono">
+                        arXiv: {pendingArxiv.arxivId}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setArxivDialogOpen(false)}>
+                      Cancel
+                    </Button>
+
+                    <Button onClick={() => void importArxivNow()} disabled={arxivIsImporting || !pendingArxiv}>
+                      {arxivIsImporting ? 'Importing…' : 'Import below link'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

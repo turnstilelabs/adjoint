@@ -8,6 +8,7 @@ import {
   CheckSquare,
   CheckCircle,
   Plus,
+  Lightbulb,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
@@ -115,6 +116,10 @@ interface SelectionToolbarProps {
   /** Optional action: add selection to a workspace (with picker). */
   showAddToWorkspace?: boolean;
 
+  /** Optional action: import LaTeX from an arXiv link in the selection (Workspace editor). */
+  showImportArxiv?: boolean;
+  onImportArxiv?: () => void;
+
   /**
    * Optional override for button order.
    *
@@ -124,6 +129,7 @@ interface SelectionToolbarProps {
   buttonOrder?: Array<
     | 'addToReview'
     | 'addToWorkspace'
+    | 'importArxiv'
     | 'copy'
     | 'verify'
     | 'askAI'
@@ -156,6 +162,8 @@ export function SelectionToolbar({
   showAddToReview = false,
   onAddToReview,
   showAddToWorkspace = false,
+  showImportArxiv = false,
+  onImportArxiv,
   buttonOrder,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
@@ -277,6 +285,7 @@ export function SelectionToolbar({
   const defaultOrder: NonNullable<SelectionToolbarProps['buttonOrder']> = [
     'addToReview',
     'addToWorkspace',
+    'importArxiv',
     'copy',
     'verify',
     'askAI',
@@ -368,6 +377,23 @@ export function SelectionToolbar({
                     title="Add to Workspace"
                   >
                     <Plus className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
+              if (k === 'importArxiv') {
+                if (!showImportArxiv || typeof onImportArxiv !== 'function') return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onImportArxiv()}
+                    title="Import LaTeX from arXiv"
+                  >
+                    <Lightbulb className="h-4 w-4" />
                   </Button>
                 );
               }
