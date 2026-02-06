@@ -50,7 +50,6 @@ export default function ProofView() {
     pendingRejection,
     clearRejection,
     startProof,
-    startExploreFromFailedProof,
     acceptSuggestedChange,
     clearSuggestion,
   } = useAppStore((s) => ({
@@ -66,7 +65,6 @@ export default function ProofView() {
     pendingRejection: s.pendingRejection,
     clearRejection: s.clearRejection,
     startProof: s.startProof,
-    startExploreFromFailedProof: s.startExploreFromFailedProof,
     acceptSuggestedChange: s.acceptSuggestedChange,
     clearSuggestion: s.clearSuggestion,
   }));
@@ -263,8 +261,7 @@ export default function ProofView() {
                 await startProof(p, { force: true });
               }}
               onExplore={() => {
-                startExploreFromFailedProof();
-                router.push('/explore');
+                router.push('/workspace');
               }}
             />
           </CardContent>

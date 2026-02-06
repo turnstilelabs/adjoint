@@ -5,6 +5,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type HomeMode = 'explore' | 'prove' | 'write';
 
+// Workspace-first UX: Home no longer presents Explore/Prove/Write mode choices.
+// Kept temporarily to avoid breaking imports; HomeView no longer uses this.
+
 export function HomeModeToggle({
     mode,
     onChange,
@@ -16,14 +19,8 @@ export function HomeModeToggle({
         <div className="flex justify-center">
             <Tabs value={mode} onValueChange={(v) => onChange(v as HomeMode)}>
                 <TabsList className="h-10">
-                    <TabsTrigger value="explore" className="px-5 py-2 text-sm">
-                        Explore
-                    </TabsTrigger>
-                    <TabsTrigger value="prove" className="px-5 py-2 text-sm">
-                        Prove
-                    </TabsTrigger>
                     <TabsTrigger value="write" className="px-5 py-2 text-sm">
-                        Write
+                        Workspace
                     </TabsTrigger>
                 </TabsList>
             </Tabs>

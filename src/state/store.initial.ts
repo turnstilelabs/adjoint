@@ -15,24 +15,6 @@ export const initialState: StoreData = {
   chatDraft: '',
   chatDraftNonce: 0,
 
-  exploreDraft: '',
-  exploreDraftNonce: 0,
-
-  exploreHasSession: false,
-  exploreSeed: null,
-  exploreMessages: [],
-  exploreArtifacts: null,
-  isExploreArtifactsOpen: false,
-  exploreIsExtracting: false,
-  exploreExtractionPaused: false,
-  exploreArtifactEdits: {
-    candidateStatements: {},
-    perStatement: {},
-  },
-  exploreTurnId: 0,
-  cancelExploreCurrent: null,
-  cancelExploreExtractionCurrent: null,
-
   loading: false,
   error: null,
   errorDetails: null,

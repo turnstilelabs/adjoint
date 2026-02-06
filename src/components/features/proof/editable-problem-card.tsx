@@ -22,7 +22,6 @@ function EditableProblemCard() {
   const macros = useAppStore((s) => s.proofRenderMacros);
   const originalProblem = useAppStore((s) => s.originalProblem);
   const startProof = useAppStore((s) => s.startProof);
-  const startExploreFromFailedProof = useAppStore((s) => s.startExploreFromFailedProof);
   const pendingSuggestion = useAppStore((s) => s.pendingSuggestion);
   const pendingRejection = useAppStore((s) => s.pendingRejection);
   const clearRejection = useAppStore((s) => s.clearRejection);
@@ -168,9 +167,7 @@ function EditableProblemCard() {
                     await startProof(problem, { force: true });
                   }}
                   onExplore={() => {
-                    // Seed explore chat with the original statement + streamed draft, then navigate.
-                    startExploreFromFailedProof();
-                    router.push('/explore');
+                    router.push('/workspace');
                   }}
                 />
               )}

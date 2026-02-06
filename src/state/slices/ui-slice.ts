@@ -9,7 +9,6 @@ export const createUiSlice = (
   AppState,
   | 'goHome'
   | 'setChatDraft'
-  | 'setExploreDraft'
   | 'setChatCancelCurrent'
   | 'setIsChatOpen'
   | 'setProofChatPanelWidth'
@@ -26,14 +25,6 @@ export const createUiSlice = (
       chatDraftNonce: (s.chatDraftNonce || 0) + 1,
       // In proof mode, optionally open the chat panel.
       isChatOpen: opts?.open ? true : s.isChatOpen,
-    }));
-  },
-
-  setExploreDraft: (text) => {
-    const t = String(text ?? '');
-    set((s: AppState) => ({
-      exploreDraft: t,
-      exploreDraftNonce: (s.exploreDraftNonce || 0) + 1,
     }));
   },
 

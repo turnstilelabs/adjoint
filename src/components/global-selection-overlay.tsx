@@ -149,11 +149,11 @@ export function GlobalSelectionOverlay() {
             showCheckAgain={false}
             showRevise={false}
             showVerify={showVerify}
-            // Add-to-workspace is available from selections in Explore + Prover chats.
-            showAddToWorkspace={view === 'explore' || view === 'proof'}
-            // Enable Prove-this in Explore + Proof selection.
+            // Add-to-workspace is available from selections in Proof mode (chat messages, etc.)
+            showAddToWorkspace={view === 'proof'}
+            // Enable Prove-this in Proof selection.
             // In Proof mode this restarts a proof attempt from the selected snippet.
-            showProveThis={view === 'explore' || view === 'proof'}
+            showProveThis={view === 'proof'}
             onProveThis={() => {
                 try {
                     const payload = String(copyText || selectedText || '').trim();

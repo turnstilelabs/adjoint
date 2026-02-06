@@ -199,7 +199,7 @@ export function ProofLoading() {
             try {
               router.back();
             } catch {
-              router.push('/explore');
+              router.push('/workspace');
             }
           }}
         >

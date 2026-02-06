@@ -5,7 +5,9 @@ import { ArrowUpRight, AlertCircle } from 'lucide-react';
 
 import { Textarea } from '@/components/ui/textarea';
 import { useRouter } from 'next/navigation';
-import type { HomeMode } from '@/components/features/home/home-mode-toggle';
+// Legacy: Home no longer routes into Explore/Prove directly.
+// This component is kept only to avoid breaking imports if used elsewhere.
+export type HomeMode = 'write';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
@@ -34,65 +36,31 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
     return trimmedProblem;
   };
 
-  const runExplore = () => {
-    const trimmed = (problem || '').trim();
-    if (!trimmed) {
-      router.push('/explore?new=1');
-      return;
-    }
-
-    // Default: avoid putting the statement in the URL at all.
-    // (sessionStorage is per-tab; shareable links are a separate feature.)
-    const sid = storeRoutePayload(trimmed);
-    if (sid) {
-      router.push(`/explore?sid=${encodeURIComponent(sid)}`);
-      return;
-    }
-
-    // Fallback if sessionStorage is unavailable: use q for small payloads.
-    if (trimmed.length <= ROUTE_PAYLOAD_MAX_QUERY_CHARS) {
-      router.push(`/explore?q=${encodeURIComponent(trimmed)}`);
-      return;
-    }
-
-    // Last resort: if it's huge and storage failed, still navigate without a seed.
-    router.push('/explore?new=1');
-  };
-
-  const runProve = async () => {
-    const trimmed = validate(problem);
-    if (!trimmed) return;
-
-    // Default: avoid putting the statement in the URL at all.
-    // (sessionStorage is per-tab; shareable links are a separate feature.)
-    const sid = storeRoutePayload(trimmed);
-    if (sid) {
-      router.push(`/prove?sid=${encodeURIComponent(sid)}`);
-      return;
-    }
-
-    // Fallback if sessionStorage is unavailable: use q for small payloads.
-    if (trimmed.length <= ROUTE_PAYLOAD_MAX_QUERY_CHARS) {
-      router.push(`/prove?q=${encodeURIComponent(trimmed)}`);
-      return;
-    }
-
-    // If it's huge and storage failed, refuse to navigate with a massive URL.
-    toast({
-      title: 'Could not start proof',
-      description:
-        'This statement is too long to place in the URL, and session storage is unavailable in this browser context.',
-      variant: 'destructive',
-    });
-  };
-
   const runCurrentMode = () => {
     startTransition(async () => {
-      if (mode === 'explore') {
-        runExplore();
-      } else {
-        await runProve();
+      const trimmed = validate(problem);
+      if (!trimmed) return;
+
+      // Workspace-first: store the statement in sessionStorage and open Workspace.
+      const sid = storeRoutePayload(trimmed);
+      if (sid) {
+        // We currently have no Workspace sid hydration; fallback to direct seed via URL.
+        // (This component is legacy; users should paste into Workspace instead.)
+        router.push(`/workspace?seed=${encodeURIComponent(trimmed)}`);
+        return;
       }
+
+      if (trimmed.length <= ROUTE_PAYLOAD_MAX_QUERY_CHARS) {
+        router.push(`/workspace?seed=${encodeURIComponent(trimmed)}`);
+        return;
+      }
+
+      toast({
+        title: 'Could not open workspace',
+        description:
+          'This input is too long to place in the URL, and session storage is unavailable in this browser context.',
+        variant: 'destructive',
+      });
     });
   };
 
@@ -136,7 +104,7 @@ export default function ProblemInputForm({ mode }: { mode: HomeMode }) {
               type="submit"
               disabled={isPending}
               className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
-              aria-label={mode === 'explore' ? 'Explore this problem with Adjoint' : 'Attempt a proof of this statement with Adjoint'}
+              aria-label={'Open workspace'}
             >
               <ArrowUpRight className="h-4 w-4" />
             </button>

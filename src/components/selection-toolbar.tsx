@@ -163,10 +163,8 @@ export function SelectionToolbar({
   const goBack = useAppStore((s) => s.goBack);
   const view = useAppStore((s) => s.view);
   const setChatDraft = useAppStore((s) => s.setChatDraft);
-  const setExploreDraft = useAppStore((s) => s.setExploreDraft);
   const setWorkspaceDraft = useAppStore((s) => s.setWorkspaceDraft);
   const setIsWorkspaceChatOpen = useAppStore((s) => s.setIsWorkspaceChatOpen);
-  const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
 
   const [openWorkspacePicker, setOpenWorkspacePicker] = useState(false);
@@ -456,11 +454,6 @@ export function SelectionToolbar({
                       const text = (fromSelection || selectedText || '').trim();
                       if (!text) return;
 
-                      if (view === 'explore') {
-                        setExploreDraft(text);
-                        return;
-                      }
-
                       if (view === 'proof') {
                         setChatDraft(text, { open: true });
                         return;
@@ -478,16 +471,17 @@ export function SelectionToolbar({
                         return;
                       }
 
-                      // Home (or unknown): send to Explore as a general "ask AI" context.
+                      // Home (or unknown): open Workspace and prefill its chat.
                       try {
-                        startExplore(text);
-                        router.push(`/explore?q=${encodeURIComponent(text)}`);
-                        // Prefill the explore input too.
-                        setExploreDraft(text);
+                        if (typeof setWorkspaceDraft === 'function')
+                          setWorkspaceDraft(text, { open: true });
+                        if (typeof setIsWorkspaceChatOpen === 'function')
+                          setIsWorkspaceChatOpen(true);
+                        router.push('/workspace');
                       } catch {
                         toast({
                           title: 'Ask AI unavailable',
-                          description: 'Please open Explore or Proof mode first.',
+                          description: 'Please open Workspace or Proof mode first.',
                           variant: 'default',
                         });
                       }

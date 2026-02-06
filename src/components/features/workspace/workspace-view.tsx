@@ -15,7 +15,6 @@ import {
   Download,
   MessageCircle,
   FileUp,
-  Sparkles,
   X,
   Square,
   Send,
@@ -76,6 +75,17 @@ import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 
 const DEFAULT_TITLE = 'Untitled';
+
+function CurlyBracesIcon() {
+  return (
+    <span
+      aria-hidden
+      className="font-mono text-[14px] leading-none text-muted-foreground group-hover:text-foreground"
+    >
+      {'{}'}
+    </span>
+  );
+}
 
 type Anchor = { top: number; left: number };
 
@@ -797,7 +807,11 @@ export default function WorkspaceView() {
       {/* Header bar (keeps controls aligned + avoids overlaying messages) */}
       <div className="h-11 px-3 border-b flex items-center justify-between">
         <div className="text-xs font-medium text-muted-foreground">
-          {rightTab === 'insights' ? 'Insights' : rightTab === 'preview' ? 'Preview' : 'Chat'}
+          {rightTab === 'insights'
+            ? 'Candidate extraction'
+            : rightTab === 'preview'
+              ? 'Preview'
+              : 'Chat'}
         </div>
 
         <div className="flex items-center gap-1">
@@ -814,16 +828,16 @@ export default function WorkspaceView() {
                 );
                 setIsChatOpen(true);
               }}
-              aria-label="Insights"
-              title="Insights"
+              aria-label="Candidate extraction"
+              title="Candidate extraction"
               className={cn(
-                'h-8 w-8',
+                'h-8 w-8 group',
                 rightTab === 'insights'
                   ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary'
                   : '',
               )}
             >
-              <Sparkles className="h-4 w-4" />
+              <CurlyBracesIcon />
             </Button>
           )}
 

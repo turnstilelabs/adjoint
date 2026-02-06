@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
  * Best-effort warm-up hook mounted near the root of the app.
  *
  * Runs once per page load and hits `/api/warmup` to force server-side module
- * initialization (Genkit providers, flows, etc.) before the user opens Explore.
+ * initialization (Genkit providers, flows, etc.) before the user opens the app.
  */
 export function WarmupClient() {
     const didWarmup = useRef(false);
