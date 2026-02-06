@@ -15,6 +15,7 @@ import {
   Download,
   MessageCircle,
   FileUp,
+  HelpCircle,
   X,
   Square,
   Send,
@@ -66,6 +67,7 @@ import {
   type WorkspaceProjectMeta,
 } from '@/lib/persistence/workspace-projects';
 import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
+import { AskPaperModal } from '@/components/workspace/ask-paper-modal';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { Decoration, EditorView, WidgetType, keymap, ViewPlugin, ViewUpdate } from '@codemirror/view';
@@ -275,6 +277,9 @@ export default function WorkspaceView() {
   const [titleDraft, setTitleDraft] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  // Ask-about-paper modal
+  const [askPaperOpen, setAskPaperOpen] = useState(false);
 
   // arXiv import UI state
   const [pendingArxiv, setPendingArxiv] = useState<PendingArxivImport | null>(null);
@@ -1295,6 +1300,17 @@ export default function WorkspaceView() {
             <Download />
             <span className="sr-only">Export</span>
           </Button>
+
+          <Button
+            data-workspace-action="ask-paper"
+            variant="ghost"
+            size="icon"
+            title="Ask about a paper"
+            onClick={() => setAskPaperOpen(true)}
+          >
+            <HelpCircle />
+            <span className="sr-only">Ask about a paper</span>
+          </Button>
         </div>
         <div className="flex-1" />
       </aside>
@@ -1707,6 +1723,66 @@ export default function WorkspaceView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AskPaperModal
+        open={askPaperOpen}
+        onOpenChange={setAskPaperOpen}
+        onAddToWorkspace={(latex) => {
+          const view = cmRef.current?.view;
+          const chunk = String(latex || '').trim();
+          if (!chunk) return;
+
+          const block = [
+            '% --- Imported from paper excerpt ---',
+            chunk,
+            '% --- End paper import ---',
+          ].join('\n');
+
+          if (view) {
+            const pos = view.state.selection.main.to;
+            const insert = `\n\n${block}\n`;
+            view.dispatch({
+              changes: { from: pos, to: pos, insert },
+              selection: { anchor: pos + insert.length },
+            });
+            view.focus();
+            return;
+          }
+
+          // Fallback
+          const prev = String(useAppStore.getState().workspaceDoc ?? '');
+          const next = prev.trimEnd().length === 0 ? block : `${prev.trimEnd()}\n\n${block}\n`;
+          setDoc(next);
+        }}
+        onAskInChat={({ latex, question }) => {
+          const view = cmRef.current?.view;
+          const chunk = String(latex || '').trim();
+          const q = String(question || '').trim();
+          if (!chunk) return;
+
+          const block = [
+            '% --- Imported from paper excerpt ---',
+            chunk,
+            '% --- End paper import ---',
+          ].join('\n');
+
+          if (view) {
+            const pos = view.state.selection.main.to;
+            const insert = `\n\n${block}\n`;
+            view.dispatch({
+              changes: { from: pos, to: pos, insert },
+              selection: { anchor: pos + insert.length },
+            });
+            view.focus();
+          }
+
+          if (q) {
+            setDraft(q, { open: true });
+            setRightTab('chat');
+            setIsChatOpen(true);
+          }
+        }}
+      />
     </div>
   );
 }
