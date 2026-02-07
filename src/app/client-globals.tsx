@@ -5,6 +5,7 @@ import { GlobalSelectionOverlay } from '@/components/global-selection-overlay';
 import { VerifyDialogController } from '@/components/sympy/verify-dialog';
 import FeedbackWidget from '@/components/feedback/feedback-widget';
 import { Toaster } from '@/components/ui/toaster';
+import { PostUnlockBanner } from '@/components/post-unlock-banner';
 
 /**
  * Client-only global UI mounted from the (server) app layout.
@@ -16,6 +17,7 @@ import { Toaster } from '@/components/ui/toaster';
 export function ClientGlobals() {
     return (
         <>
+            <PostUnlockBanner />
             <WarmupClient />
             <GlobalSelectionOverlay />
             <VerifyDialogController />

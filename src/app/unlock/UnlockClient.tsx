@@ -55,6 +55,14 @@ export default function UnlockClient({ initialNext }: { initialNext?: string }) 
                 // ignore
             }
 
+            // Show a one-time post-unlock banner on the next page.
+            // Use sessionStorage so it naturally resets on a new tab/session.
+            try {
+                window.sessionStorage.setItem('adjoint_show_post_unlock_banner_v1', '1');
+            } catch {
+                // ignore
+            }
+
             router.replace(next);
         } finally {
             setSubmitting(false);
