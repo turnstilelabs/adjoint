@@ -39,7 +39,8 @@ export default function HomeView() {
   const router = useRouter();
 
   const [workspaceModalOpen, setWorkspaceModalOpen] = React.useState(false);
-  const [projects, setProjects] = React.useState(() => listWorkspaceProjects());
+  const [projects, setProjects] = React.useState<ReturnType<typeof listWorkspaceProjects>>([]);
+  const [isHydrated, setIsHydrated] = React.useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
 
   const confirmDeleteTitle = React.useMemo(() => {
@@ -64,7 +65,8 @@ export default function HomeView() {
   }, []);
 
   React.useEffect(() => {
-    // Keep list fresh when arriving on Home.
+    // Keep list fresh when arriving on Home (client only).
+    setIsHydrated(true);
     refreshProjects();
   }, [refreshProjects]);
 
@@ -76,7 +78,8 @@ export default function HomeView() {
   const startWriting = () => {
     // First-time UX: no existing projects -> jump straight into a fresh Workspace.
     // (No modal/picker.)
-    if (!hasAnyWorkspaceProjects) {
+    const existing = listWorkspaceProjects();
+    if (existing.length === 0) {
       createNewProjectAndOpen();
       return;
     }
@@ -150,7 +153,9 @@ export default function HomeView() {
       <div className="mb-6 flex flex-col items-center justify-center gap-3">
         <div className="flex items-center justify-center gap-2">
           <Button size="lg" onClick={startWriting}>
-            {hasAnyWorkspaceProjects || hasDraft ? 'Resume workspace' : 'Create workspace'}
+            {isHydrated && (hasAnyWorkspaceProjects || hasDraft)
+              ? 'Resume workspace'
+              : 'Create workspace'}
           </Button>
         </div>
       </div>
