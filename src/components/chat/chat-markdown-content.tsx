@@ -9,20 +9,33 @@ type Segment =
     | { type: 'text'; content: string }
     | { type: 'code'; language: string | null; code: string };
 
-type TextLine = { kind: 'heading'; level: number; text: string } | { kind: 'text'; text: string };
+type TextBlock =
+    | { kind: 'heading'; level: number; text: string }
+    | { kind: 'text'; text: string };
 
-function parseTextLines(input: string): TextLine[] {
+function splitTextBlocks(input: string): TextBlock[] {
     const s = String(input ?? '').replace(/\r\n/g, '\n');
     const lines = s.split('\n');
-    const out: TextLine[] = [];
+    const out: TextBlock[] = [];
+    let buf: string[] = [];
+
+    const flush = () => {
+        if (buf.length === 0) return;
+        out.push({ kind: 'text', text: buf.join('\n') });
+        buf = [];
+    };
+
     for (const ln of lines) {
         const m = ln.match(/^(#{2,6})\s+(.*)$/);
         if (m) {
+            flush();
             out.push({ kind: 'heading', level: m[1].length, text: (m[2] ?? '').trim() });
         } else {
-            out.push({ kind: 'text', text: ln });
+            buf.push(ln);
         }
     }
+
+    flush();
     return out;
 }
 
@@ -93,11 +106,11 @@ export function ChatMarkdownContent({
                 const txt = String(seg.content ?? '').trimEnd();
                 if (!txt) return null;
 
-                const lines = parseTextLines(txt);
+                const blocks = splitTextBlocks(txt);
 
                 return (
                     <div key={`text-${i}`} className="space-y-2">
-                        {lines.map((l, j) => {
+                        {blocks.map((l, j) => {
                             if (l.kind === 'heading') {
                                 const cls =
                                     l.level === 2
@@ -111,7 +124,7 @@ export function ChatMarkdownContent({
                                     </div>
                                 );
                             }
-                            // Normal text line: preserve line breaks and wrap.
+                            // Normal text block: preserve line breaks and wrap.
                             return (
                                 <div
                                     key={`t-${i}-${j}`}
