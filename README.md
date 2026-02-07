@@ -13,13 +13,22 @@ It’s built around a simple workflow:
 
 ## The Main Features
 
-### Explore mode to formulate the best statement
+### Workspace mode to write and review mathematical notes
 
-Chat to refine the problem and context
-![Explore Chat](docs/images/explore_chat.png)
+Write a mathematical document with direct in-context actions (chat, prove, review,...)
+![Workspace](docs/images/workspace.png)
 
-The Adjoint will automatically extract **candidate statements**, **assumptions**, and other artifacts. You can always directly edit artifacts and **promote a candidate statement** to “Prove”.
-![Attempt Prove](docs/images/attempt_proof.png)
+Extract LaTeX directly from documents
+![LaTeX Extraction](docs/images/latex_extraction.png)
+
+Interact with your favorite LLMs through a chat
+![Workspace Chat](docs/images/workspace_chat.png)
+
+Review notes artifacts (lemmas, propositions, theorems,...). Those are automatically extracted through a regex heuristic if in proper LaTeX environment.
+![Workspace Artifact](docs/images/review.png)
+
+Check artifact consistency and send to the prover mode if needed.
+![Workspace Review](docs/images/review_result.png)
 
 ### Prove mode to structure and iterate on proof construction
 
@@ -36,17 +45,6 @@ Keep a **version history** so you can revisit earlier attempts.
 ![Version History](docs/images/proof_versioning.png)
 
 And last but not least, **Export to LaTeX** (`proof.tex`).
-
-### Workspace mode to write and review mathematical notes
-
-Write a mathematical document with direct in-context actions (chat, prove, review,...)
-![Workspace](docs/images/workspace.png)
-
-Review notes artifacts (lemmas, propositions, theorems,...). Those are automatically extracted through a regex heuristic if in proper LaTeX environment.
-![Workspace Artifact](docs/images/review.png)
-
-Check artifact consistency and send to the prover mode if needed.
-![Workspace Review](docs/images/review_result.png)
 
 ## Quick start
 

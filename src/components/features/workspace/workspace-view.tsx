@@ -24,6 +24,7 @@ import {
   Minimize2,
   CheckSquare,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
@@ -250,6 +251,7 @@ export default function WorkspaceView() {
   const workspaceInsightsIsExtracting = useAppStore(
     (s) => (s as any).workspaceInsightsIsExtracting,
   );
+  const cancelWorkspaceCurrent = useAppStore((s) => (s as any).cancelWorkspaceCurrent);
   const extractInsights = useExtractWorkspaceInsights();
 
   const isChatOpen = useAppStore((s) => s.isWorkspaceChatOpen);
@@ -278,6 +280,7 @@ export default function WorkspaceView() {
 
   // Ask-about-paper modal
   const [askPaperOpen, setAskPaperOpen] = useState(false);
+  const [insightsPaused, setInsightsPaused] = useState(false);
 
   // arXiv import UI state
   const [pendingArxiv, setPendingArxiv] = useState<PendingArxivImport | null>(null);
@@ -876,6 +879,7 @@ export default function WorkspaceView() {
 
             // Auto-extract insights after the assistant finishes.
             try {
+              if (insightsPaused) return;
               const latest = useAppStore.getState().workspaceMessages;
               const lastUser = [...latest].reverse().find((m: any) => m.role === 'user')?.content;
               const basis = String(lastUser ?? trimmed);
@@ -1027,6 +1031,22 @@ export default function WorkspaceView() {
             </Button>
           )}
 
+          {rightTab === 'chat' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setMessages([]);
+                setChatInput('');
+              }}
+              aria-label="Reset chat"
+              title="Reset chat"
+              className="h-8 w-8"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          )}
+
           {rightTab === 'chat' &&
             (isChatFocused ? (
               <Button
@@ -1070,7 +1090,7 @@ export default function WorkspaceView() {
 
       {rightTab === 'chat' ? (
         <>
-          <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any}>
+          <ScrollArea className="flex-1 px-3 md:px-6" ref={chatScrollRef as any} scrollbar="both">
             <div className="flex flex-col gap-4 py-6 min-w-0 pr-2">
               {(messages as Message[]).map((m, idx) => (
                 <ChatMessage message={m as any} key={idx} />
@@ -1149,6 +1169,28 @@ export default function WorkspaceView() {
               router.push(`/prove?q=${encodeURIComponent(s)}`);
             }}
             isExtracting={Boolean(workspaceInsightsIsExtracting)}
+            extractionPaused={insightsPaused}
+            onPauseExtraction={() => {
+              try {
+                cancelWorkspaceCurrent?.();
+              } catch {
+                // ignore
+              }
+              setInsightsPaused(true);
+            }}
+            onRefreshExtraction={() => {
+              setInsightsPaused(false);
+              const history = (messages ?? []).slice(-10) as any;
+              const lastUser = [...history].reverse().find((m: any) => m.role === 'user')?.content;
+              const basis =
+                String(lastUser ?? '').trim() ||
+                'Extract candidate statements from the current document.';
+              void extractInsights({
+                request: basis,
+                history,
+                seed: (doc || '').slice(0, 2000),
+              });
+            }}
             edits={workspaceArtifactEdits}
             setEdit={setWorkspaceArtifactEdit}
           />
