@@ -15,7 +15,6 @@ import {
   Download,
   MessageCircle,
   FileUp,
-  HelpCircle,
   X,
   Square,
   Send,
@@ -268,7 +267,6 @@ export default function WorkspaceView() {
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const cmRef = useRef<ReactCodeMirrorRef | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -381,9 +379,9 @@ export default function WorkspaceView() {
 
   // Hover hint coming from the “Getting started in Workspace” callout.
   // Kept as local UI state (no global store changes).
-  const [hoverHint, setHoverHint] = useState<
-    'import' | 'chat' | 'preview' | 'review' | 'export' | null
-  >(null);
+  const [hoverHint, setHoverHint] = useState<'add' | 'chat' | 'preview' | 'review' | 'export' | null>(
+    null,
+  );
 
   useEffect(() => {
     const onHover = (evt: any) => {
@@ -1169,51 +1167,23 @@ export default function WorkspaceView() {
     <div className="inset-0 absolute overflow-hidden flex">
       {/* Left sidebar (match Proof mode) */}
       <aside className="w-14 flex flex-col items-center py-4 border-r bg-card shrink-0">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".tex,text/plain"
-          className="hidden"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            // Reset input value immediately so selecting the same file again retriggers onChange,
-            // even if the user re-opens the picker quickly.
-            try {
-              if (fileInputRef.current) fileInputRef.current.value = '';
-              // Also clear the event target for robustness.
-              (e.target as HTMLInputElement).value = '';
-            } catch {
-              // ignore
-            }
-
-            await onImport(f);
-          }}
-        />
-
         <div className="mb-6 cursor-pointer" onClick={() => router.push('/')}>
           <LogoSmall />
         </div>
 
         <div className="flex flex-col items-center space-y-2">
           <Button
-            data-workspace-action="import"
+            data-workspace-action="add"
             variant="ghost"
             size="icon"
-            title="Import"
+            title="Add to Workspace"
             onClick={() => {
-              // Ensure the next selection always fires onChange (even if same file).
-              try {
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              } catch {
-                // ignore
-              }
-              fileInputRef.current?.click();
+              setAskPaperOpen(true);
             }}
-            className={hoverHint === 'import' ? 'ring-1 ring-primary/25' : undefined}
+            className={hoverHint === 'add' ? 'ring-1 ring-primary/25' : undefined}
           >
             <FileUp />
-            <span className="sr-only">Import</span>
+            <span className="sr-only">Add to Workspace</span>
           </Button>
 
           <Button
@@ -1301,16 +1271,6 @@ export default function WorkspaceView() {
             <span className="sr-only">Export</span>
           </Button>
 
-          <Button
-            data-workspace-action="ask-paper"
-            variant="ghost"
-            size="icon"
-            title="Ask about a paper"
-            onClick={() => setAskPaperOpen(true)}
-          >
-            <HelpCircle />
-            <span className="sr-only">Ask about a paper</span>
-          </Button>
         </div>
         <div className="flex-1" />
       </aside>
@@ -1727,6 +1687,20 @@ export default function WorkspaceView() {
       <AskPaperModal
         open={askPaperOpen}
         onOpenChange={setAskPaperOpen}
+        onImportTex={async (file) => {
+          try {
+            await onImport(file);
+            toast({
+              title: 'Imported to workspace',
+              description: 'The file has been inserted into your workspace.',
+            });
+          } catch (e: any) {
+            toast({
+              title: 'Import failed',
+              description: e?.message || 'Could not import that file.',
+            });
+          }
+        }}
         onAddToWorkspace={(latex, sourceName) => {
           const view = cmRef.current?.view;
           const chunk = String(latex || '').trim();

@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { parseArxivId } from '@/lib/arxiv';
 import { cn } from '@/lib/utils';
-import { Download, Loader2 } from 'lucide-react';
+import { FilePlus, Loader2 } from 'lucide-react';
 
 type AskPaperModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddToWorkspace: (latex: string, sourceName?: string) => void;
+  onImportTex?: (file: File) => Promise<void> | void;
 };
 
 type PdfDoc = {
@@ -38,7 +39,12 @@ function normalizeRect(rect: Rect, maxW: number, maxH: number): Rect {
   return { x, y, width: w, height: h };
 }
 
-export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaperModalProps) {
+export function AskPaperModal({
+  open,
+  onOpenChange,
+  onAddToWorkspace,
+  onImportTex,
+}: AskPaperModalProps) {
   const [sourceInput, setSourceInput] = useState('');
   const [pdfDoc, setPdfDoc] = useState<PdfDoc | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -57,6 +63,7 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
   const dragStartRef = useRef<{ pageIndex: number; x: number; y: number } | null>(null);
   const extractAbortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canExtract = !!selection && selection.width >= MIN_SELECTION && selection.height >= MIN_SELECTION;
 
@@ -189,6 +196,7 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
       const isAllowed = host === 'export.arxiv.org' || host === 'arxiv.org';
       if (!isAllowed) {
         setError('load-unsupported');
+        setErrorDetail('Only arXiv links are supported right now.');
         return;
       }
 
@@ -213,6 +221,50 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
       setIsLoadingPdf(false);
     }
   }, [sourceInput, loadPdfFromBytes]);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (!file) return;
+      const name = String(file.name || '').trim();
+      const lower = name.toLowerCase();
+      const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf');
+      const isTex = lower.endsWith('.tex') || file.type.startsWith('text/');
+
+      if (isPdf) {
+        setError(null);
+        setErrorDetail(null);
+        setLatex('');
+        setSelection(null);
+        setIsLoadingPdf(true);
+        try {
+          const bytes = await file.arrayBuffer();
+          await loadPdfFromBytes(bytes);
+          setSourceName(name || 'PDF');
+        } catch (e: any) {
+          setError('load');
+          setErrorDetail(String(e?.message || e || 'Failed to load PDF.'));
+        } finally {
+          setIsLoadingPdf(false);
+        }
+        return;
+      }
+
+      if (isTex) {
+        if (!onImportTex) return;
+        try {
+          await onImportTex(file);
+        } catch (e: any) {
+          setError('import');
+          setErrorDetail(String(e?.message || e || 'Failed to import file.'));
+        }
+        return;
+      }
+
+      setError('load-unsupported');
+      setErrorDetail('Unsupported file type.');
+    },
+    [loadPdfFromBytes, onImportTex],
+  );
 
   useEffect(() => {
     if (!pdfDoc) return;
@@ -416,13 +468,33 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
         )}
       >
         <DialogHeader>
-          <DialogTitle>Extract from Paper</DialogTitle>
-          <DialogDescription>
-            Paste an arXiv PDF URL (or ID), load it, then snip a region to extract LaTeX.
-          </DialogDescription>
+          <DialogTitle>Add to Workspace</DialogTitle>
+          <DialogDescription>Import full LaTeX files or extract snippets from PDFs.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          onDragOver={(e) => {
+            e.preventDefault();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const file = e.dataTransfer?.files?.[0];
+            if (file) void handleFile(file);
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.tex,text/plain,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              void handleFile(file);
+            }}
+          />
           <div className="flex gap-2">
             <Input
               id="ask-paper-url"
@@ -431,18 +503,24 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleLoadFromUrl();
               }}
-              placeholder="https://export.arxiv.org/pdf/2501.01234.pdf or 2501.01234"
+              placeholder="Paste link or drop a file"
             />
             <Button
               type="button"
               size="icon"
               variant="secondary"
-              onClick={handleLoadFromUrl}
-              disabled={isLoadingPdf || !sourceInput.trim()}
-              aria-label="Load PDF"
-              title="Load PDF"
+              onClick={() => {
+                if (sourceInput.trim()) {
+                  handleLoadFromUrl();
+                } else {
+                  fileInputRef.current?.click();
+                }
+              }}
+              disabled={isLoadingPdf}
+              aria-label={sourceInput.trim() ? 'Load link' : 'Upload file'}
+              title={sourceInput.trim() ? 'Load link' : 'Upload file'}
             >
-              {isLoadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {isLoadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePlus className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -532,9 +610,10 @@ export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaper
           <div className="text-sm text-destructive">
             {error === 'select' && 'Select a region on the PDF to extract.'}
             {error === 'load' && 'Could not load that PDF. Double-check the link and try again.'}
-            {error === 'load-unsupported' && 'Only arXiv PDF links (export.arxiv.org) are supported right now.'}
+            {error === 'load-unsupported' && 'Unsupported link or file type.'}
             {error === 'render' && 'PDF renderer failed to initialize. Please retry loading the PDF.'}
             {error === 'extract' && 'Could not extract LaTeX from that region. Try a smaller selection.'}
+            {error === 'import' && 'Could not import that file. Try a different file.'}
             {errorDetail ? (
               <div className="mt-1 text-xs text-muted-foreground">{errorDetail}</div>
             ) : null}
