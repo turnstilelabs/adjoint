@@ -54,10 +54,10 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
     rotateEveryMs: 10000,
   });
 
-  // This per-message “add to workspace” control is intended for Explore chat.
-  // (Workspace chat already has its own workflow and icons.)
+  // Per-message “add to workspace” control (useful in Proof chat).
+  // Workspace chat already has its own workflow and icons.
   const canAddMessageToWorkspace =
-    view === 'explore' && message.role === 'assistant' && String(message.content || '').trim().length > 0;
+    view === 'proof' && message.role === 'assistant' && String(message.content || '').trim().length > 0;
 
   const onDragStart = (e: DragEvent) => {
     try {
@@ -74,7 +74,7 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
         }`}
     >
       <div
-        className={`group relative p-4 rounded-2xl break-words w-fit max-w-[85%] min-w-0 ${message.role === 'user'
+        className={`group relative p-4 rounded-2xl break-words max-w-[85%] min-w-0 overflow-x-auto ${message.role === 'user'
           ? 'bg-primary text-primary-foreground shadow-md'
           : 'bg-card border border-border shadow-sm'
           }`}
@@ -134,7 +134,8 @@ function ChatMessage({ message, autoWrapMath = false }: { message: Message; auto
               size="sm"
               variant="secondary"
               onClick={() => {
-                window.dispatchEvent(new CustomEvent('explore:open-attempt-proof-chooser'));
+                // Explore has been removed; this action is now deprecated.
+                // Keep it as a no-op to avoid surprising runtime errors if older messages include it.
               }}
             >
               <Sparkles className="mr-2 h-4 w-4" />

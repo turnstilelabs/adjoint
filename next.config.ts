@@ -39,6 +39,20 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/explore',
+        destination: '/workspace',
+        permanent: false,
+      },
+      {
+        source: '/explore/:path*',
+        destination: '/workspace',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

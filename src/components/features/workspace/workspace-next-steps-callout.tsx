@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 
-type ActionId = 'import' | 'chat' | 'preview' | 'review' | 'export';
+type ActionId = 'add' | 'chat' | 'preview' | 'review' | 'export';
 
 const SESSION_KEY = 'adjoint.workspace.nextStepsDismissed.v1';
 
 const LABELS: Record<ActionId, string> = {
-  import: 'Import',
+  add: 'Add',
   chat: 'Chat',
   preview: 'Preview',
   review: 'Review',
@@ -19,7 +19,7 @@ const LABELS: Record<ActionId, string> = {
 };
 
 const DESCRIPTIONS: Record<ActionId, string> = {
-  import: 'Import a .tex file (or plain text) into the editor.',
+  add: 'Add content via link or file and insert it into the editor.',
   chat: 'Ask questions about your draft or a selected excerpt.',
   preview: 'See a KaTeX preview of your current document.',
   review: 'Extract theorem-like artifacts and ask the AI to review their proofs.',
@@ -90,7 +90,7 @@ export function WorkspaceNextStepsCallout({ className }: { className?: string })
             <div className="mt-1 text-xs text-muted-foreground">
               {active
                 ? DESCRIPTIONS[active]
-                : 'Use the left sidebar to import/export, chat with the assistant, preview the document, or review artifacts.'}
+                : 'Use the left sidebar to add content, chat with the assistant, preview the document, or review artifacts.'}
             </div>
           </div>
 

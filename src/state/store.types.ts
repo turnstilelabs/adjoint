@@ -6,7 +6,7 @@ import type { Message } from '@/components/chat/interactive-chat';
 import type { GraphData } from '@/components/proof-graph';
 import type { ArtifactReviewResult, ExtractedArtifact } from '@/types/review';
 
-export type View = 'home' | 'explore' | 'workspace' | 'proof';
+export type View = 'home' | 'workspace' | 'proof';
 
 // Extended ProofVersion to support raw vs structured versions, numbering and metadata
 export type ProofVersion = {
@@ -76,46 +76,6 @@ export type StoreData = {
   chatDraft: string;
   /** Bumped to request focus/apply of chatDraft. */
   chatDraftNonce: number;
-
-  /** Draft text prefilled into the explore-mode chat input (used by global selection toolbar). */
-  exploreDraft: string;
-  /** Bumped to request focus/apply of exploreDraft. */
-  exploreDraftNonce: number;
-
-  // Explore mode
-  /** Whether the user has ever entered Explore in this session (used for "Continue exploring" CTA). */
-  exploreHasSession: boolean;
-  exploreSeed: string | null;
-  exploreMessages: Message[];
-  exploreArtifacts: ExploreArtifacts | null;
-  /** Right panel visibility for Explore candidate extraction. */
-  isExploreArtifactsOpen: boolean;
-  /** Whether an extract-only job is currently running. */
-  exploreIsExtracting: boolean;
-  /** If true, auto-extraction is paused until the user manually resumes/relaunches. */
-  exploreExtractionPaused: boolean;
-  /**
-   * User edits overlay for extracted artifacts.
-   * Keyed by the original extracted string -> edited string.
-   */
-  exploreArtifactEdits: {
-    candidateStatements: Record<string, string>;
-    /**
-     * Non-statement artifacts are scoped per candidate statement (keyed by the original statement string).
-     */
-    perStatement: Record<
-      string,
-      {
-        assumptions: Record<string, string>;
-        examples: Record<string, string>;
-        counterexamples: Record<string, string>;
-      }
-    >;
-  };
-  exploreTurnId: number;
-  cancelExploreCurrent?: (() => void) | null;
-  /** Cancel the current in-flight Explore extraction stream (extract-only), separate from chat. */
-  cancelExploreExtractionCurrent?: (() => void) | null;
 
   loading: boolean;
   error: string | null;
@@ -212,9 +172,6 @@ export interface AppState extends StoreData {
   /** Prefill + focus the proof-mode chat input (and optionally open the chat panel). */
   setChatDraft: (text: string, opts?: { open?: boolean }) => void;
 
-  /** Prefill + focus the explore-mode chat input. */
-  setExploreDraft: (text: string) => void;
-
   /** Set/cancel the in-flight Proof chat stream. */
   setChatCancelCurrent: (cancel: (() => void) | null) => void;
 
@@ -259,30 +216,6 @@ export interface AppState extends StoreData {
 
   /** Set/cancel the in-flight Workspace chat stream (separate from Insights extraction). */
   setWorkspaceChatCancelCurrent: (cancel: (() => void) | null) => void;
-
-  // Explore navigation / state
-  startExplore: (seed?: string) => void;
-  /** Reset Explore into a fresh empty session and switch to Explore view. */
-  newExplore: () => void;
-  setExploreMessages: (updater: ((prev: Message[]) => Message[]) | Message[]) => void;
-  setExploreArtifacts: (artifacts: ExploreArtifacts | null) => void;
-  deleteExploreCandidateStatement: (statement: string) => void;
-  setExploreArtifactEdit: (opts: {
-    kind: 'candidateStatements' | 'assumptions' | 'examples' | 'counterexamples';
-    /** Candidate statement key for non-candidate edits. */
-    statementKey?: string;
-    original: string;
-    edited: string;
-  }) => void;
-  clearExploreArtifactEdits: () => void;
-  bumpExploreTurnId: () => number;
-  getExploreTurnId: () => number;
-  setExploreCancelCurrent: (cancel: (() => void) | null) => void;
-  setExploreExtractionCancelCurrent: (cancel: (() => void) | null) => void;
-  setExploreIsExtracting: (extracting: boolean) => void;
-  setExploreExtractionPaused: (paused: boolean) => void;
-  setIsExploreArtifactsOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  startExploreFromFailedProof: () => void;
 
   startProof: (problem: string, opts?: { force?: boolean }) => Promise<void>;
   /** Restore the current Proof view without starting a new run. */

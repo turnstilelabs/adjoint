@@ -8,6 +8,7 @@ import {
   CheckSquare,
   CheckCircle,
   Plus,
+  Lightbulb,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from './ui/popover';
@@ -115,6 +116,10 @@ interface SelectionToolbarProps {
   /** Optional action: add selection to a workspace (with picker). */
   showAddToWorkspace?: boolean;
 
+  /** Optional action: import LaTeX from an arXiv link in the selection (Workspace editor). */
+  showImportArxiv?: boolean;
+  onImportArxiv?: () => void;
+
   /**
    * Optional override for button order.
    *
@@ -124,6 +129,7 @@ interface SelectionToolbarProps {
   buttonOrder?: Array<
     | 'addToReview'
     | 'addToWorkspace'
+    | 'importArxiv'
     | 'copy'
     | 'verify'
     | 'askAI'
@@ -156,6 +162,8 @@ export function SelectionToolbar({
   showAddToReview = false,
   onAddToReview,
   showAddToWorkspace = false,
+  showImportArxiv = false,
+  onImportArxiv,
   buttonOrder,
 }: SelectionToolbarProps) {
   const { toast } = useToast();
@@ -163,10 +171,8 @@ export function SelectionToolbar({
   const goBack = useAppStore((s) => s.goBack);
   const view = useAppStore((s) => s.view);
   const setChatDraft = useAppStore((s) => s.setChatDraft);
-  const setExploreDraft = useAppStore((s) => s.setExploreDraft);
   const setWorkspaceDraft = useAppStore((s) => s.setWorkspaceDraft);
   const setIsWorkspaceChatOpen = useAppStore((s) => s.setIsWorkspaceChatOpen);
-  const startExplore = useAppStore((s) => s.startExplore);
   const router = useRouter();
 
   const [openWorkspacePicker, setOpenWorkspacePicker] = useState(false);
@@ -279,6 +285,7 @@ export function SelectionToolbar({
   const defaultOrder: NonNullable<SelectionToolbarProps['buttonOrder']> = [
     'addToReview',
     'addToWorkspace',
+    'importArxiv',
     'copy',
     'verify',
     'askAI',
@@ -374,6 +381,23 @@ export function SelectionToolbar({
                 );
               }
 
+              if (k === 'importArxiv') {
+                if (!showImportArxiv || typeof onImportArxiv !== 'function') return null;
+                return (
+                  <Button
+                    key={k}
+                    variant="ghost"
+                    size="icon"
+                    // Prevent the click from collapsing the current selection before we read it.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onImportArxiv()}
+                    title="Import LaTeX from arXiv"
+                  >
+                    <Lightbulb className="h-4 w-4" />
+                  </Button>
+                );
+              }
+
               if (k === 'copy') {
                 if (!showCopy) return null;
                 return (
@@ -456,11 +480,6 @@ export function SelectionToolbar({
                       const text = (fromSelection || selectedText || '').trim();
                       if (!text) return;
 
-                      if (view === 'explore') {
-                        setExploreDraft(text);
-                        return;
-                      }
-
                       if (view === 'proof') {
                         setChatDraft(text, { open: true });
                         return;
@@ -478,16 +497,17 @@ export function SelectionToolbar({
                         return;
                       }
 
-                      // Home (or unknown): send to Explore as a general "ask AI" context.
+                      // Home (or unknown): open Workspace and prefill its chat.
                       try {
-                        startExplore(text);
-                        router.push(`/explore?q=${encodeURIComponent(text)}`);
-                        // Prefill the explore input too.
-                        setExploreDraft(text);
+                        if (typeof setWorkspaceDraft === 'function')
+                          setWorkspaceDraft(text, { open: true });
+                        if (typeof setIsWorkspaceChatOpen === 'function')
+                          setIsWorkspaceChatOpen(true);
+                        router.push('/workspace');
                       } catch {
                         toast({
                           title: 'Ask AI unavailable',
-                          description: 'Please open Explore or Proof mode first.',
+                          description: 'Please open Workspace or Proof mode first.',
                           variant: 'default',
                         });
                       }

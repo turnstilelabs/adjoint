@@ -227,11 +227,13 @@ export function ArtifactsPanel({
     edits: editsOverride,
     setEdit: setEditOverride,
 }: Props) {
-    const exploreEdits = useAppStore((s) => s.exploreArtifactEdits);
-    const exploreSetEdit = useAppStore((s) => s.setExploreArtifactEdit);
-
-    const edits = editsOverride ?? exploreEdits;
-    const setEdit = setEditOverride ?? exploreSetEdit;
+    const edits =
+        editsOverride ??
+        (useAppStore.getState() as any).workspaceArtifactEdits ??
+        { candidateStatements: {}, perStatement: {} };
+    const setEdit =
+        setEditOverride ??
+        ((useAppStore.getState() as any).setWorkspaceArtifactEdit as any);
 
     const a0: ExploreArtifacts = artifacts ?? {
         candidateStatements: [],

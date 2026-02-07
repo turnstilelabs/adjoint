@@ -1,12 +1,9 @@
 'use client';
 
 import * as React from 'react';
-
-import ProblemInputForm from '@/components/problem-input-form';
 import { HomeHeader } from '@/components/features/home/home-header';
 import HomeExamples from '@/components/features/home/home-examples';
 import { HomeFooter } from '@/components/features/home/home-footer';
-import { HomeModeToggle, type HomeMode } from '@/components/features/home/home-mode-toggle';
 import { Button } from '@/components/ui/button';
 import { FolderOpen, Trash2 } from 'lucide-react';
 import {
@@ -39,11 +36,11 @@ import {
 const DEFAULT_TITLE = 'Untitled';
 
 export default function HomeView() {
-  const [mode, setMode] = React.useState<HomeMode>('prove');
   const router = useRouter();
 
   const [workspaceModalOpen, setWorkspaceModalOpen] = React.useState(false);
-  const [projects, setProjects] = React.useState(() => listWorkspaceProjects());
+  const [projects, setProjects] = React.useState<ReturnType<typeof listWorkspaceProjects>>([]);
+  const [isHydrated, setIsHydrated] = React.useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
 
   const confirmDeleteTitle = React.useMemo(() => {
@@ -58,12 +55,6 @@ export default function HomeView() {
   const hasAnyWorkspaceProjects = (projects || []).length > 0;
 
   const hasDraft = useAppStore((s) => (s.workspaceDoc || '').trim().length > 0);
-  const hasExploreSession = useAppStore((s) =>
-    s.exploreHasSession ||
-    s.exploreMessages.length > 0 ||
-    Boolean((s.exploreSeed || '').trim()) ||
-    Boolean(s.exploreArtifacts),
-  );
 
   const refreshProjects = React.useCallback(() => {
     try {
@@ -74,7 +65,8 @@ export default function HomeView() {
   }, []);
 
   React.useEffect(() => {
-    // Keep list fresh when arriving on Home.
+    // Keep list fresh when arriving on Home (client only).
+    setIsHydrated(true);
     refreshProjects();
   }, [refreshProjects]);
 
@@ -86,7 +78,8 @@ export default function HomeView() {
   const startWriting = () => {
     // First-time UX: no existing projects -> jump straight into a fresh Workspace.
     // (No modal/picker.)
-    if (!hasAnyWorkspaceProjects) {
+    const existing = listWorkspaceProjects();
+    if (existing.length === 0) {
       createNewProjectAndOpen();
       return;
     }
@@ -149,51 +142,22 @@ export default function HomeView() {
   return (
     <div className="w-full max-w-5xl mx-auto p-8 flex flex-col">
       <HomeHeader />
+
+      {/* Workspace-first UX: Home is only a project picker / launcher. */}
       <div className="-mt-2 mb-6">
-        <HomeModeToggle mode={mode} onChange={setMode} />
         <div className="mt-2 text-center text-xs text-muted-foreground">
-          {mode === 'explore'
-            ? 'Analyse the problem and formulate a precise statement to be proved.'
-            : mode === 'write'
-              ? 'Draft and refine your notes.'
-              : 'Attempt and structure a proof of your statement.'}
+          Create or resume a Workspace to draft notes, chat, extract candidate statements, and launch proof attempts.
         </div>
       </div>
 
       <div className="mb-6 flex flex-col items-center justify-center gap-3">
-        {mode === 'prove' ? (
-          <div className="w-full">
-            <ProblemInputForm mode={mode} />
-          </div>
-        ) : mode === 'explore' ? (
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              size="lg"
-              onClick={() => {
-                router.push('/explore?new=1');
-              }}
-            >
-              New exploration
-            </Button>
-            {hasExploreSession && (
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => {
-                  router.push('/explore');
-                }}
-              >
-                Continue exploring
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-2">
-            <Button size="lg" onClick={startWriting}>
-              {hasAnyWorkspaceProjects || hasDraft ? 'Resume writing' : 'Start writing'}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center justify-center gap-2">
+          <Button size="lg" onClick={startWriting}>
+            {isHydrated && (hasAnyWorkspaceProjects || hasDraft)
+              ? 'Resume workspace'
+              : 'Create workspace'}
+          </Button>
+        </div>
       </div>
 
       {/* Workspace project picker modal */}

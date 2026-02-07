@@ -6,14 +6,12 @@ import type { AppState } from '@/state/store.types';
 import { initialState } from '@/state/store.initial';
 import { createUiSlice } from '@/state/slices/ui-slice';
 import { createWorkspaceSlice } from '@/state/slices/workspace-slice';
-import { createExploreSlice } from '@/state/slices/explore-slice';
 import { createProofSlice } from '@/state/slices/proof-slice';
 
 export const useAppStore = create<AppState>((set, get) => ({
   ...initialState,
   ...createUiSlice(set, get),
   ...createWorkspaceSlice(set, get),
-  ...createExploreSlice(set, get),
   ...createProofSlice(set, get),
 
   cancelProofAttempt: () => {
@@ -52,16 +50,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         isWorkspaceChatOpen: state.isWorkspaceChatOpen,
         lastViewBeforeWorkspace: state.lastViewBeforeWorkspace,
 
-        // IMPORTANT: preserve Explore session too.
-        // Users often enter Prove from Explore and expect Cancel to return to Explore
-        // with the chat + extracted artifacts intact.
-        exploreHasSession: state.exploreHasSession,
-        exploreSeed: state.exploreSeed,
-        exploreMessages: state.exploreMessages,
-        exploreArtifacts: state.exploreArtifacts,
-        exploreArtifactEdits: state.exploreArtifactEdits,
-        exploreTurnId: state.exploreTurnId,
-        cancelExploreCurrent: state.cancelExploreCurrent,
       };
 
       // Return to a safe “home” UI state. (RouteViewSync will set `view` appropriately
@@ -105,20 +93,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (cancelChat) {
       try {
         cancelChat();
-      } catch { }
-    }
-
-    const cancelExplore = get().cancelExploreCurrent || null;
-    if (cancelExplore) {
-      try {
-        cancelExplore();
-      } catch { }
-    }
-
-    const cancelExploreExtraction = get().cancelExploreExtractionCurrent || null;
-    if (cancelExploreExtraction) {
-      try {
-        cancelExploreExtraction();
       } catch { }
     }
 

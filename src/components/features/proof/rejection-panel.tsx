@@ -63,7 +63,7 @@ export function RejectionPanel({
                     Try again
                 </Button>
                 <Button size="sm" variant="ghost" onClick={onExplore}>
-                    Explore instead
+                    Return to workspace
                 </Button>
             </div>
         </div>
