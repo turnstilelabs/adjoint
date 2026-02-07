@@ -539,10 +539,14 @@ export function AskPaperModal({
                         height: pageSizes[idx]?.height ?? 'auto',
                       }}
                     >
-                    <canvas ref={(el) => (canvasRefs.current[idx] = el)} />
-                    <div
-                      className={cn(
-                        'absolute inset-0',
+                      <canvas
+                        ref={(el) => {
+                          canvasRefs.current[idx] = el;
+                        }}
+                      />
+                      <div
+                        className={cn(
+                          'absolute inset-0',
                           pageSizes[idx] ? 'cursor-crosshair' : 'cursor-default',
                           isRenderingPage ? 'pointer-events-none' : 'pointer-events-auto',
                         )}
