@@ -75,6 +75,10 @@ export async function POST(req: NextRequest) {
         }
 
         const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+        console.info('[extract-latex] request', {
+            bytes: approxBytes,
+            hint: Boolean(hint && hint.trim().length > 0),
+        });
 
         const system =
             'You are a LaTeX transcription engine for math papers. ' +
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest) {
 
         for (const model of models) {
             try {
+                console.info('[extract-latex] calling model', { model });
                 const resp = await client.responses.create({
                     model,
                     input: [
@@ -117,9 +122,14 @@ export async function POST(req: NextRequest) {
                 const latex = stripLatexFences(text || '');
                 if (!latex.trim()) throw new Error('Model returned empty LaTeX.');
 
+                console.info('[extract-latex] success', { model, chars: latex.length });
                 return NextResponse.json({ ok: true, latex, model });
             } catch (e: any) {
                 lastErr = e;
+                console.warn('[extract-latex] model error', {
+                    model,
+                    message: String(e?.message || e || 'Unknown error'),
+                });
                 // Try next fallback.
                 continue;
             }
