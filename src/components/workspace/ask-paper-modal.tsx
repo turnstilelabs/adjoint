@@ -1,480 +1,554 @@
+/* eslint-disable react/no-unescaped-entities */
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
 import { parseArxivId } from '@/lib/arxiv';
 import { cn } from '@/lib/utils';
-import { Document, Page, pdfjs } from 'react-pdf';
-import { Loader2, Upload, Crosshair, ChevronLeft, ChevronRight, PlusSquare, MessageSquareText } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 
-// Configure PDF.js worker.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(pdfjs as any).GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-).toString();
-
-type Props = {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onAddToWorkspace: (latex: string) => void;
-    onAskInChat: (opts: { latex: string; question: string }) => void;
+type AskPaperModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAddToWorkspace: (latex: string, sourceName?: string) => void;
 };
 
-type Rect = { x: number; y: number; w: number; h: number };
+type PdfDoc = {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<any>;
+  destroy?: () => void;
+};
 
-function clampRect(r: Rect): Rect {
-    const w = Math.max(1, r.w);
-    const h = Math.max(1, r.h);
-    return { ...r, w, h };
+type Rect = { x: number; y: number; width: number; height: number };
+type SelectionRect = Rect & { pageIndex: number };
+
+const MIN_SELECTION = 8;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
-export function AskPaperModal({ open, onOpenChange, onAddToWorkspace, onAskInChat }: Props) {
-    const { toast } = useToast();
+function normalizeRect(rect: Rect, maxW: number, maxH: number): Rect {
+  const x = clamp(rect.x, 0, maxW);
+  const y = clamp(rect.y, 0, maxH);
+  const w = clamp(rect.width, 0, maxW - x);
+  const h = clamp(rect.height, 0, maxH - y);
+  return { x, y, width: w, height: h };
+}
 
-    const [tab, setTab] = useState<'arxiv' | 'upload'>('arxiv');
-    const [arxivInput, setArxivInput] = useState('');
-    const [pdfFile, setPdfFile] = useState<File | null>(null);
-    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+export function AskPaperModal({ open, onOpenChange, onAddToWorkspace }: AskPaperModalProps) {
+  const [sourceInput, setSourceInput] = useState('');
+  const [pdfDoc, setPdfDoc] = useState<PdfDoc | null>(null);
+  const [numPages, setNumPages] = useState(0);
+  const [renderScale, setRenderScale] = useState(1.1);
+  const [pageSizes, setPageSizes] = useState<{ width: number; height: number }[]>([]);
+  const [selection, setSelection] = useState<SelectionRect | null>(null);
+  const [latex, setLatex] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
+  const [isRenderingPage, setIsRenderingPage] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const pdfjsRef = useRef<any>(null);
+  const loadIdRef = useRef(0);
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const dragStartRef = useRef<{ pageIndex: number; x: number; y: number } | null>(null);
+  const extractAbortRef = useRef<AbortController | null>(null);
 
-    const [numPages, setNumPages] = useState<number>(0);
-    const [pageNumber, setPageNumber] = useState<number>(1);
+  const canExtract = !!selection && selection.width >= MIN_SELECTION && selection.height >= MIN_SELECTION;
 
-    const [selectMode, setSelectMode] = useState(false);
-    const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-    const [rect, setRect] = useState<Rect | null>(null);
+  const resetState = useCallback(() => {
+    loadIdRef.current += 1;
+    setSelection(null);
+    setLatex('');
+    setSourceName('');
+    setError(null);
+    setErrorDetail(null);
+    setIsLoadingPdf(false);
+    setIsRenderingPage(false);
+    setIsExtracting(false);
+    extractAbortRef.current?.abort();
+    extractAbortRef.current = null;
+    setNumPages(0);
+    setPageSizes([]);
+    pdfjsRef.current = null;
+    setPdfDoc((prev) => {
+      try {
+        prev?.destroy?.();
+      } catch {
+        // ignore
+      }
+      return null;
+    });
+  }, []);
 
-    const [question, setQuestion] = useState('');
-    const [latex, setLatex] = useState('');
-    const [isExtracting, setIsExtracting] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      resetState();
+    }
+  }, [open, resetState]);
 
-    const pageContainerRef = useRef<HTMLDivElement | null>(null);
-    const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ensurePdfjs = useCallback(async () => {
+    if (pdfjsRef.current) return pdfjsRef.current;
+    try {
+      let mod: any = null;
+      try {
+        mod = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      } catch {
+        mod = await import('pdfjs-dist/legacy/build/pdf.min.mjs');
+      }
+      mod.GlobalWorkerOptions.workerSrc = '/workers/pdf.worker.mjs';
+      pdfjsRef.current = mod;
+      return mod;
+    } catch (e: any) {
+      setError('render');
+      setErrorDetail(String(e?.message || e || 'Failed to load PDF renderer.'));
+      throw new Error('Failed to load PDF renderer.');
+    }
+  }, []);
 
-    // Create/revoke object URL for uploads.
-    useEffect(() => {
-        if (!pdfFile) {
-            setPdfUrl(null);
-            return;
-        }
-        const url = URL.createObjectURL(pdfFile);
-        setPdfUrl(url);
-        return () => {
-            try {
-                URL.revokeObjectURL(url);
-            } catch {
-                // ignore
-            }
-        };
-    }, [pdfFile]);
+  const loadPdfFromBytes = useCallback(
+    async (bytes: ArrayBuffer) => {
+      setError(null);
+      setErrorDetail(null);
+      setLatex('');
+      setSelection(null);
+      setPageSizes([]);
+      canvasRefs.current = [];
+      setIsLoadingPdf(true);
+      const loadId = ++loadIdRef.current;
 
-    // Reset state when opening/closing.
-    useEffect(() => {
-        if (!open) {
-            setSelectMode(false);
-            setDragStart(null);
-            setRect(null);
-            setLatex('');
-            setQuestion('');
-            setIsExtracting(false);
-            setNumPages(0);
-            setPageNumber(1);
-            return;
-        }
-    }, [open]);
-
-    const effectivePdf = useMemo(() => {
-        if (tab === 'upload') return pdfUrl;
-        const parsed = parseArxivId(arxivInput);
-        if (!parsed) return null;
-        // Prefer export.arxiv.org (more permissive).
-        return `https://export.arxiv.org/pdf/${encodeURIComponent(parsed.canonical)}.pdf`;
-    }, [tab, pdfUrl, arxivInput]);
-
-    const onDropFile = (file: File | null) => {
-        if (!file) return;
-        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-            toast({ title: 'Unsupported file', description: 'Please upload a PDF file.', variant: 'destructive' });
-            return;
-        }
-        setPdfFile(file);
-        setTab('upload');
-    };
-
-    const getLocalPoint = (clientX: number, clientY: number) => {
-        const el = pageContainerRef.current;
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        const x = clientX - r.left;
-        const y = clientY - r.top;
-        return { x: Math.max(0, Math.min(r.width, x)), y: Math.max(0, Math.min(r.height, y)) };
-    };
-
-    const beginDrag = (clientX: number, clientY: number) => {
-        const p = getLocalPoint(clientX, clientY);
-        if (!p) return;
-        setDragStart(p);
-        setRect({ x: p.x, y: p.y, w: 1, h: 1 });
-    };
-
-    const updateDrag = (clientX: number, clientY: number) => {
-        if (!dragStart) return;
-        const p = getLocalPoint(clientX, clientY);
-        if (!p) return;
-        const x = Math.min(dragStart.x, p.x);
-        const y = Math.min(dragStart.y, p.y);
-        const w = Math.abs(p.x - dragStart.x);
-        const h = Math.abs(p.y - dragStart.y);
-        setRect(clampRect({ x, y, w, h }));
-    };
-
-    const endDrag = () => {
-        setDragStart(null);
-        setSelectMode(false);
-    };
-
-    const extractNow = async () => {
-        if (!rect) {
-            toast({ title: 'No selection', description: 'Drag a rectangle on the PDF page first.', variant: 'destructive' });
-            return;
-        }
-        const canvas = pageCanvasRef.current;
-        const container = pageContainerRef.current;
-        if (!canvas || !container) {
-            toast({ title: 'Not ready', description: 'PDF page is not ready yet.', variant: 'destructive' });
-            return;
-        }
-
-        // Convert container-relative rect to canvas pixels.
-        const scaleX = canvas.width / container.clientWidth;
-        const scaleY = canvas.height / container.clientHeight;
-
-        const sx = Math.floor(rect.x * scaleX);
-        const sy = Math.floor(rect.y * scaleY);
-        const sw = Math.floor(rect.w * scaleX);
-        const sh = Math.floor(rect.h * scaleY);
-
-        if (sw < 2 || sh < 2) {
-            toast({ title: 'Selection too small', description: 'Please select a larger region.', variant: 'destructive' });
-            return;
-        }
-
-        // Copy the region into an offscreen canvas.
-        const out = document.createElement('canvas');
-        out.width = sw;
-        out.height = sh;
-        const ctx = out.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-        const dataUrl = out.toDataURL('image/png');
-
-        setIsExtracting(true);
+      try {
+        const pdfjs = await ensurePdfjs();
+        let doc: PdfDoc | null = null;
         try {
-            const resp = await fetch('/api/paper/extract-latex', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageDataUrl: dataUrl, hint: question || undefined }),
-            });
-            const data = await resp.json().catch(() => null);
-            if (!resp.ok || !data?.ok) {
-                throw new Error(data?.error || `Extract failed (HTTP ${resp.status})`);
-            }
-            const outLatex = String(data?.latex ?? '').trim();
-            if (!outLatex) throw new Error('Model returned empty LaTeX.');
-            setLatex(outLatex);
-            toast({ title: 'LaTeX extracted', description: `Model: ${data?.model || 'unknown'}` });
-        } catch (e: any) {
-            toast({ title: 'Extraction failed', description: e?.message || 'Could not extract LaTeX.', variant: 'destructive' });
-        } finally {
-            setIsExtracting(false);
+          const loadingTask = pdfjs.getDocument({ data: bytes, disableWorker: true });
+          doc = (await loadingTask.promise) as PdfDoc;
+        } catch {
+          // Fallback: try worker if main-thread rendering failed.
+          const loadingTask = pdfjs.getDocument({ data: bytes });
+          doc = (await loadingTask.promise) as PdfDoc;
         }
+        if (!doc) throw new Error('Failed to load PDF.');
+        if (loadId !== loadIdRef.current) {
+          doc?.destroy?.();
+          return;
+        }
+
+        setPdfDoc((prev) => {
+          try {
+            prev?.destroy?.();
+          } catch {
+            // ignore
+          }
+          return doc;
+        });
+        setNumPages(doc.numPages || 0);
+      } catch (e: any) {
+        setError('load');
+        setErrorDetail(String(e?.message || e || 'Failed to load PDF.'));
+      } finally {
+        if (loadId === loadIdRef.current) {
+          setIsLoadingPdf(false);
+        }
+      }
+    },
+    [ensurePdfjs],
+  );
+
+  const handleLoadFromUrl = useCallback(async () => {
+    const raw = String(sourceInput || '').trim();
+    if (!raw) return;
+    setError(null);
+    setErrorDetail(null);
+
+    let url = raw;
+    const parsed = parseArxivId(raw);
+    if (parsed) {
+      url = `https://export.arxiv.org/pdf/${encodeURIComponent(parsed.canonical)}.pdf`;
+    } else if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+
+    try {
+      setIsLoadingPdf(true);
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        setError('load-unsupported');
+        return;
+      }
+      const displayName = parsed
+        ? `arXiv:${parsed.canonical}`
+        : decodeURIComponent(parsedUrl.pathname.split('/').pop() || '').trim() || parsedUrl.hostname;
+      const host = parsedUrl.hostname.toLowerCase();
+      const isAllowed = host === 'export.arxiv.org' || host === 'arxiv.org';
+      if (!isAllowed) {
+        setError('load-unsupported');
+        return;
+      }
+
+      const proxyUrl = `/api/paper/fetch?url=${encodeURIComponent(url)}`;
+      const resp = await fetch(proxyUrl);
+      if (!resp.ok) {
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const json = await resp.json().catch(() => null);
+          const msg = json?.error ? String(json.error) : `Failed to fetch PDF (${resp.status}).`;
+          throw new Error(msg);
+        }
+        throw new Error(`Failed to fetch PDF (${resp.status}).`);
+      }
+      const bytes = await resp.arrayBuffer();
+      await loadPdfFromBytes(bytes);
+      setSourceName(displayName);
+    } catch (e: any) {
+      setError('load');
+      setErrorDetail(String(e?.message || e || 'Failed to fetch PDF.'));
+    } finally {
+      setIsLoadingPdf(false);
+    }
+  }, [sourceInput, loadPdfFromBytes]);
+
+  useEffect(() => {
+    if (!pdfDoc) return;
+    let cancelled = false;
+
+    const renderAll = async () => {
+      setIsRenderingPage(true);
+      setError(null);
+
+      try {
+        const total = pdfDoc.numPages || 0;
+        const sizes: { width: number; height: number }[] = new Array(total);
+        const outputScale = typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1;
+
+        for (let i = 1; i <= total; i++) {
+          if (cancelled) return;
+          const canvas = canvasRefs.current[i - 1];
+          if (!canvas) continue;
+
+          const page = await pdfDoc.getPage(i);
+          if (cancelled) return;
+          const viewport = page.getViewport({ scale: renderScale });
+
+          const width = Math.floor(viewport.width);
+          const height = Math.floor(viewport.height);
+          const pixelWidth = Math.floor(width * outputScale);
+          const pixelHeight = Math.floor(height * outputScale);
+
+          canvas.width = pixelWidth;
+          canvas.height = pixelHeight;
+          canvas.style.width = `${width}px`;
+          canvas.style.height = `${height}px`;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+
+          const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+          await page.render({ canvasContext: ctx, viewport, transform }).promise;
+          if (cancelled) return;
+
+          sizes[i - 1] = { width, height };
+        }
+
+        setPageSizes(sizes);
+      } catch {
+        if (!cancelled) {
+          setError('render');
+        }
+      } finally {
+        if (!cancelled) setIsRenderingPage(false);
+      }
     };
 
-    const canAdd = latex.trim().length > 0;
-    const canAsk = canAdd && question.trim().length > 0;
+    renderAll();
+    setSelection(null);
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[1100px]">
-                <DialogHeader>
-                    <DialogTitle>Ask about a paper</DialogTitle>
-                </DialogHeader>
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfDoc, renderScale, numPages]);
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_1fr]">
-                    {/* Left column */}
-                    <div className="space-y-3">
-                        <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant={tab === 'arxiv' ? 'secondary' : 'outline'}
-                                onClick={() => setTab('arxiv')}
-                                className="flex-1"
-                            >
-                                arXiv URL
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={tab === 'upload' ? 'secondary' : 'outline'}
-                                onClick={() => setTab('upload')}
-                                className="flex-1"
-                            >
-                                Upload PDF
-                            </Button>
-                        </div>
+  const onPointerDown = useCallback((pageIndex: number) => {
+    return (e: PointerEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left, 0, rect.width);
+      const y = clamp(e.clientY - rect.top, 0, rect.height);
+      dragStartRef.current = { pageIndex, x, y };
+      setSelection({ pageIndex, x, y, width: 0, height: 0 });
+      e.currentTarget.setPointerCapture(e.pointerId);
+    };
+  }, []);
 
-                        {tab === 'arxiv' ? (
-                            <div className="space-y-2">
-                                <div className="text-xs text-muted-foreground">Paste an arXiv link (abs/pdf)</div>
-                                <Input
-                                    value={arxivInput}
-                                    onChange={(e) => setArxivInput(e.target.value)}
-                                    placeholder="https://arxiv.org/abs/1706.03762"
-                                />
-                                <div className="text-xs text-muted-foreground">
-                                    {parseArxivId(arxivInput) ? 'Detected arXiv id ✓' : '—'}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                <div
-                                    className={cn(
-                                        'rounded-lg border border-dashed p-4 text-sm text-muted-foreground',
-                                        'flex flex-col items-center justify-center gap-2',
-                                    )}
-                                    onDragOver={(e) => {
-                                        e.preventDefault();
-                                    }}
-                                    onDrop={(e) => {
-                                        e.preventDefault();
-                                        const f = e.dataTransfer.files?.[0] || null;
-                                        onDropFile(f);
-                                    }}
-                                >
-                                    <Upload className="h-5 w-5" />
-                                    <div>Drag & drop a PDF here</div>
-                                    <div className="text-xs">or</div>
-                                    <label className="cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept="application/pdf,.pdf"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const f = e.target.files?.[0] || null;
-                                                // allow reselect same file
-                                                e.target.value = '';
-                                                onDropFile(f);
-                                            }}
-                                        />
-                                        <Button type="button" variant="secondary" size="sm">
-                                            Choose file
-                                        </Button>
-                                    </label>
-                                    {pdfFile ? (
-                                        <div className="text-xs text-foreground/80 break-all">{pdfFile.name}</div>
-                                    ) : null}
-                                </div>
-                            </div>
+  const onPointerMove = useCallback((pageIndex: number) => {
+    return (e: PointerEvent<HTMLDivElement>) => {
+      if (!dragStartRef.current || dragStartRef.current.pageIndex !== pageIndex) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = clamp(e.clientX - rect.left, 0, rect.width);
+      const y = clamp(e.clientY - rect.top, 0, rect.height);
+      const start = dragStartRef.current;
+      const left = Math.min(start.x, x);
+      const top = Math.min(start.y, y);
+      const width = Math.abs(x - start.x);
+      const height = Math.abs(y - start.y);
+      setSelection({ pageIndex, x: left, y: top, width, height });
+    };
+  }, []);
+
+  const onPointerUp = useCallback((pageIndex: number) => {
+    return (e: PointerEvent<HTMLDivElement>) => {
+      if (dragStartRef.current?.pageIndex !== pageIndex) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        return;
+      }
+      dragStartRef.current = null;
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      setSelection((prev) => {
+        if (!prev) return null;
+        if (prev.width < MIN_SELECTION || prev.height < MIN_SELECTION) return null;
+        return prev;
+      });
+    };
+  }, []);
+
+  const getSelectionDataUrl = useCallback(() => {
+    if (!selection) return null;
+    const canvas = canvasRefs.current[selection.pageIndex];
+    const size = pageSizes[selection.pageIndex];
+    if (!canvas || !size) return null;
+    const normalized = normalizeRect(selection, size.width, size.height);
+    if (normalized.width < MIN_SELECTION || normalized.height < MIN_SELECTION) return null;
+
+    const scaleX = canvas.width / size.width;
+    const scaleY = canvas.height / size.height;
+
+    const sx = Math.round(normalized.x * scaleX);
+    const sy = Math.round(normalized.y * scaleY);
+    const sw = Math.max(1, Math.round(normalized.width * scaleX));
+    const sh = Math.max(1, Math.round(normalized.height * scaleY));
+
+    const out = document.createElement('canvas');
+    out.width = sw;
+    out.height = sh;
+
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    return out.toDataURL('image/png');
+  }, [selection, pageSizes]);
+
+  const handleExtractLatex = useCallback(async () => {
+    if (isExtracting) return;
+    const dataUrl = getSelectionDataUrl();
+    if (!dataUrl) {
+      setError('select');
+      setErrorDetail(null);
+      return;
+    }
+
+    setIsExtracting(true);
+    setError(null);
+    setErrorDetail(null);
+    const controller = new AbortController();
+    extractAbortRef.current = controller;
+
+    try {
+      const resp = await fetch('/api/paper/extract-latex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageDataUrl: dataUrl }),
+        signal: controller.signal,
+      });
+      const json = await resp.json().catch(() => null);
+      if (!resp.ok || !json?.ok) {
+        throw new Error(json?.error || 'Failed to extract LaTeX.');
+      }
+      setLatex(String(json.latex || '').trim());
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        // user cancelled
+        return;
+      }
+      setError('extract');
+      setErrorDetail(String(e?.message || e || 'Failed to extract LaTeX.'));
+    } finally {
+      setIsExtracting(false);
+      extractAbortRef.current = null;
+    }
+  }, [getSelectionDataUrl, isExtracting]);
+
+  const handleCancelExtract = useCallback(() => {
+    extractAbortRef.current?.abort();
+    extractAbortRef.current = null;
+    setIsExtracting(false);
+  }, []);
+
+  const handleAddToWorkspace = useCallback(() => {
+    const chunk = String(latex || '').trim();
+    if (!chunk) return;
+    onAddToWorkspace(chunk, sourceName.trim() || undefined);
+    setLatex('');
+    setSelection(null);
+  }, [latex, onAddToWorkspace, sourceName]);
+
+  const selectionStyle = useMemo(() => {
+    if (!selection) return null;
+    return {
+      left: `${selection.x}px`,
+      top: `${selection.y}px`,
+      width: `${selection.width}px`,
+      height: `${selection.height}px`,
+    };
+  }, [selection]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-4',
+          pdfDoc ? 'w-[95vw] max-w-[1100px] h-[85vh]' : 'w-[92vw] max-w-[560px]',
+        )}
+      >
+        <DialogHeader>
+          <DialogTitle>Extract from Paper</DialogTitle>
+          <DialogDescription>
+            Paste an arXiv PDF URL (or ID), load it, then snip a region to extract LaTeX.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              id="ask-paper-url"
+              value={sourceInput}
+              onChange={(e) => setSourceInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleLoadFromUrl();
+              }}
+              placeholder="https://export.arxiv.org/pdf/2501.01234.pdf or 2501.01234"
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="secondary"
+              onClick={handleLoadFromUrl}
+              disabled={isLoadingPdf || !sourceInput.trim()}
+              aria-label="Load PDF"
+              title="Load PDF"
+            >
+              {isLoadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+
+        {pdfDoc ? (
+          <div className="flex-1 min-h-0 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+            <div className="flex flex-col min-h-0 gap-2">
+              <div className="flex-1 min-h-0 rounded-md border bg-muted/30 overflow-auto">
+                <div className="flex flex-col items-center gap-6 p-3">
+                  {Array.from({ length: numPages || 0 }).map((_, idx) => (
+                    <div
+                      key={`pdf-page-${idx}`}
+                      className="relative inline-block group"
+                      style={{
+                        width: pageSizes[idx]?.width ?? 'auto',
+                        height: pageSizes[idx]?.height ?? 'auto',
+                      }}
+                    >
+                    <canvas ref={(el) => (canvasRefs.current[idx] = el)} />
+                    <div
+                      className={cn(
+                        'absolute inset-0',
+                          pageSizes[idx] ? 'cursor-crosshair' : 'cursor-default',
+                          isRenderingPage ? 'pointer-events-none' : 'pointer-events-auto',
                         )}
-
-                        <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">Question (optional hint for OCR)</div>
-                            <Textarea
-                                value={question}
-                                onChange={(e) => setQuestion(e.target.value)}
-                                placeholder="What does this step mean?"
-                                rows={4}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <div className="text-xs text-muted-foreground">Extracted LaTeX</div>
-                            <Textarea
-                                value={latex}
-                                onChange={(e) => setLatex(e.target.value)}
-                                placeholder="(Extracted LaTeX will appear here)"
-                                rows={10}
-                                className="font-mono text-xs"
-                            />
-                        </div>
+                        onPointerDown={onPointerDown(idx)}
+                        onPointerMove={onPointerMove(idx)}
+                        onPointerUp={onPointerUp(idx)}
+                      >
+                        {selection && selection.pageIndex === idx && selectionStyle && (
+                          <div
+                            className="absolute border-2 border-primary/80 bg-primary/20"
+                            style={selectionStyle}
+                          />
+                        )}
+                      </div>
                     </div>
-
-                    {/* Right column */}
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="text-xs text-muted-foreground">
-                                {effectivePdf ? 'PDF loaded' : 'Provide an arXiv URL or upload a PDF'}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        setRect(null);
-                                        setSelectMode(true);
-                                    }}
-                                    disabled={!effectivePdf}
-                                    title="Select a rectangle on the page"
-                                >
-                                    <Crosshair className="h-4 w-4 mr-2" />
-                                    Select region
-                                </Button>
-
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => void extractNow()}
-                                    disabled={!effectivePdf || !rect || isExtracting}
-                                >
-                                    {isExtracting ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Extracting…
-                                        </>
-                                    ) : (
-                                        'Extract LaTeX'
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                                    disabled={pageNumber <= 1}
-                                    aria-label="Prev page"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                                <div className="text-xs text-muted-foreground">
-                                    Page {pageNumber} / {numPages || '—'}
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setPageNumber((p) => Math.min(numPages || p + 1, p + 1))}
-                                    disabled={numPages > 0 && pageNumber >= numPages}
-                                    aria-label="Next page"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-
-                            {rect ? (
-                                <div className="text-xs text-muted-foreground">
-                                    Selected: {Math.round(rect.w)}×{Math.round(rect.h)} px (screen)
-                                </div>
-                            ) : null}
-                        </div>
-
-                        <div
-                            ref={pageContainerRef}
-                            className={cn(
-                                'relative w-full overflow-auto rounded-lg border bg-muted/10',
-                                selectMode ? 'cursor-crosshair' : 'cursor-default',
-                            )}
-                            onMouseDown={(e) => {
-                                if (!selectMode) return;
-                                beginDrag(e.clientX, e.clientY);
-                            }}
-                            onMouseMove={(e) => {
-                                if (!selectMode) return;
-                                updateDrag(e.clientX, e.clientY);
-                            }}
-                            onMouseUp={() => {
-                                if (!selectMode) return;
-                                endDrag();
-                            }}
-                            onMouseLeave={() => {
-                                if (!selectMode) return;
-                                endDrag();
-                            }}
-                            style={{ height: '70vh' }}
-                        >
-                            {effectivePdf ? (
-                                <Document
-                                    file={effectivePdf}
-                                    loading={<div className="p-4 text-sm text-muted-foreground">Loading PDF…</div>}
-                                    onLoadSuccess={(pdf: any) => {
-                                        setNumPages(pdf?.numPages ?? 0);
-                                        setPageNumber(1);
-                                    }}
-                                    onLoadError={(err: any) => {
-                                        toast({ title: 'PDF load failed', description: String(err?.message || err), variant: 'destructive' });
-                                    }}
-                                >
-                                    <Page
-                                        pageNumber={pageNumber}
-                                        renderTextLayer={false}
-                                        renderAnnotationLayer={false}
-                                        canvasRef={(c: HTMLCanvasElement) => {
-                                            pageCanvasRef.current = c;
-                                        }}
-                                    />
-                                </Document>
-                            ) : (
-                                <div className="p-6 text-sm text-muted-foreground">No PDF loaded.</div>
-                            )}
-
-                            {rect ? (
-                                <div
-                                    className="absolute border-2 border-primary bg-primary/10 pointer-events-none"
-                                    style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
-                                />
-                            ) : null}
-                        </div>
-                    </div>
+                  ))}
                 </div>
+              </div>
+            </div>
 
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                            setLatex('');
-                            setRect(null);
-                            setSelectMode(false);
-                        }}
-                    >
-                        Clear
-                    </Button>
+            <div className="flex flex-col min-h-0 gap-3">
+              <div className="relative flex-1 min-h-0 rounded-md border bg-background">
+                {!latex.trim() && !isExtracting ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleExtractLatex}
+                    disabled={!pdfDoc || !canExtract}
+                    className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+                  >
+                    Extract
+                  </Button>
+                ) : null}
+                {isExtracting ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelExtract}
+                    className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+                <textarea
+                  id="ask-paper-latex"
+                  value={latex}
+                  onChange={(e) => setLatex(e.target.value)}
+                  placeholder="LaTeX will appear here after extraction."
+                  readOnly={isExtracting}
+                  className="h-full w-full resize-none border-0 bg-transparent p-3 pt-11 font-mono text-xs leading-relaxed outline-none"
+                />
+                {isExtracting && !latex.trim() ? (
+                  <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 mt-10 -translate-x-1/2 text-sm text-muted-foreground">
+                    Extracting…
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={!canAdd}
-                        onClick={() => {
-                            onAddToWorkspace(latex);
-                            toast({ title: 'Added to Workspace', description: 'Inserted extracted LaTeX into the editor.' });
-                        }}
-                    >
-                        <PlusSquare className="h-4 w-4 mr-2" />
-                        Add to workspace
-                    </Button>
+        {error && (
+          <div className="text-sm text-destructive">
+            {error === 'select' && 'Select a region on the PDF to extract.'}
+            {error === 'load' && 'Could not load that PDF. Double-check the link and try again.'}
+            {error === 'load-unsupported' && 'Only arXiv PDF links (export.arxiv.org) are supported right now.'}
+            {error === 'render' && 'PDF renderer failed to initialize. Please retry loading the PDF.'}
+            {error === 'extract' && 'Could not extract LaTeX from that region. Try a smaller selection.'}
+            {errorDetail ? (
+              <div className="mt-1 text-xs text-muted-foreground">{errorDetail}</div>
+            ) : null}
+          </div>
+        )}
 
-                    <Button
-                        type="button"
-                        disabled={!canAsk}
-                        onClick={() => {
-                            onAskInChat({ latex, question });
-                            toast({ title: 'Sent to chat', description: 'Inserted into Workspace and opened chat.' });
-                        }}
-                    >
-                        <MessageSquareText className="h-4 w-4 mr-2" />
-                        Ask in chat
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
+        {pdfDoc && latex.trim() ? (
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" onClick={handleAddToWorkspace} disabled={!latex.trim()}>
+              Add to Workspace
+            </Button>
+          </DialogFooter>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
 }

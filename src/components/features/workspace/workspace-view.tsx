@@ -1727,13 +1727,18 @@ export default function WorkspaceView() {
       <AskPaperModal
         open={askPaperOpen}
         onOpenChange={setAskPaperOpen}
-        onAddToWorkspace={(latex) => {
+        onAddToWorkspace={(latex, sourceName) => {
           const view = cmRef.current?.view;
           const chunk = String(latex || '').trim();
           if (!chunk) return;
 
+          const safeSource = String(sourceName || '')
+            .replace(/\s+/g, ' ')
+            .trim();
           const block = [
-            '% --- Imported from paper excerpt ---',
+            safeSource
+              ? `% --- Imported from paper excerpt: ${safeSource} ---`
+              : '% --- Imported from paper excerpt ---',
             chunk,
             '% --- End paper import ---',
           ].join('\n');
@@ -1746,6 +1751,10 @@ export default function WorkspaceView() {
               selection: { anchor: pos + insert.length },
             });
             view.focus();
+            toast({
+              title: 'Added to workspace',
+              description: 'The extracted LaTeX has been inserted into your workspace.',
+            });
             return;
           }
 
@@ -1753,34 +1762,10 @@ export default function WorkspaceView() {
           const prev = String(useAppStore.getState().workspaceDoc ?? '');
           const next = prev.trimEnd().length === 0 ? block : `${prev.trimEnd()}\n\n${block}\n`;
           setDoc(next);
-        }}
-        onAskInChat={({ latex, question }) => {
-          const view = cmRef.current?.view;
-          const chunk = String(latex || '').trim();
-          const q = String(question || '').trim();
-          if (!chunk) return;
-
-          const block = [
-            '% --- Imported from paper excerpt ---',
-            chunk,
-            '% --- End paper import ---',
-          ].join('\n');
-
-          if (view) {
-            const pos = view.state.selection.main.to;
-            const insert = `\n\n${block}\n`;
-            view.dispatch({
-              changes: { from: pos, to: pos, insert },
-              selection: { anchor: pos + insert.length },
-            });
-            view.focus();
-          }
-
-          if (q) {
-            setDraft(q, { open: true });
-            setRightTab('chat');
-            setIsChatOpen(true);
-          }
+          toast({
+            title: 'Added to workspace',
+            description: 'The extracted LaTeX has been inserted into your workspace.',
+          });
         }}
       />
     </div>
