@@ -76,6 +76,7 @@ export function ChatMarkdownContent({
     content,
     className,
     macros,
+    autoWrapMath,
 }: {
     content: string;
     className?: string;
@@ -120,7 +121,12 @@ export function ChatMarkdownContent({
                                             : 'text-sm font-medium';
                                 return (
                                     <div key={`h-${i}-${j}`} className={cn(cls, 'mt-2')}>
-                                        <KatexRenderer content={l.text} macros={macros} inline />
+                                        <KatexRenderer
+                                            content={l.text}
+                                            macros={macros}
+                                            inline
+                                            autoWrap={autoWrapMath ?? true}
+                                        />
                                     </div>
                                 );
                             }
@@ -130,7 +136,11 @@ export function ChatMarkdownContent({
                                     key={`t-${i}-${j}`}
                                     className="whitespace-pre-wrap leading-relaxed"
                                 >
-                                    <KatexRenderer content={l.text} macros={macros} />
+                                    <KatexRenderer
+                                        content={l.text}
+                                        macros={macros}
+                                        autoWrap={autoWrapMath ?? true}
+                                    />
                                 </div>
                             );
                         })}

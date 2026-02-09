@@ -3,38 +3,69 @@ import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 import { openAI } from '@genkit-ai/compat-oai/openai';
 import { anthropic } from '@genkit-ai/anthropic';
+import { getLlmContext } from '@/ai/llm-context';
 
-const provider = env.LLM_PROVIDER ?? (env.OPENAI_API_KEY ? 'openai' : 'googleai');
+export type LlmProvider = 'googleai' | 'openai' | 'anthropic';
 
-const model =
-  env.LLM_MODEL ??
-  (provider === 'openai'
-    ? 'gpt-4o-mini'
-    : provider === 'anthropic'
-      ? 'claude-haiku-4-5'
-      : 'gemini-2.5-flash');
+export function getDefaultProvider(): LlmProvider {
+  return (env.LLM_PROVIDER ?? (env.OPENAI_API_KEY ? 'openai' : 'googleai')) as LlmProvider;
+}
 
-// Register all available provider plugins so we can switch models at runtime for fallbacks.
+export function getDefaultModel(provider: LlmProvider): string {
+  if (env.LLM_MODEL) return env.LLM_MODEL;
+  if (provider === 'openai') return 'gpt-4o-mini';
+  if (provider === 'anthropic') return 'claude-haiku-4-5';
+  return 'gemini-2.5-flash';
+}
+
+export function getDefaultLlmId(): string {
+  const provider = getDefaultProvider();
+  return `${provider}/${getDefaultModel(provider)}`;
+}
+
+export function getLlmId(): string {
+  const ctx = getLlmContext();
+  if (ctx?.provider) {
+    const model = ctx.model?.trim() || getDefaultModel(ctx.provider as LlmProvider);
+    return `${ctx.provider}/${model}`;
+  }
+  return getDefaultLlmId();
+}
+
+export function getLlmProvider(): LlmProvider {
+  const id = getLlmId();
+  return (id.split('/')?.[0] || getDefaultProvider()) as LlmProvider;
+}
+
+export function getLlmModel(): string {
+  return getLlmId().split('/')?.[1] || getDefaultModel(getDefaultProvider());
+}
+
+export function getLlmApiKey(): string | undefined {
+  const ctx = getLlmContext();
+  if (ctx?.apiKey) return ctx.apiKey;
+  const provider = ctx?.provider ?? getDefaultProvider();
+  if (provider === 'openai') return env.OPENAI_API_KEY;
+  if (provider === 'anthropic') return env.ANTHROPIC_API_KEY;
+  return env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY;
+}
+
+export function requireLlmApiKey(): string {
+  const key = getLlmApiKey();
+  if (key) return key;
+  const provider = getLlmProvider();
+  throw new Error(`No API key configured for ${provider}.`);
+}
+
+// Register provider plugins unconditionally so BYOK can inject keys per request.
 const plugins = [
-  ...(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY ? [googleAI()] : []),
-  ...(env.OPENAI_API_KEY ? [openAI()] : []),
+  googleAI({ apiKey: false }),
+  openAI({ apiKey: false }),
   ...(env.ANTHROPIC_API_KEY ? [anthropic({ apiKey: env.ANTHROPIC_API_KEY })] : []),
 ];
 
-export const llmId = `${provider}/${model}`;
-export const llmModel = model;
-
 if (process.env.NODE_ENV !== 'production') {
   try {
-    const enabledProviders = [
-      (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY) ? 'googleai' : null,
-      env.OPENAI_API_KEY ? 'openai' : null,
-      env.ANTHROPIC_API_KEY ? 'anthropic' : null,
-    ].filter(Boolean).join(',');
-    console.info(`[AI] Using provider=${provider} model=${model} (plugins: ${enabledProviders || 'none'})`);
-    if (provider === 'googleai' && !env.LLM_MODEL) {
-      console.info('[AI] Defaulting Google model to gemini-2.5-flash for stable tool-calling.');
-    }
     if (env.LLM_MODEL?.startsWith('gemini-3')) {
       console.warn('[AI] LLM_MODEL is set to a Gemini 3 preview model. These models require thought_signature for tool calls and updated thinking_config. If you encounter 400 errors, switch to gemini-2.5-flash.');
     }
@@ -43,5 +74,5 @@ if (process.env.NODE_ENV !== 'production') {
 
 export const ai = genkit({
   plugins,
-  model: llmId,
+  model: getDefaultLlmId(),
 });

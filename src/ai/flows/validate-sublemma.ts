@@ -2,11 +2,11 @@
 
 /** @fileOverview Validates a single sublemma/step in context of the whole proof. */
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
-import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 const ValidateSublemmaInputSchema = z.object({
     problem: z.string().describe('The original mathematical problem.'),
@@ -44,17 +44,10 @@ const validateSublemmaFlow = ai.defineFlow(
         outputSchema: ValidateSublemmaOutputSchema,
     },
     async (input: ValidateSublemmaInput) => {
-        const provider = llmId.split('/')?.[0] || 'unknown';
-        const candidates: string[] = [];
-
-        if (provider === 'googleai') {
-            candidates.push(llmId);
-            const proId = 'googleai/gemini-2.5-pro';
-            if (llmId !== proId) candidates.push(proId);
-            if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-        } else {
-            candidates.push(llmId);
-        }
+        const llmId = getLlmId();
+        const provider = getLlmProvider();
+        const candidates = buildLlmCandidates(provider, llmId);
+        const apiKey = requireLlmApiKey();
 
         const k = input.stepIndex + 1;
         const stepsText = input.proofSteps
@@ -91,6 +84,7 @@ Return JSON with fields:
                 const { output } = await ai.generate({
                     model: cand,
                     prompt: user,
+                    config: { apiKey },
                     output: { schema: ValidateSublemmaOutputSchema },
                 });
                 if (!output) throw new Error('The AI failed to provide a validation result.');

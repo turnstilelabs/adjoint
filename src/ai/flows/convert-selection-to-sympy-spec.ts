@@ -1,9 +1,9 @@
 /** @fileOverview Convert a highlighted selection (LaTeX-ish + plain) into a SymPySpec JSON. */
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
-import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 const SymPyOpSchema = z.enum(['verify', 'simplify', 'solve', 'diff', 'integrate', 'dsolve']);
 
@@ -111,16 +111,10 @@ const convertSelectionToSympySpecFlow = ai.defineFlow(
         outputSchema: SymPySpecSchema,
     },
     async (input: ConvertSelectionToSympySpecInput) => {
-        const provider = (llmId.split('/')?.[0]) || 'unknown';
-        const candidates: string[] = [];
-        if (provider === 'googleai') {
-            candidates.push(llmId);
-            const proId = 'googleai/gemini-2.5-pro';
-            if (llmId !== proId) candidates.push(proId);
-            if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-        } else {
-            candidates.push(llmId);
-        }
+        const llmId = getLlmId();
+        const provider = getLlmProvider();
+        const candidates = buildLlmCandidates(provider, llmId);
+        const apiKey = requireLlmApiKey();
 
         const system =
             'You are a precise JSON API. Return ONLY a single JSON object matching the schema. ' +
@@ -159,6 +153,7 @@ Return ONLY a JSON object and nothing else.`;
                     model: cand,
                     system,
                     prompt: user,
+                    config: { apiKey },
                 });
 
                 const parsed = extractJsonObject(text || '');

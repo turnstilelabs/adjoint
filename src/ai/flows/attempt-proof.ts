@@ -1,9 +1,9 @@
 /** @fileOverview Attempts a proof of a statement and classifies the outcome. */
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
-import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 const AttemptProofInputSchema = z.object({
     problem: z.string().describe('The original statement the user asked to prove.'),
@@ -37,16 +37,10 @@ const attemptProofFlow = ai.defineFlow(
         outputSchema: AttemptProofOutputSchema,
     },
     async (input: AttemptProofInput) => {
-        const provider = (llmId.split('/')?.[0]) || 'unknown';
-        const candidates: string[] = [];
-        if (provider === 'googleai') {
-            candidates.push(llmId);
-            const proId = 'googleai/gemini-2.5-pro';
-            if (llmId !== proId) candidates.push(proId);
-            if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-        } else {
-            candidates.push(llmId);
-        }
+        const llmId = getLlmId();
+        const provider = getLlmProvider();
+        const candidates = buildLlmCandidates(provider, llmId);
+        const apiKey = requireLlmApiKey();
 
         const system = 'You are a rigorous mathematician. Return ONLY a single JSON object that matches the required schema. Do not include markdown fences or extra text.';
         const user = `Task: Attempt to prove the following statement. If you must modify it to obtain a correct proof, do so explicitly and classify the modification.\n\nOriginal statement:\n"${input.problem}"\n\nOutcome classification\n- If you can prove the original as-is, set status = PROVED_AS_IS, finalStatement = the original, variantType = null.\n- If you can instead prove a different but closely related statement, set status = PROVED_VARIANT, finalStatement = the exact proved statement, and variantType = one of:\n  • WEAKENING (a weaker claim than the original)\n  • OPPOSITE (close to the negation/opposite of the original)\n- If you cannot provide a correct proof, set status = FAILED and explain succinctly why (explanation). In this case rawProof and finalStatement must be null.\n\nRequirements for rawProof when status ≠ FAILED\n- Provide a complete, self-contained, multi-sentence proof (no outlines or mere sketches). Use clear narrative text; LaTeX is allowed for math ($...$ or $$...$$) but avoid bullet lists.\n- Be explicit: no large logical leaps; include key justifications (algebraic/analytic steps, quantifier reasoning, set/number theoretic details) that establish correctness.\n- If providing a counterexample, construct it explicitly and verify all required properties step by step.\n- Structure guidance: when the argument is non-trivial, naturally organize into 2–6 logical segments (paragraphs). For trivial statements, a concise direct proof is fine.\n\nStrict output shape:\n{"status":"PROVED_AS_IS|PROVED_VARIANT|FAILED","finalStatement":string|null,"variantType":"WEAKENING|OPPOSITE"|null,"rawProof":string|null,"explanation":string}`;
@@ -58,6 +52,7 @@ const attemptProofFlow = ai.defineFlow(
                     model: cand,
                     system,
                     prompt: user,
+                    config: { apiKey },
                     output: { schema: AttemptProofOutputSchema },
                 });
                 if (!output) {

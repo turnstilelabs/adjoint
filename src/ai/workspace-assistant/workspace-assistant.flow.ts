@@ -3,7 +3,7 @@ import {
     WorkspaceAssistantInputSchema,
 } from '@/ai/workspace-assistant/workspace-assistant.schemas';
 import { workspaceAssistantPrompt } from '@/ai/workspace-assistant/workspace-assistant.prompt';
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, requireLlmApiKey } from '@/ai/genkit';
 import { normalizeModelError } from '@/lib/model-error-core';
 
 export const workspaceAssistantFlow = ai.defineFlow(
@@ -14,9 +14,11 @@ export const workspaceAssistantFlow = ai.defineFlow(
     },
     async (input, { sendChunk }) => {
         try {
+            const apiKey = requireLlmApiKey();
             const { stream } = workspaceAssistantPrompt.stream(input, {
                 maxTurns: 1,
-                model: llmId,
+                model: getLlmId(),
+                config: { apiKey },
             } as any);
 
             for await (const evt of stream) {

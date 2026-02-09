@@ -5,7 +5,7 @@ import {
 import type { Sublemma } from '@/ai/flows/llm-proof-decomposition';
 import { proposeChangesTool } from '@/ai/interactive-assistant/interactive-assistant.tools';
 import { interactiveAssistantPrompt } from '@/ai/interactive-assistant/interactive-assistant.prompt';
-import { ai } from '@/ai/genkit';
+import { ai, getLlmId, requireLlmApiKey } from '@/ai/genkit';
 
 export const interactiveAssistantFlow = ai.defineFlow(
   {
@@ -14,9 +14,12 @@ export const interactiveAssistantFlow = ai.defineFlow(
     streamSchema: InteractiveAssistantEventSchema,
   },
   async (input, { sendChunk }) => {
+    const apiKey = requireLlmApiKey();
     const { stream } = interactiveAssistantPrompt.stream(input, {
       tools: [proposeChangesTool],
       maxTurns: 1,
+      model: getLlmId(),
+      config: { apiKey },
     });
 
     for await (const evt of stream) {

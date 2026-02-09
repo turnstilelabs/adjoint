@@ -25,9 +25,9 @@ export function ChatTriviaCard({ item }: { item: MathTriviaItem }) {
     };
 
     return (
-        <Card className="w-full bg-muted/20 border-border/60 shadow-none">
+        <Card className="w-full min-w-0 bg-muted/20 border-border/60 shadow-none">
             <CardContent className="p-3">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 min-w-0">
                     <div className="min-w-0">
                         <div className="mb-1 flex items-center gap-2">
                             <Badge variant={meta.badgeVariant} className="shrink-0">

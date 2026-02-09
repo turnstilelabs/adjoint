@@ -24,6 +24,7 @@ export function ProofLoading() {
   // Default to math rendering during streaming (requested UX)
   const [renderMath, setRenderMath] = useState(false);
 
+
   // While streaming, force math rendering on.
   useEffect(() => {
     if (isDraftStreaming) setRenderMath(true);
@@ -44,6 +45,7 @@ export function ProofLoading() {
     }, 1000);
     return () => clearInterval(id);
   }, [loading]);
+
 
   // Derive whether the model name has been displayed in the progress log.
   const hasModelName = !!(progressLog || []).some((l) => typeof l === 'string' && l.startsWith('Using '));
@@ -135,59 +137,56 @@ export function ProofLoading() {
         </CardContent>
       </Card>
       <div className="mt-12 flex flex-col items-center gap-3 text-muted-foreground">
-
-
-
-        {progressLog && progressLog.length > 0 && (
-          <div className="mt-4 w-full rounded-md bg-muted/30 p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-foreground/60">
-              Progress <span className="ml-2 text-foreground/50">{minutes}:{seconds}</span>
-            </p>
-            <ul className="space-y-1 text-xs font-mono text-foreground/80">
-              {progressLog.slice(-6).map((line, idx) => (
-                <li key={idx}>• {line}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Trivia appears (a) after model is known and before first token arrives, and
-            (b) again during the classify phase once the draft is complete. */}
-        {shouldShowTrivia && !triviaLoadError && currentTrivia && (
-          <div
-            className={
-              'mt-4 w-full flex justify-center transition-all duration-300 ease-out overflow-hidden ' +
-              (triviaVisible ? 'opacity-100 max-h-64 translate-y-0' : 'opacity-0 max-h-0 -translate-y-1 pointer-events-none')
-            }
-          >
-            <TriviaCard item={currentTrivia} />
-          </div>
-        )}
-
-        {liveDraft && liveDraft.length > 0 && (
-          <div className="mt-4 w-full rounded-md border p-3 bg-background">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wide text-foreground/60">
-                Live draft {isDraftStreaming ? '(streaming...)' : '(complete)'}
-              </p>
-              <button
-                className="text-xs underline text-primary"
-                onClick={() => setRenderMath((v) => !v)}
-              >
-                {renderMath ? 'Show plain text' : 'Render math'}
-              </button>
-            </div>
-            {renderMath ? (
-              <div className="prose max-w-full">
-                <ProofStreamMarkdown content={deferredLiveDraft || ''} macros={macros} />
+            {progressLog && progressLog.length > 0 && (
+              <div className="mt-4 w-full rounded-md bg-muted/30 p-3">
+                <p className="mb-2 text-xs uppercase tracking-wide text-foreground/60">
+                  Progress <span className="ml-2 text-foreground/50">{minutes}:{seconds}</span>
+                </p>
+                <ul className="space-y-1 text-xs font-mono text-foreground/80">
+                  {progressLog.slice(-6).map((line, idx) => (
+                    <li key={idx}>• {line}</li>
+                  ))}
+                </ul>
               </div>
-            ) : (
-              <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
-                {liveDraft}
-              </pre>
             )}
-          </div>
-        )}
+
+            {/* Trivia appears (a) after model is known and before first token arrives, and
+                (b) again during the classify phase once the draft is complete. */}
+            {shouldShowTrivia && !triviaLoadError && currentTrivia && (
+              <div
+                className={
+                  'mt-4 w-full flex justify-center transition-all duration-300 ease-out overflow-hidden ' +
+                  (triviaVisible ? 'opacity-100 max-h-64 translate-y-0' : 'opacity-0 max-h-0 -translate-y-1 pointer-events-none')
+                }
+              >
+                <TriviaCard item={currentTrivia} />
+              </div>
+            )}
+
+            {liveDraft && liveDraft.length > 0 && (
+              <div className="mt-4 w-full rounded-md border p-3 bg-background">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">
+                    Live draft {isDraftStreaming ? '(streaming...)' : '(complete)'}
+                  </p>
+                  <button
+                    className="text-xs underline text-primary"
+                    onClick={() => setRenderMath((v) => !v)}
+                  >
+                    {renderMath ? 'Show plain text' : 'Render math'}
+                  </button>
+                </div>
+                {renderMath ? (
+                  <div className="prose max-w-full">
+                    <ProofStreamMarkdown content={deferredLiveDraft || ''} macros={macros} />
+                  </div>
+                ) : (
+                  <pre className="max-w-full whitespace-pre-wrap break-words text-xs font-mono text-foreground/90">
+                    {liveDraft}
+                  </pre>
+                )}
+              </div>
+            )}
       </div>
       <div className="mt-8 flex items-center gap-2">
         <Button

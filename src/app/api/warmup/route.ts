@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getDefaultLlmId } from '@/ai/genkit';
 import { explorationAssistantFlow } from '@/ai/exploration-assistant/exploration-assistant.flow';
 import { workspaceAssistantFlow } from '@/ai/workspace-assistant/workspace-assistant.flow';
 
@@ -13,10 +13,9 @@ import { workspaceAssistantFlow } from '@/ai/workspace-assistant/workspace-assis
 export async function GET() {
     // Touch exports so they are initialized.
     void ai;
-    void llmId;
+    void getDefaultLlmId;
     void explorationAssistantFlow;
     void workspaceAssistantFlow;
 
-    return NextResponse.json({ ok: true, warmed: true, llmId });
+    return NextResponse.json({ ok: true, warmed: true, llmId: getDefaultLlmId() });
 }
-
