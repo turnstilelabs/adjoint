@@ -2,7 +2,7 @@
 
 /** @fileOverview Generates a dependency graph from a sequence of proof steps. */
 
-import { ai } from '@/ai/genkit';
+import { ai, getLlmId, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 import { env } from '@/env';
@@ -84,7 +84,11 @@ const generateProofGraphFlow = ai.defineFlow(
     outputSchema: GenerateProofGraphOutputSchema,
   },
   async (input) => {
-    const { output } = await generateProofGraphPrompt(input);
+    const apiKey = requireLlmApiKey();
+    const { output } = await generateProofGraphPrompt(input, {
+      model: getLlmId(),
+      config: { apiKey },
+    } as any);
     if (!output || !output.nodes || !output.edges) {
       throw new Error(
         'The AI failed to generate a valid graph structure. The response was empty or malformed.',

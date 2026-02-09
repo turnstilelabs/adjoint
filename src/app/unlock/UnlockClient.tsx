@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { YellowSnowBackground } from '@/components/yellow-snow-background';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,11 +9,7 @@ import { KatexRenderer } from '@/components/katex-renderer';
 
 export default function UnlockClient({ initialNext }: { initialNext?: string }) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const next = useMemo(
-        () => searchParams.get('next') || initialNext || '/',
-        [searchParams, initialNext]
-    );
+    const next = useMemo(() => initialNext || '/', [initialNext]);
 
     const [password, setPassword] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -63,7 +59,7 @@ export default function UnlockClient({ initialNext }: { initialNext?: string }) 
                 // ignore
             }
 
-            router.replace(next);
+            router.replace('/');
         } finally {
             setSubmitting(false);
         }

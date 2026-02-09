@@ -1,10 +1,10 @@
 /** @fileOverview Decomposes a raw proof into a proved statement + sublemmas. */
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
-import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 const DecomposeRawProofInputSchema = z.object({
     rawProof: z
@@ -38,16 +38,10 @@ const decomposeRawProofFlow = ai.defineFlow(
         outputSchema: DecomposeRawProofOutputSchema,
     },
     async (input: DecomposeRawProofInput) => {
-        const provider = (llmId.split('/')?.[0]) || 'unknown';
-        const candidates: string[] = [];
-        if (provider === 'googleai') {
-            candidates.push(llmId);
-            const proId = 'googleai/gemini-2.5-pro';
-            if (llmId !== proId) candidates.push(proId);
-            if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-        } else {
-            candidates.push(llmId);
-        }
+        const llmId = getLlmId();
+        const provider = getLlmProvider();
+        const candidates = buildLlmCandidates(provider, llmId);
+        const apiKey = requireLlmApiKey();
 
         const system = 'You are a mathematical writing expert. Return ONLY a single JSON object matching the schema. No markdown fences or extra text.';
         const user = `Instructions\nInput: A mathematical proof text (possibly short, counterexample-style, or a full argument)\nOutput: A JSON object with keys provedStatement, sublemmas, normalizedProof. Use LaTeX delimiters: inline $...$ and display $$...$$. For each sublemma.proof, write 2–6 narrative paragraphs for non-trivial steps with a BLANK LINE between paragraphs. Avoid bullet lists; keep natural prose. For very short/trivial proofs a single compact paragraph is acceptable.\n\nDecomposition Guidelines\n1. Identify Decomposition Candidates\n- Intermediate results used multiple times\n- Sub-arguments (>3–4 logical steps)\n- Conceptually distinct ideas or techniques\n- Standalone facts that simplify the main flow\n\n2. Atomic Statement Principle\nEach sublemma must:\n- Be self-contained with precise hypotheses/conclusions\n- Focus on a single mathematical idea\n- Be useful (reused or simplifies reasoning)\n- Clearly specify inputs/outputs\n\nAdditional constraints (critical)\n- You must return at least one sublemma. Never return an empty array.\n- If the proof is short or a counterexample, return exactly one sublemma:\n  • title: 'Counterexample' (or 'Direct proof' if appropriate)\n  • statement: the exact proved claim (same as provedStatement)\n  • proof: a clear, step-by-step explanation (include the specific counterexample and why it works)\n- Prefer 2–6 sublemmas for longer arguments.\n\nRaw proof:\n"""\n${input.rawProof}\n"""\n\nReturn strictly:\n{"provedStatement":string,"sublemmas":[{"title":string,"statement":string,"proof":string},...],"normalizedProof":string}`;
@@ -59,6 +53,7 @@ const decomposeRawProofFlow = ai.defineFlow(
                     model: cand,
                     system,
                     prompt: user,
+                    config: { apiKey },
                     output: { schema: DecomposeRawProofOutputSchema },
                 });
                 if (!output) {

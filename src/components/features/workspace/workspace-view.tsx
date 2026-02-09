@@ -25,6 +25,7 @@ import {
   CheckSquare,
   Trash2,
   RotateCcw,
+  Settings,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LogoSmall } from '@/components/logo-small';
@@ -68,6 +69,7 @@ import {
 } from '@/lib/persistence/workspace-projects';
 import { extractKatexMacrosFromLatexDocument } from '@/lib/latex/extract-katex-macros';
 import { AskPaperModal } from '@/components/workspace/ask-paper-modal';
+import { AiSettingsSheet } from '@/components/ai/ai-settings-sheet';
 
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { Decoration, EditorView, WidgetType, keymap, ViewPlugin, ViewUpdate } from '@codemirror/view';
@@ -382,9 +384,9 @@ export default function WorkspaceView() {
 
   // Hover hint coming from the “Getting started in Workspace” callout.
   // Kept as local UI state (no global store changes).
-  const [hoverHint, setHoverHint] = useState<'add' | 'chat' | 'preview' | 'review' | 'export' | null>(
-    null,
-  );
+  const [hoverHint, setHoverHint] = useState<
+    'add' | 'chat' | 'preview' | 'review' | 'export' | 'ai-settings' | null
+  >(null);
 
   useEffect(() => {
     const onHover = (evt: any) => {
@@ -1312,7 +1314,20 @@ export default function WorkspaceView() {
             <Download />
             <span className="sr-only">Export</span>
           </Button>
-
+          <AiSettingsSheet
+            trigger={
+              <Button
+                data-workspace-action="ai-settings"
+                variant="ghost"
+                size="icon"
+                title="AI Settings"
+                className={hoverHint === 'ai-settings' ? 'ring-1 ring-primary/25' : undefined}
+              >
+                <Settings />
+                <span className="sr-only">AI Settings</span>
+              </Button>
+            }
+          />
         </div>
         <div className="flex-1" />
       </aside>

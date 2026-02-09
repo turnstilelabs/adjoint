@@ -115,14 +115,14 @@ export default function ProofDisplay() {
                 <>
                     {/* Click-outside overlay to close chat panel */}
                     <div
-                        className="fixed inset-0 z-20 bg-transparent xl:hidden"
+                        className="fixed inset-0 z-20 bg-transparent lg:hidden"
                         onClick={() => setIsChatOpen(false)}
                         aria-hidden="true"
                     />
 
-                    {/* Desktop (xl+): resizable right sidebar */}
+                    {/* Desktop (lg+): resizable right sidebar */}
                     <div
-                        className={cn('hidden xl:flex relative shrink-0 h-full')}
+                        className={cn('hidden lg:flex relative shrink-0 h-full')}
                         style={{ width: isChatOpen ? chatWidth : 0 }}
                     >
                         {/* Drag handle */}
@@ -151,8 +151,8 @@ export default function ProofDisplay() {
                         </aside>
                     </div>
 
-                    {/* Mobile/tablet (<xl): keep existing overlay */}
-                    <aside className="absolute inset-0 left-14 z-30 xl:hidden bg-background h-full overflow-y-auto flex flex-col">
+                    {/* Mobile/tablet (<lg): keep existing overlay */}
+                    <aside className="absolute inset-0 left-14 z-30 lg:hidden bg-background h-full overflow-y-auto flex flex-col">
                         <InteractiveChat />
                     </aside>
                 </>

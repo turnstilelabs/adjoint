@@ -274,11 +274,15 @@ function autoWrapInlineMathIfNeeded(input: string): string {
         // remove one leading/trailing bracket if present
         .replace(/^[({\[]/, '')
         .replace(/[)}\]]$/, '')
-        // strip leading/trailing commas/colons/semicolons
-        .replace(/^[,;:]+|[,;:]+$/g, '');
+        // strip leading/trailing quotes and punctuation
+        .replace(/^[“”‘’"'`]+|[“”‘’"'`]+$/g, '')
+        .replace(/^[,;:.!?]+|[,;:.!?]+$/g, '');
 
       // Pure word or hyphenated word (letters only) -> not math
       if (/^[A-Za-z]+(?:-[A-Za-z]+)*$/.test(core)) return false;
+
+      // Slash- or hyphen-separated words with 2+ letters (e.g., "paper/notes", "AM-GM") -> not math
+      if (/^[A-Za-z]{2,}(?:[/-][A-Za-z]{2,})+$/.test(core)) return false;
 
       // Any TeX command e.g. \sum, \frac, \sin, ...
       if (/\\[A-Za-z]+/.test(mdStripped)) return true;
@@ -309,14 +313,24 @@ function autoWrapInlineMathIfNeeded(input: string): string {
       }
     };
 
+    const nextNonWhitespace = (from: number) => {
+      for (let k = from; k < parts.length; k++) {
+        if (!isWhitespace(parts[k])) return parts[k];
+      }
+      return null;
+    };
+
     for (let i = 0; i < parts.length; i++) {
       const tok = parts[i];
       if (isWhitespace(tok)) {
-        // Preserve whitespace inside an ongoing math run so expressions like
-        // "\{X(t)\}_{t\ge 0}" are not split into two invalid fragments.
-        if (run.length > 0) {
+        const hasNewline = /[\r\n]/.test(tok);
+        const nextTok = nextNonWhitespace(i + 1);
+        const shouldKeepInRun = run.length > 0 && !hasNewline && nextTok && isMathToken(nextTok);
+        // Preserve spaces only when we know the run will continue with math.
+        if (shouldKeepInRun) {
           run.push(tok);
         } else {
+          flushRun();
           out.push(tok);
         }
         continue;

@@ -1,6 +1,6 @@
 'use server';
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import {
   ReviewArtifactInputSchema,
   ReviewArtifactOutputSchema,
@@ -10,6 +10,7 @@ import {
 import { buildReviewArtifactSoundnessMessages } from '@/ai/flows/review-artifact-soundness.prompt';
 import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 export async function reviewArtifactSoundness(
   input: ReviewArtifactInput,
@@ -24,16 +25,10 @@ const reviewArtifactSoundnessFlow = ai.defineFlow(
     outputSchema: ReviewArtifactOutputSchema,
   },
   async (input: ReviewArtifactInput) => {
-    const provider = llmId.split('/')?.[0] || 'unknown';
-    const candidates: string[] = [];
-    if (provider === 'googleai') {
-      candidates.push(llmId);
-      const proId = 'googleai/gemini-2.5-pro';
-      if (llmId !== proId) candidates.push(proId);
-      if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-    } else {
-      candidates.push(llmId);
-    }
+    const llmId = getLlmId();
+    const provider = getLlmProvider();
+    const candidates = buildLlmCandidates(provider, llmId);
+    const apiKey = requireLlmApiKey();
 
     const { system, prompt: user } = buildReviewArtifactSoundnessMessages(input);
 
@@ -50,6 +45,7 @@ const reviewArtifactSoundnessFlow = ai.defineFlow(
           model: cand,
           system,
           prompt: user,
+          config: { apiKey },
           output: { schema: ReviewArtifactOutputSchema },
         });
         if (!output?.verdict || !output?.summary || !output?.correctness || !output?.clarity) {

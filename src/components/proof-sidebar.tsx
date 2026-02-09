@@ -11,6 +11,7 @@ import {
   Sparkles,
   Loader2,
   Plus,
+  Settings,
 } from 'lucide-react';
 import { useAppStore } from '@/state/app-store';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +37,7 @@ import {
 } from '@/lib/persistence/workspace-projects';
 import { ToastAction } from '@/components/ui/toast';
 import { WorkspacePickerDialog } from '@/components/workspace/workspace-picker-dialog';
+import { AiSettingsSheet } from '@/components/ai/ai-settings-sheet';
 
 export function ProofSidebar() {
   const router = useRouter();
@@ -465,6 +467,19 @@ export function ProofSidebar() {
             <FileDown />
             <span className="sr-only">Export .tex</span>
           </Button>
+          <AiSettingsSheet
+            trigger={
+              <Button
+                data-proof-action="ai-settings"
+                variant="ghost"
+                size="icon"
+                title="AI Settings"
+              >
+                <Settings />
+                <span className="sr-only">AI Settings</span>
+              </Button>
+            }
+          />
         </div>
         <div className="flex-1" />
       </aside>

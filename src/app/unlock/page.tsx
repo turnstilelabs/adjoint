@@ -20,10 +20,8 @@ export default async function UnlockPage({
     }
 
     const cookieStore = await cookies();
-    const nextFromCookie = cookieStore.get('adjoint_next_after_unlock')?.value ?? null;
-    const sp = (await searchParams) ?? {};
-    const nextFromQuery = sp.next ?? null;
-    const next = nextFromCookie || nextFromQuery || '/';
+    void cookieStore;
+    const next = '/';
 
     // `useSearchParams()` (used inside UnlockClient) triggers a CSR bailout and must be
     // wrapped in a Suspense boundary to satisfy Next.js prerendering constraints.

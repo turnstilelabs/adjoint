@@ -4,9 +4,9 @@ import {
 } from '@/ai/exploration-assistant/exploration-assistant.schemas';
 import { explorationAssistantPrompt } from '@/ai/exploration-assistant/exploration-assistant.prompt';
 import { updateArtifactsTool } from '@/ai/exploration-assistant/exploration-assistant.tools';
-import { ai, llmId } from '@/ai/genkit';
-import { env } from '@/env';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 export const explorationAssistantFlow = ai.defineFlow(
     {
@@ -318,17 +318,10 @@ export const explorationAssistantFlow = ai.defineFlow(
         };
         // ----------------------------------------------------------------------
 
-        const provider = (llmId.split('/')?.[0]) || 'unknown';
-        const candidates: string[] = [];
-        if (provider === 'googleai') {
-            candidates.push(llmId);
-            const proId = 'googleai/gemini-2.5-pro';
-            if (llmId !== proId) candidates.push(proId);
-            if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-        } else {
-            // Default: try the configured model only
-            candidates.push(llmId);
-        }
+        const llmId = getLlmId();
+        const provider = getLlmProvider();
+        const candidates = buildLlmCandidates(provider, llmId);
+        const apiKey = requireLlmApiKey();
 
         let lastErr: { code: string | null; message: string; detail?: string } | null = null;
 
@@ -346,6 +339,7 @@ export const explorationAssistantFlow = ai.defineFlow(
                         tools: [updateArtifactsTool],
                         maxTurns: 1,
                         model: cand,
+                        config: { apiKey },
                     } as any);
 
                     let sawToolCall = false;

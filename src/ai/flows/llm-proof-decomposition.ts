@@ -2,7 +2,7 @@
 
 /** @fileOverview Decomposes a problem into sublemmas using an LLM. */
 
-import { ai } from '@/ai/genkit';
+import { ai, getLlmId, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
 import { env } from '@/env';
@@ -77,7 +77,11 @@ const decomposeProofFlow = ai.defineFlow(
     outputSchema: DecomposeProofOutputSchema,
   },
   async (input: DecomposeProofInput) => {
-    const { output } = await decomposeProofPrompt(input);
+    const apiKey = requireLlmApiKey();
+    const { output } = await decomposeProofPrompt(input, {
+      model: getLlmId(),
+      config: { apiKey },
+    } as any);
     if (!output || !output.sublemmas) {
       throw new Error('The AI failed to decompose the problem into steps.');
     }

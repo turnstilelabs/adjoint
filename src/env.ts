@@ -16,6 +16,7 @@ const BaseEnvSchema = z
     GOOGLE_GENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_API_KEY: z.string().min(1).optional(),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    AI_SETTINGS_SECRET: z.string().min(1).optional(),
 
     // Mock mode toggle (from main)
     USE_MOCK_API: z
@@ -58,36 +59,10 @@ const BaseEnvSchema = z
   })
   .passthrough();
 
-// Provider-aware refinement
+// Provider-aware refinement (keys optional; allow BYOK via encrypted cookie)
 const EnvSchema = BaseEnvSchema.superRefine((e, ctx) => {
   const provider = (e.LLM_PROVIDER ?? 'googleai').toLowerCase();
-
-  if (provider === 'googleai') {
-    if (!(e.GEMINI_API_KEY || e.GOOGLE_API_KEY || e.GOOGLE_GENAI_API_KEY)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['GEMINI_API_KEY'],
-        message:
-          'For LLM_PROVIDER=googleai, one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY is required',
-      });
-    }
-  } else if (provider === 'openai') {
-    if (!e.OPENAI_API_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['OPENAI_API_KEY'],
-        message: 'For LLM_PROVIDER=openai, OPENAI_API_KEY is required',
-      });
-    }
-  } else if (provider === 'anthropic') {
-    if (!e.ANTHROPIC_API_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['ANTHROPIC_API_KEY'],
-        message: 'For LLM_PROVIDER=anthropic, ANTHROPIC_API_KEY is required',
-      });
-    }
-  } else {
+  if (provider !== 'googleai' && provider !== 'openai' && provider !== 'anthropic') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['LLM_PROVIDER'],

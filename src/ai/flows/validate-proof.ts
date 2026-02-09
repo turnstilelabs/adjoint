@@ -2,11 +2,11 @@
 
 /** @fileOverview Validates a structured proof (sequence of sublemmas) against the goal. */
 
-import { ai, llmId } from '@/ai/genkit';
+import { ai, getLlmId, getLlmProvider, requireLlmApiKey } from '@/ai/genkit';
 import { z } from 'genkit';
 import { SublemmaSchema } from './schemas';
-import { env } from '@/env';
 import { normalizeModelError } from '@/lib/model-error-core';
+import { buildLlmCandidates } from '@/ai/llm-candidates';
 
 const ValidateProofInputSchema = z.object({
   problem: z.string().describe('The original mathematical problem.'),
@@ -33,16 +33,10 @@ const validateProofFlow = ai.defineFlow(
     outputSchema: ValidateProofOutputSchema,
   },
   async (input: ValidateProofInput) => {
-    const provider = (llmId.split('/')?.[0]) || 'unknown';
-    const candidates: string[] = [];
-    if (provider === 'googleai') {
-      candidates.push(llmId);
-      const proId = 'googleai/gemini-2.5-pro';
-      if (llmId !== proId) candidates.push(proId);
-      if (env.OPENAI_API_KEY) candidates.push('openai/gpt-4o-mini');
-    } else {
-      candidates.push(llmId);
-    }
+    const llmId = getLlmId();
+    const provider = getLlmProvider();
+    const candidates = buildLlmCandidates(provider, llmId);
+    const apiKey = requireLlmApiKey();
 
     const user = `You are a meticulous mathematics professor reviewing a student's proof.
 
@@ -68,6 +62,7 @@ Return ONLY a single JSON object matching the required schema.`;
         const { output } = await ai.generate({
           model: cand,
           prompt: user,
+          config: { apiKey },
           output: { schema: ValidateProofOutputSchema },
         });
         if (!output) {
