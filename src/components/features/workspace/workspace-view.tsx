@@ -20,6 +20,7 @@ import {
   Send,
   Eye,
   Pencil,
+  ChevronDown,
   Maximize2,
   Minimize2,
   CheckSquare,
@@ -61,6 +62,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import {
   deleteWorkspaceProject,
@@ -289,6 +299,10 @@ export default function WorkspaceView() {
 
   // Preview appearance toggle (dark by default).
   const [isPreviewPaper, setIsPreviewPaper] = useState(false);
+
+  // Workspace switcher (list of persisted projects)
+  const [projects, setProjects] = useState<WorkspaceProjectMeta[]>([]);
+  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
 
   // After deleting the current workspace, optionally ask which remaining workspace to open.
   const [postDeletePickerOpen, setPostDeletePickerOpen] = useState(false);
@@ -568,6 +582,17 @@ export default function WorkspaceView() {
         setProjectMeta(meta);
         if (!isEditingTitle) setTitleDraft(meta.title || DEFAULT_TITLE);
       }
+
+      // Keep switcher list fresh.
+      setProjects(listWorkspaceProjects());
+    } catch {
+      // ignore
+    }
+  };
+
+  const refreshProjects = () => {
+    try {
+      setProjects(listWorkspaceProjects());
     } catch {
       // ignore
     }
@@ -577,6 +602,9 @@ export default function WorkspaceView() {
     const trimmed = String(id || '').trim();
     if (!trimmed) return;
     try {
+      // Flush current state to storage first (autosave is debounced).
+      saveCurrentProjectBestEffort();
+
       setCurrentWorkspaceProjectId(trimmed);
       const meta = listWorkspaceProjects().find((m) => m.id === trimmed) || null;
       if (meta) {
@@ -592,6 +620,8 @@ export default function WorkspaceView() {
       if (typeof ui.rightPanelTab === 'string') setRightTab(ui.rightPanelTab as any);
       if (typeof ui.rightPanelWidth === 'number') setRightWidth(ui.rightPanelWidth);
       if (typeof ui.isChatOpen === 'boolean') setIsChatOpen(ui.isChatOpen);
+
+      refreshProjects();
     } catch {
       // ignore
     }
@@ -616,6 +646,7 @@ export default function WorkspaceView() {
       setIsEditingTitle(false);
       syncMetaFromStorage();
       toast({ title: 'Renamed', description: `Project renamed to “${next}”.` });
+      refreshProjects();
     } catch {
       // ignore
       setIsEditingTitle(false);
@@ -632,6 +663,7 @@ export default function WorkspaceView() {
       // After deletion, pick another existing workspace (if any).
       // If none remain, return to homepage.
       const remaining = listWorkspaceProjects();
+      refreshProjects();
       const next = remaining[0]?.id;
       if (next) {
         // Ask the user which workspace to open.
@@ -681,6 +713,7 @@ export default function WorkspaceView() {
       // Refresh local header state from storage so title updates immediately.
       setIsEditingTitle(false);
       syncMetaFromStorage();
+      refreshProjects();
       toast({ title: 'New workspace', description: `Created “${title}”.` });
     } catch {
       // ignore
@@ -1444,6 +1477,59 @@ export default function WorkspaceView() {
                   {projectMeta?.title || DEFAULT_TITLE}
                 </button>
               )}
+
+              {/* Workspace switcher */}
+              <DropdownMenu
+                open={projectSwitcherOpen}
+                onOpenChange={(open) => {
+                  setProjectSwitcherOpen(open);
+                  if (open) refreshProjects();
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Switch workspace"
+                    aria-label="Switch workspace"
+                    className="h-9 w-9"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[260px]">
+                  <DropdownMenuRadioGroup value={getCurrentWorkspaceProjectId() || ''}>
+                    {(projects || []).map((p) => (
+                      <DropdownMenuRadioItem
+                        key={p.id}
+                        value={p.id}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          openProjectById(p.id);
+                          setProjectSwitcherOpen(false);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        {p.title || DEFAULT_TITLE}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setProjectSwitcherOpen(false);
+                      setNewWorkspaceTitle('');
+                      setNewWorkspaceOpen(true);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    New workspace…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Button
                 variant="ghost"

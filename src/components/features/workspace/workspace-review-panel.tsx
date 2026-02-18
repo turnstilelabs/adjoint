@@ -255,6 +255,13 @@ export function WorkspaceReviewPanel() {
 
   const onReviewOne = async () => {
     if (!active) return;
+
+    // No proof attached -> don't run review; use the prover CTA instead.
+    if (!activeHasProof) {
+      proveActive();
+      return;
+    }
+
     try {
       setReviewingKey(artifactKey(active));
       await runReviewOne(active);
@@ -279,9 +286,37 @@ export function WorkspaceReviewPanel() {
 
   const activeStatement = (activeEdit?.statement ?? activeDefault.statement ?? '').trim();
   const activeProof = (activeEdit?.proof ?? active?.proof ?? '').trim();
+  const activeHasProof = !!active?.proofBlock && (activeProof || '').trim().length > 0;
 
   const activeResult = active ? results[artifactKey(active)] : undefined;
   const isReviewingThis = !!active && reviewingKey === artifactKey(active);
+
+  const proveActive = () => {
+    if (!active) return;
+
+    const payload = buildProverPayloadFromReview({
+      doc: doc || '',
+      artifactStartChar: active.artifactStartChar,
+      statement: activeStatement,
+      proof: active.proofBlock ? activeProof : null,
+    });
+
+    if (!payload) {
+      toast({
+        title: 'Nothing to prove',
+        description: 'Could not build a statement payload for the prover.',
+      });
+      return;
+    }
+
+    // Carry Workspace macros into Prover rendering.
+    try {
+      useAppStore.setState({ proofRenderMacros: macros } as any);
+    } catch {
+      // ignore
+    }
+    router.push(`/prove?q=${encodeURIComponent(payload)}`);
+  };
 
   useEffect(() => {
     if (!active) return;
@@ -574,14 +609,18 @@ export function WorkspaceReviewPanel() {
 
                 {/* Action row (kept consistent at the bottom) */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={onReviewOne} disabled={isReviewingThis}>
-                    {isReviewingThis ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Reviewing artifact…
-                      </>
+                  <Button size="sm" onClick={activeHasProof ? onReviewOne : proveActive}>
+                    {activeHasProof ? (
+                      isReviewingThis ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Reviewing artifact…
+                        </>
+                      ) : (
+                        'Review with AI'
+                      )
                     ) : (
-                      'Review with AI'
+                      'Prove it'
                     )}
                   </Button>
 
@@ -610,6 +649,8 @@ export function WorkspaceReviewPanel() {
                   </div>
                 )}
 
+                {/* No separate “no proof” panel; the primary CTA becomes “Prove it”. */}
+
                 {results[artifactKey(active)] && (
                   <>
                     <Separator />
@@ -620,36 +661,7 @@ export function WorkspaceReviewPanel() {
                           <ReviewVerdictBadge v={results[artifactKey(active)].verdict} />
 
                           {results[artifactKey(active)].verdict !== 'OK' && (
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                if (!active) return;
-                                const payload = buildProverPayloadFromReview({
-                                  doc: doc || '',
-                                  artifactStartChar: active.artifactStartChar,
-                                  statement: activeStatement,
-                                  proof: active.proofBlock ? activeProof : null,
-                                });
-
-                                if (!payload) {
-                                  toast({
-                                    title: 'Nothing to prove',
-                                    description:
-                                      'Could not build a statement/proof payload for the prover.',
-                                  });
-                                  return;
-                                }
-
-                                // Jump to the prover/proof page with the inferred context.
-                                // Carry Workspace macros into Prover rendering.
-                                try {
-                                  useAppStore.setState({ proofRenderMacros: macros } as any);
-                                } catch {
-                                  // ignore
-                                }
-                                router.push(`/prove?q=${encodeURIComponent(payload)}`);
-                              }}
-                            >
+                            <Button size="sm" onClick={proveActive}>
                               Prove this
                             </Button>
                           )}
