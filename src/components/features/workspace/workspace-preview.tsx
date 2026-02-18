@@ -161,7 +161,16 @@ function normalizeLatexStructureForPreview(input: string): string {
   return s;
 }
 
-export function WorkspacePreview({ content, className }: { content: string; className?: string }) {
+export function WorkspacePreview({
+  content,
+  className,
+  paper,
+}: {
+  content: string;
+  className?: string;
+  /** Render the preview on a white “paper” background for readability. */
+  paper?: boolean;
+}) {
   const macros = useMemo(() => extractKatexMacrosFromLatexDocument(content), [content]);
   const { body, hasPreamble } = useMemo(() => extractDocumentBody(content), [content]);
   const normalized = useMemo(() => normalizeLatexStructureForPreview(body), [body]);
@@ -205,6 +214,7 @@ export function WorkspacePreview({ content, className }: { content: string; clas
         // Allow horizontal scrolling for long unbroken LaTeX tokens that would otherwise
         // look visually truncated inside the Radix ScrollArea (which uses overflow-hidden).
         'text-sm leading-relaxed max-w-full overflow-x-auto overflow-y-hidden',
+        paper ? 'rounded-md border bg-white p-4 text-black' : '',
         className,
       )}
       style={{ WebkitOverflowScrolling: 'touch' }}
@@ -237,7 +247,13 @@ export function WorkspacePreview({ content, className }: { content: string; clas
         // Use a single block container (div) so newlines are preserved via CSS,
         // but inline math remains inline.
         return (
-          <div key={`ir-${i}`} className="whitespace-pre-wrap font-sans text-foreground/90">
+          <div
+            key={`ir-${i}`}
+            className={cn(
+              'whitespace-pre-wrap font-sans',
+              paper ? 'text-black/90' : 'text-foreground/90',
+            )}
+          >
             {run.items.map((seg, j) => {
               if (seg.type === 'text') {
                 return <span key={`t-${j}`}>{seg.content}</span>;

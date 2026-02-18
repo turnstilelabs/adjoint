@@ -74,11 +74,12 @@ export const createWorkspaceSlice = (
     // - If caller falls back to this function, they can still use browser back/forward.
   },
 
-  newWorkspace: () => {
+  newWorkspace: (opts) => {
     // Create a fresh persisted project and switch the UI to it.
     // (This is important so /workspace?new=1 doesn't get overwritten by hydration.)
     try {
-      createWorkspaceProject({ title: 'Untitled', kind: 'project' });
+      const title = String(opts?.title ?? '').trim() || 'Untitled';
+      createWorkspaceProject({ title, kind: 'project' });
     } catch {
       // ignore: still reset in-memory state
     }
