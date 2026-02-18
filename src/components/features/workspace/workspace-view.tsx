@@ -26,6 +26,8 @@ import {
   Trash2,
   RotateCcw,
   Plus,
+  Sun,
+  Moon,
   Settings,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -284,6 +286,9 @@ export default function WorkspaceView() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const [newWorkspaceTitle, setNewWorkspaceTitle] = useState('');
+
+  // Preview appearance toggle (dark by default).
+  const [isPreviewPaper, setIsPreviewPaper] = useState(false);
 
   // After deleting the current workspace, optionally ask which remaining workspace to open.
   const [postDeletePickerOpen, setPostDeletePickerOpen] = useState(false);
@@ -1064,6 +1069,19 @@ export default function WorkspaceView() {
         </div>
 
         <div className="flex items-center gap-1">
+          {rightTab === 'preview' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsPreviewPaper((p) => !p)}
+              aria-label={isPreviewPaper ? 'Switch preview to dark' : 'Switch preview to light'}
+              title={isPreviewPaper ? 'Dark preview' : 'Light preview'}
+              className="h-8 w-8"
+            >
+              {isPreviewPaper ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            </Button>
+          )}
+
           {rightTab !== 'preview' && (
             <Button
               variant="ghost"
@@ -1257,7 +1275,7 @@ export default function WorkspaceView() {
       ) : (
         <ScrollArea className="flex-1 px-3 md:px-6" scrollbar="both">
           <div className="py-6">
-            <WorkspacePreview content={doc || ''} paper />
+            <WorkspacePreview content={doc || ''} paper={isPreviewPaper} />
           </div>
         </ScrollArea>
       )}
