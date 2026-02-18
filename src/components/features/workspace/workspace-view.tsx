@@ -20,11 +20,15 @@ import {
   Send,
   Eye,
   Pencil,
+  ChevronDown,
   Maximize2,
   Minimize2,
   CheckSquare,
   Trash2,
   RotateCcw,
+  Plus,
+  Sun,
+  Moon,
   Settings,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -44,6 +48,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +62,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import {
   deleteWorkspaceProject,
@@ -279,6 +294,20 @@ export default function WorkspaceView() {
   const [titleDraft, setTitleDraft] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
+  const [newWorkspaceTitle, setNewWorkspaceTitle] = useState('');
+
+  // Preview appearance toggle (dark by default).
+  const [isPreviewPaper, setIsPreviewPaper] = useState(false);
+
+  // Workspace switcher (list of persisted projects)
+  const [projects, setProjects] = useState<WorkspaceProjectMeta[]>([]);
+  const [projectSwitcherOpen, setProjectSwitcherOpen] = useState(false);
+
+  // After deleting the current workspace, optionally ask which remaining workspace to open.
+  const [postDeletePickerOpen, setPostDeletePickerOpen] = useState(false);
+  const [postDeleteOptions, setPostDeleteOptions] = useState<WorkspaceProjectMeta[]>([]);
+  const [postDeleteSelectedId, setPostDeleteSelectedId] = useState('');
 
   // Ask-about-paper modal
   const [askPaperOpen, setAskPaperOpen] = useState(false);
@@ -553,6 +582,17 @@ export default function WorkspaceView() {
         setProjectMeta(meta);
         if (!isEditingTitle) setTitleDraft(meta.title || DEFAULT_TITLE);
       }
+
+      // Keep switcher list fresh.
+      setProjects(listWorkspaceProjects());
+    } catch {
+      // ignore
+    }
+  };
+
+  const refreshProjects = () => {
+    try {
+      setProjects(listWorkspaceProjects());
     } catch {
       // ignore
     }
@@ -562,6 +602,9 @@ export default function WorkspaceView() {
     const trimmed = String(id || '').trim();
     if (!trimmed) return;
     try {
+      // Flush current state to storage first (autosave is debounced).
+      saveCurrentProjectBestEffort();
+
       setCurrentWorkspaceProjectId(trimmed);
       const meta = listWorkspaceProjects().find((m) => m.id === trimmed) || null;
       if (meta) {
@@ -577,6 +620,8 @@ export default function WorkspaceView() {
       if (typeof ui.rightPanelTab === 'string') setRightTab(ui.rightPanelTab as any);
       if (typeof ui.rightPanelWidth === 'number') setRightWidth(ui.rightPanelWidth);
       if (typeof ui.isChatOpen === 'boolean') setIsChatOpen(ui.isChatOpen);
+
+      refreshProjects();
     } catch {
       // ignore
     }
@@ -601,6 +646,7 @@ export default function WorkspaceView() {
       setIsEditingTitle(false);
       syncMetaFromStorage();
       toast({ title: 'Renamed', description: `Project renamed to “${next}”.` });
+      refreshProjects();
     } catch {
       // ignore
       setIsEditingTitle(false);
@@ -614,14 +660,63 @@ export default function WorkspaceView() {
       deleteWorkspaceProject(id);
       setConfirmDeleteOpen(false);
 
-      toast({ title: 'Deleted', description: 'Workspace deleted.' });
-      router.push('/');
+      // After deletion, pick another existing workspace (if any).
+      // If none remain, return to homepage.
+      const remaining = listWorkspaceProjects();
+      refreshProjects();
+      const next = remaining[0]?.id;
+      if (next) {
+        // Ask the user which workspace to open.
+        setPostDeleteOptions(remaining);
+        setPostDeleteSelectedId(next);
+        setPostDeletePickerOpen(true);
+        toast({ title: 'Deleted', description: 'Workspace deleted.' });
+      } else {
+        toast({ title: 'Deleted', description: 'Workspace deleted.' });
+        router.push('/');
+      }
     } catch (e: any) {
       toast({
         title: 'Delete failed',
         description: e?.message || 'Could not delete the project.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const saveCurrentProjectBestEffort = () => {
+    try {
+      const id = getCurrentWorkspaceProjectId() || projectMeta?.id;
+      if (!id) return;
+      saveWorkspaceProject(id, {
+        doc: doc ?? '',
+        messages: (messages ?? []) as any,
+        uiState: {
+          isChatOpen: Boolean(useAppStore.getState().isWorkspaceChatOpen),
+          rightPanelTab: useAppStore.getState().workspaceRightPanelTab,
+          rightPanelWidth: useAppStore.getState().workspaceRightPanelWidth,
+        },
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const createNewWorkspace = (titleInput: string) => {
+    // Flush current state to storage first (autosave is debounced).
+    saveCurrentProjectBestEffort();
+
+    try {
+      const title = String(titleInput || '').trim() || DEFAULT_TITLE;
+      // This creates a new persisted project and resets in-memory workspace state.
+      useAppStore.getState().newWorkspace({ title });
+      // Refresh local header state from storage so title updates immediately.
+      setIsEditingTitle(false);
+      syncMetaFromStorage();
+      refreshProjects();
+      toast({ title: 'New workspace', description: `Created “${title}”.` });
+    } catch {
+      // ignore
     }
   };
 
@@ -1007,6 +1102,19 @@ export default function WorkspaceView() {
         </div>
 
         <div className="flex items-center gap-1">
+          {rightTab === 'preview' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsPreviewPaper((p) => !p)}
+              aria-label={isPreviewPaper ? 'Switch preview to dark' : 'Switch preview to light'}
+              title={isPreviewPaper ? 'Dark preview' : 'Light preview'}
+              className="h-8 w-8"
+            >
+              {isPreviewPaper ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+            </Button>
+          )}
+
           {rightTab !== 'preview' && (
             <Button
               variant="ghost"
@@ -1200,7 +1308,7 @@ export default function WorkspaceView() {
       ) : (
         <ScrollArea className="flex-1 px-3 md:px-6" scrollbar="both">
           <div className="py-6">
-            <WorkspacePreview content={doc || ''} />
+            <WorkspacePreview content={doc || ''} paper={isPreviewPaper} />
           </div>
         </ScrollArea>
       )}
@@ -1369,6 +1477,72 @@ export default function WorkspaceView() {
                   {projectMeta?.title || DEFAULT_TITLE}
                 </button>
               )}
+
+              {/* Workspace switcher */}
+              <DropdownMenu
+                open={projectSwitcherOpen}
+                onOpenChange={(open) => {
+                  setProjectSwitcherOpen(open);
+                  if (open) refreshProjects();
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Switch workspace"
+                    aria-label="Switch workspace"
+                    className="h-9 w-9"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[260px]">
+                  <DropdownMenuRadioGroup value={getCurrentWorkspaceProjectId() || ''}>
+                    {(projects || []).map((p) => (
+                      <DropdownMenuRadioItem
+                        key={p.id}
+                        value={p.id}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          openProjectById(p.id);
+                          setProjectSwitcherOpen(false);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        {p.title || DEFAULT_TITLE}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setProjectSwitcherOpen(false);
+                      setNewWorkspaceTitle('');
+                      setNewWorkspaceOpen(true);
+                    }}
+                    className="cursor-pointer"
+                  >
+                    New workspace…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setNewWorkspaceTitle('');
+                  setNewWorkspaceOpen(true);
+                }}
+                title="New workspace"
+                aria-label="New workspace"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
 
               <Button
                 variant="ghost"
@@ -1740,6 +1914,132 @@ export default function WorkspaceView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* New workspace modal */}
+      <Dialog
+        open={newWorkspaceOpen}
+        onOpenChange={(open) => {
+          setNewWorkspaceOpen(open);
+          if (!open) setNewWorkspaceTitle('');
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Create new workspace</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">Name your new workspace project.</div>
+            <Input
+              value={newWorkspaceTitle}
+              onChange={(e) => setNewWorkspaceTitle(e.target.value)}
+              placeholder="Untitled"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const t = String(newWorkspaceTitle || '').trim();
+                  if (!t) return;
+                  createNewWorkspace(t);
+                  setNewWorkspaceOpen(false);
+                  setNewWorkspaceTitle('');
+                }
+              }}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setNewWorkspaceOpen(false);
+                setNewWorkspaceTitle('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const t = String(newWorkspaceTitle || '').trim();
+                if (!t) return;
+                createNewWorkspace(t);
+                setNewWorkspaceOpen(false);
+                setNewWorkspaceTitle('');
+              }}
+              disabled={!String(newWorkspaceTitle || '').trim()}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-delete workspace picker */}
+      <Dialog
+        open={postDeletePickerOpen}
+        onOpenChange={(open) => {
+          setPostDeletePickerOpen(open);
+          if (!open) {
+            setPostDeleteOptions([]);
+            setPostDeleteSelectedId('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Open another workspace</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Select a workspace to open.
+            </div>
+
+            <RadioGroup
+              value={postDeleteSelectedId}
+              onValueChange={(v) => setPostDeleteSelectedId(String(v || ''))}
+              className="gap-3"
+            >
+              {(postDeleteOptions || []).map((m) => (
+                <div key={m.id} className="flex items-start gap-3 rounded-md border p-3">
+                  <RadioGroupItem value={m.id} id={`post-del-ws-${m.id}`} className="mt-0.5" />
+                  <Label htmlFor={`post-del-ws-${m.id}`} className="min-w-0 flex-1 cursor-pointer">
+                    <div className="text-sm font-medium truncate">{m.title || DEFAULT_TITLE}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {m.updatedAt ? new Date(m.updatedAt).toLocaleString() : ''}
+                    </div>
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // If user cancels, go home; no workspace is currently selected.
+                setPostDeletePickerOpen(false);
+                router.push('/');
+              }}
+            >
+              Go to homepage
+            </Button>
+
+            <Button
+              onClick={() => {
+                const id = String(postDeleteSelectedId || '').trim();
+                if (!id) return;
+                openProjectById(id);
+                setPostDeletePickerOpen(false);
+              }}
+              disabled={!String(postDeleteSelectedId || '').trim()}
+            >
+              Open
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AskPaperModal
         open={askPaperOpen}

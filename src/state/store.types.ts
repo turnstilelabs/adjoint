@@ -177,7 +177,7 @@ export interface AppState extends StoreData {
 
   // Workspace actions
   startWorkspace: (seed?: string) => void;
-  newWorkspace: () => void;
+  newWorkspace: (opts?: { title?: string }) => void;
   /** Navigate to Workspace from the current view, optionally appending a snippet to the document. */
   goToWorkspace: (opts?: { from?: View; append?: string }) => void;
   /** Return from Workspace to the previously active view (typically Proof/Explore). */
