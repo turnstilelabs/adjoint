@@ -688,6 +688,8 @@ export default function WorkspaceView() {
     try {
       const id = getCurrentWorkspaceProjectId() || projectMeta?.id;
       if (!id) return;
+      const exists = listWorkspaceProjects().some((m) => m.id === id);
+      if (!exists) return;
       saveWorkspaceProject(id, {
         doc: doc ?? '',
         messages: (messages ?? []) as any,
